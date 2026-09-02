@@ -69,6 +69,29 @@ You always know what you're sending.
 Every control shows its `describe` text on hover, and its documented default is visibly marked as
 default so a deliberate change reads as deliberate.
 
+### What a fresh form opens on
+
+Documented defaults, with three studio preferences layered over them
+(`lib/kie/studio-defaults.ts`):
+
+| Preference | Value | Applies to |
+|---|---|---|
+| Output count | `1` | `n`, `max_images` |
+| Image resolution | `1K` | `resolution`, `image_resolution` on image models |
+| Video resolution | `720p` | `resolution` on video models, matching each family's casing |
+
+A fresh form should cost the least it can while still being the shape you usually want; Kie's own
+defaults lean the other way, and Wan 2.7 Image shipping `n: 4` at `2K` is eight times the credits of
+one 1K image for a prompt you are probably still iterating on. It raises as readily as it lowers —
+Wan Animate's documented `480p` opens at `720p` too.
+
+This is a layer, never an edit to the registry. `param.default` stays exactly what `docs.kie.ai`
+says, because it answers a different question — what Kie does with the field omitted — and both
+numbers are printed under the control: *Default: `4`. Opens on `1`.* A preference that cannot be
+expressed in a model's own vocabulary is dropped rather than approximated, so nothing here can put a
+value in the form that the model would reject: `seedream/5-pro-layer-decomposition` keeps its `auto`
+size, which follows the source image rather than downscaling it to 1K.
+
 ### Constraints in the UI
 
 When a `Constraint` is violated, the app **prevents** the state rather than reporting it afterwards.

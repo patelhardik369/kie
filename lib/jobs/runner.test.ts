@@ -53,7 +53,9 @@ interface FakeKie {
   recordInfo: Array<Record<string, unknown> | { code: number; msg: string }>
   /** HTTP status the result URL answers with. */
   cdnStatus: number
-  calls: { createTask: number; recordInfo: number; download: number }
+  /** What `/chat/credit` reports. */
+  balance: number
+  calls: { createTask: number; recordInfo: number; download: number; credit: number }
 }
 
 let kie: FakeKie
@@ -94,6 +96,12 @@ before(() => {
       kie.calls.recordInfo++
       const outcome = next(kie.recordInfo)
       return isError(outcome) ? jsonResponse(outcome) : envelope(outcome)
+    }
+
+    if (url.includes('/chat/credit')) {
+      kie.calls.credit++
+      // A BARE NUMBER in `data`, not an object.
+      return envelope(kie.balance)
     }
 
     if (url === RESULT_URL) {
@@ -182,7 +190,8 @@ beforeEach(() => {
     createTask: [{ taskId }],
     recordInfo: [successRecord(taskId)],
     cdnStatus: 200,
-    calls: { createTask: 0, recordInfo: 0, download: 0 },
+    balance: 400,
+    calls: { createTask: 0, recordInfo: 0, download: 0, credit: 0 },
   }
 })
 
@@ -555,6 +564,96 @@ describe('bulk recovery', () => {
       return true
     })
     assert.equal(kie.calls.createTask, 0, 'resumed from the stored task ids')
+  })
+})
+
+describe('credit tracking', () => {
+  it('samples the balance after a generation that spent credits', async () => {
+    kie.createTask = [{ taskId: 'task-billed' }]
+    kie.recordInfo = [successRecord('task-billed')]
+
+    let samples = 0
+    const runner = new JobRunner({
+      sampleBalance: async () => {
+        samples++
+        return 400
+      },
+    })
+
+    const id = await insertGeneration()
+    await runner.enqueue(id)
+
+    assert.equal((await readGeneration(id)).state, 'complete')
+    // `credit_log` is otherwise written only when someone opens Settings, which
+    // is not a sampling schedule.
+    assert.equal(samples, 1)
+  })
+
+  it('samples after a failure too — a task that tripped moderation still bills', async () => {
+    kie.createTask = [{ taskId: 'task-billed-fail' }]
+    kie.recordInfo = [
+      {
+        taskId: 'task-billed-fail',
+        state: 'fail',
+        failCode: '422',
+        failMsg: 'Content policy violation.',
+        creditsConsumed: 3,
+      },
+    ]
+
+    let samples = 0
+    const runner = new JobRunner({
+      sampleBalance: async () => {
+        samples++
+        return 397
+      },
+    })
+
+    const id = await insertGeneration()
+    await runner.enqueue(id)
+
+    assert.equal((await readGeneration(id)).state, 'failed')
+    assert.equal(samples, 1)
+  })
+
+  it('does not sample when nothing was billed', async () => {
+    // A submission that never reached Kie moved no credits, and a reading taken
+    // then is a row that says nothing.
+    kie.createTask = [{ code: 400, msg: 'Bad request' }]
+
+    let samples = 0
+    const runner = new JobRunner({
+      sampleBalance: async () => {
+        samples++
+        return 400
+      },
+    })
+
+    const id = await insertGeneration()
+    await runner.enqueue(id)
+
+    assert.equal((await readGeneration(id)).state, 'failed')
+    assert.equal(samples, 0)
+  })
+
+  it('completes the generation even when the balance cannot be read', async () => {
+    kie.createTask = [{ taskId: 'task-credit-down' }]
+    kie.recordInfo = [successRecord('task-credit-down')]
+
+    const runner = new JobRunner({
+      sampleBalance: async () => {
+        throw new Error('Kie is down.')
+      },
+    })
+
+    const id = await insertGeneration()
+    await runner.enqueue(id)
+
+    // Bookkeeping must never be able to fail finished work.
+    const generation = await readGeneration(id)
+    assert.equal(generation.state, 'complete')
+    assert.equal(generation.failCode, null)
+    assert.equal((await readAssets(id)).length, 1)
   })
 })
 

@@ -7,6 +7,7 @@ import { getEnv, webhooksEnabled } from '../env.ts'
 // The set of parked-but-recoverable states lives with the other state groupings,
 // so the label, the tone and the retry all agree on what "stalled" means.
 import { RECOVERABLE_STATES } from '../gallery/display.ts'
+import { sampleBalance } from '../library/balance.ts'
 import { isKieError, KieError } from '../kie/errors.ts'
 import { POLL_TIMEOUT_MS, isTerminal, pollDelayMs } from '../kie/polling.ts'
 import { getModel } from '../kie/registry/index.ts'
@@ -79,6 +80,13 @@ export interface JobRunnerOptions {
    * should not have to sit through it.
    */
   download?: typeof downloadGenerationAssets
+  /**
+   * The credit-balance reading taken after a generation that spent credits.
+   *
+   * Injectable for the same reason `download` is: the tests assert *when* it is
+   * taken, and should not have to serve a credits endpoint to do it.
+   */
+  sampleBalance?: typeof sampleBalance
 }
 
 export class JobRunner {
@@ -94,9 +102,11 @@ export class JobRunner {
    */
   private readonly waiters = new Map<string, AbortController>()
   private readonly downloadAssets: typeof downloadGenerationAssets
+  private readonly sampleBalance: typeof sampleBalance
 
   constructor(options: JobRunnerOptions = {}) {
     this.downloadAssets = options.download ?? downloadGenerationAssets
+    this.sampleBalance = options.sampleBalance ?? sampleBalance
   }
 
   /** Generations currently being submitted or polled. */
@@ -319,6 +329,7 @@ export class JobRunner {
             costTimeMs: task.costTime ?? null,
             pollAttempts: attempt,
           })
+          this.recordSpend(task.creditsConsumed)
           await this.download(generation, task.result, task)
           return
         }
@@ -336,6 +347,9 @@ export class JobRunner {
             pollAttempts: attempt,
             completedAt: Date.now(),
           })
+          // A failed generation is not always a free one — a task that ran and
+          // then tripped moderation still bills.
+          this.recordSpend(task.creditsConsumed)
           return
         }
 
@@ -430,6 +444,19 @@ export class JobRunner {
         failMsg: describe(error),
       })
     }
+  }
+
+  /**
+   * Logs a balance reading, but only when Kie says credits actually moved.
+   *
+   * Fire-and-forget on purpose. Deliberately not awaited: the download is the
+   * next thing to happen after a success, and it must not queue behind a
+   * bookkeeping request. `sampleBalance` swallows its own failures, so the
+   * `catch` here is for the impossible case rather than the expected one.
+   */
+  private recordSpend(creditsConsumed: number | null | undefined): void {
+    if (!creditsConsumed) return
+    void this.sampleBalance().catch(() => undefined)
   }
 
   private async fail(id: string, code: string, message: string): Promise<void> {

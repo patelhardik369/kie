@@ -6,6 +6,7 @@ import { GenerationStatus } from '@/components/queue/GenerationStatus.tsx'
 import { deriveFields, pendingRequirements } from '@/lib/kie/constraints.ts'
 import type { ModelDefinition, ParamGroup } from '@/lib/kie/registry/types.ts'
 import { buildRequestInput } from '@/lib/kie/request.ts'
+import { openingValues, studioDefaults } from '@/lib/kie/studio-defaults.ts'
 import { validateInput } from '@/lib/kie/validate.ts'
 import { Field } from './Field.tsx'
 import { SavePreset } from './SavePreset.tsx'
@@ -28,18 +29,14 @@ import {
 const PRIMARY_GROUPS: ParamGroup[] = ['core', 'framing']
 const SECONDARY_GROUPS: ParamGroup[] = ['motion', 'audio', 'advanced']
 
-function initialValues(model: ModelDefinition): Record<string, unknown> {
-  const values: Record<string, unknown> = {}
-  for (const param of model.params) {
-    if (param.default !== undefined) values[param.key] = param.default
-  }
-  return values
-}
-
 export function ParamForm({ model }: { model: ModelDefinition }) {
-  const [values, setValues] = useState<Record<string, unknown>>(() =>
-    initialValues(model),
-  )
+  // Documented defaults, with the studio preferences over them — one output, 1K
+  // images, 720p video. See lib/kie/studio-defaults.ts for why that is a layer
+  // rather than an edit to the registry.
+  const opening = useMemo(() => openingValues(model), [model])
+  /** Only the overridden keys, so a field can show both numbers. */
+  const preferences = useMemo(() => studioDefaults(model), [model])
+  const [values, setValues] = useState<Record<string, unknown>>(opening)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -188,8 +185,11 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
   const secondary = inGroups(SECONDARY_GROUPS)
 
   // Surfaced on the collapsed header so a changed advanced value is never hidden.
+  // Compared against what the form OPENED on, not the documented default: a
+  // studio preference is not something the user changed, and badging it as such
+  // on an untouched form would make the marker meaningless.
   const changedAdvanced = secondary.filter(
-    (p) => values[p.key] !== undefined && values[p.key] !== p.default,
+    (p) => values[p.key] !== undefined && values[p.key] !== opening[p.key],
   )
 
   const blocking = [
@@ -268,6 +268,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
             required={derived[param.key]?.required}
             max={derived[param.key]?.max}
             errors={errorsByKey[param.key]}
+            studioDefault={preferences[param.key] as string | number | undefined}
           />
         ))}
       </section>
@@ -323,6 +324,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
                   required={derived[param.key]?.required}
                   max={derived[param.key]?.max}
                   errors={errorsByKey[param.key]}
+                  studioDefault={preferences[param.key] as string | number | undefined}
                 />
             ))}
           </div>

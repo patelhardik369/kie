@@ -30,6 +30,12 @@ export interface FieldProps extends ControlProps {
   required?: boolean
   /** Validation messages for this field. */
   errors?: string[]
+  /**
+   * The studio preference this field opened on, when it differs from the
+   * documented default. Shown alongside it rather than replacing it — what Kie
+   * does with the field omitted stays visible either way.
+   */
+  studioDefault?: string | number
 }
 
 function Control(props: ControlProps) {
@@ -59,7 +65,7 @@ function Control(props: ControlProps) {
   }
 }
 
-export function Field({ reason, required, errors, ...rest }: FieldProps) {
+export function Field({ reason, required, errors, studioDefault, ...rest }: FieldProps) {
   const { param, disabled } = rest
   const isRequired = required ?? param.required
   // The control needs the derived requiredness too — it drives placeholders and
@@ -83,6 +89,11 @@ export function Field({ reason, required, errors, ...rest }: FieldProps) {
         {param.default !== undefined && (
           <span className="ml-1 opacity-70">
             Default: <code className="font-mono">{JSON.stringify(param.default)}</code>.
+          </span>
+        )}
+        {studioDefault !== undefined && (
+          <span className="ml-1 opacity-70">
+            Opens on <code className="font-mono">{JSON.stringify(studioDefault)}</code>.
           </span>
         )}
       </p>

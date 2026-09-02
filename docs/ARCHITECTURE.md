@@ -163,6 +163,9 @@ One runner per process, started lazily on first import of the server module.
 - **Hand-off** — on terminal `success`, the downloader runs before the generation reaches `complete`.
 - **Wake** — `notify(id)` aborts a loop's backoff so it polls now. The only thing a webhook is
   allowed to do, and the only reason the runner knows webhooks exist.
+- **Balance sampling** — after any terminal task reporting a non-zero `creditsConsumed`, a reading is
+  logged to `credit_log`. Fire-and-forget and never awaited: a bookkeeping number that could not be
+  fetched must not hold up a download or fail finished work.
 
 `stalled` and `needs_retry` are excluded from startup recovery on purpose: a task Kie has forgotten
 would otherwise be re-polled on every restart forever. They move when someone asks — "Check again"

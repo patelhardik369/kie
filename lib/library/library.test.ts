@@ -37,6 +37,7 @@ const {
   promptTags,
   recordBalance,
 } = await import('./queries.ts')
+const { readBalance } = await import('./balance.ts')
 const { eq } = await import('drizzle-orm')
 
 const model = requireModel('wan/2-7-image')
@@ -47,6 +48,8 @@ let realFetch: typeof globalThis.fetch
 let uploadCalls = 0
 /** Controls the expiry the fake upload host reports. */
 let uploadTtlMs = 24 * 60 * 60 * 1000
+/** What the fake `/chat/credit` answers with. */
+let creditResponse: { balance: number } | { code: number; msg: string } = { balance: 250 }
 
 before(async () => {
   realFetch = globalThis.fetch
@@ -69,6 +72,19 @@ before(async () => {
       )
     }
 
+    if (url.includes('/chat/credit')) {
+      // Kie returns the balance as a BARE NUMBER in `data`, and returns its
+      // errors as an HTTP 200 with the real status in the envelope's `code`.
+      const body =
+        'balance' in creditResponse
+          ? { code: 200, msg: 'success', data: creditResponse.balance }
+          : creditResponse
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+
     throw new Error(`Unexpected request in a test: ${url}`)
   }) as typeof globalThis.fetch
 
@@ -87,6 +103,7 @@ after(() => {
 beforeEach(async () => {
   uploadCalls = 0
   uploadTtlMs = 24 * 60 * 60 * 1000
+  creditResponse = { balance: 250 }
   const db = getDb()
   await db.delete(inputAssets)
   await db.delete(presets)
@@ -319,5 +336,47 @@ describe('credit tracking', () => {
     const summary = await getSpendSummary()
     assert.equal(summary.totalSpent, 0)
     assert.deepEqual(summary.byModel, [])
+  })
+})
+
+describe('the balance shown in Settings', () => {
+  it('asks Kie rather than waiting for something to have written a log row', async () => {
+    // The bug this replaced: the card read `credit_log`, nothing in the app ever
+    // wrote to it, so it sat on "not fetched yet" forever.
+    const reading = await readBalance({ balance: null, recordedAt: null })
+
+    assert.equal(reading.balance, 250)
+    assert.equal(reading.live, true)
+    assert.equal(reading.error, undefined)
+  })
+
+  it('records what it read, so spend gets a history', async () => {
+    await readBalance({ balance: null, recordedAt: null })
+
+    const history = await (await import('./queries.ts')).balanceHistory()
+    assert.deepEqual(history.map((h) => h.balance), [250])
+  })
+
+  it('falls back to the last reading when Kie cannot be reached', async () => {
+    creditResponse = { code: 401, msg: 'Unauthorized' }
+    const recordedAt = Date.now() - 60_000
+
+    const reading = await readBalance({ balance: 999, recordedAt })
+
+    // Stale beats blank, and the page still renders.
+    assert.equal(reading.balance, 999)
+    assert.equal(reading.recordedAt, recordedAt)
+    assert.equal(reading.live, false)
+    assert.match(reading.error ?? '', /KIE_API_KEY/)
+  })
+
+  it('says so plainly when there has never been a reading', async () => {
+    creditResponse = { code: 500, msg: 'Kie is down' }
+
+    const reading = await readBalance({ balance: null, recordedAt: null })
+
+    assert.equal(reading.balance, null)
+    assert.equal(reading.live, false)
+    assert.ok(reading.error)
   })
 })

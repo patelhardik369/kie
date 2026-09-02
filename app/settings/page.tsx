@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { AssetLibrary } from '@/components/library/AssetLibrary.tsx'
 import { ResumeParked } from '@/components/queue/ResumeParked.tsx'
 import { formatBytes, formatTimestamp } from '@/lib/gallery/display.ts'
+import { readBalance, type BalanceReading } from '@/lib/library/balance.ts'
 import { measureOutputDir } from '@/lib/library/disk.ts'
 import {
   getSpendSummary,
@@ -33,6 +34,14 @@ export default async function SettingsPage() {
     measureOutputDir(env.outputDir),
     parkedCounts(),
   ])
+
+  // Asked of Kie on every load, falling back to the last logged reading. Reading
+  // the log alone is what left this card empty: nothing wrote to it.
+  const balance = await readBalance({
+    balance: spend.balance,
+    recordedAt: spend.balanceRecordedAt,
+  })
+  const runs = spend.byModel.reduce((total, row) => total + row.runs, 0)
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-10">
@@ -73,23 +82,26 @@ export default async function SettingsPage() {
       <section className="mt-8">
         <h2 className="text-sm font-medium">Credits</h2>
         <p className="mt-0.5 text-xs text-(--color-ink-muted)">
-          Kie&rsquo;s own logs age out after two months, so this is the long-term
-          record — read from our rows, not from the API.
+          Balance comes from Kie on every load. Spend comes from our own rows &mdash;
+          Kie&rsquo;s logs age out after two months, which makes the local table the
+          only long-term record.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-3">
           <Stat
             label="Balance"
-            value={spend.balance === null ? '—' : String(spend.balance)}
-            hint={
-              spend.balanceRecordedAt
-                ? `as of ${formatTimestamp(spend.balanceRecordedAt)}`
-                : 'not fetched yet'
-            }
+            value={balance.balance === null ? '—' : String(balance.balance)}
+            hint={balanceHint(balance)}
           />
           <Stat label="Spent, all time" value={String(spend.totalSpent)} hint="credits" />
-          <Stat label="Generations" value={String(counts.presets >= 0 ? spend.byModel.reduce((n, m) => n + m.runs, 0) : 0)} hint="last 30 days" />
+          <Stat label="Generations" value={String(runs)} hint="last 30 days" />
         </div>
+
+        {balance.error && (
+          <p className="mt-3 rounded border-l-2 border-amber-400 bg-amber-400/10 px-3 py-2 text-xs text-amber-300">
+            Could not reach Kie for the balance: {balance.error}
+          </p>
+        )}
 
         {spend.byModel.length > 0 && (
           <div className="mt-4 overflow-hidden rounded-lg border border-(--color-border)">
@@ -195,6 +207,13 @@ export default async function SettingsPage() {
       </section>
     </main>
   )
+}
+
+/** Live readings say nothing; a stale one has to say how stale, and why. */
+function balanceHint(balance: BalanceReading): string {
+  if (balance.live) return 'live from Kie'
+  if (balance.recordedAt) return `last reading ${formatTimestamp(balance.recordedAt)}`
+  return 'unavailable'
 }
 
 function Row({ label, value }: { label: string; value: string }) {
