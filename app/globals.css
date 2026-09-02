@@ -1,0 +1,20 @@
+@import 'tailwindcss';
+
+/*
+ * Dark by default — media is the content, chrome stays quiet (docs/UX-SPEC.md).
+ * Tokens land here as the Studio shell is built in Phase 3.
+ */
+@theme {
+  --color-surface: oklch(0.16 0.008 265);
+  --color-surface-raised: oklch(0.21 0.009 265);
+  --color-border: oklch(0.31 0.011 265);
+  --color-ink: oklch(0.95 0.005 265);
+  --color-ink-muted: oklch(0.68 0.011 265);
+  --color-accent: oklch(0.72 0.15 250);
+}
+
+html,
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+}

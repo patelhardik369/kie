@@ -1,0 +1,35 @@
+{
+  "name": "kie-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted generation studio on the Kie AI unified API — Kling, ByteDance and Wan, every parameter exposed.",
+  "scripts": {
+    "dev": "next dev",
+    "dev:clean": "node scripts/dev-clean.mjs && next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "test": "node --conditions=react-server --test \"lib/**/*.test.ts\"",
+    "smoke": "node --conditions=react-server --env-file=.env scripts/smoke.ts",
+    "sweep": "node --conditions=react-server scripts/sweep-forms.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.17.4",
+    "drizzle-orm": "^0.45.2",
+    "next": "^16.3.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.5",
+    "drizzle-kit": "^0.31.10",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2"
+  }
+}
