@@ -129,6 +129,10 @@ export function GenerationCard({
     <Link
       href={`/gallery/${generation.id}`}
       onMouseLeave={() => setArmed(false)}
+      // The date is off the face of the tile — a grid is scanned by picture and
+      // by prompt, and 48 timestamps are 48 pieces of noise nobody reads. It is
+      // still one hover away here, and printed in full on the detail page.
+      title={formatTimestamp(generation.createdAt)}
       className="tile group relative flex flex-col"
     >
       <div className="relative aspect-square w-full overflow-hidden bg-(--color-bg-deep)">
@@ -205,27 +209,30 @@ export function GenerationCard({
 
       <div className="flex flex-1 flex-col gap-1.5 border-t border-(--color-border) p-2.5">
         <div className="flex items-center gap-1.5">
-          <span className={stateTone(generation.state)}>{stateLabel(generation.state)}</span>
+          <span className={`${stateTone(generation.state)} shrink-0`}>
+            {stateLabel(generation.state)}
+          </span>
           {generation.nsfw && (
             // Only reachable with the NSFW filter on, so this confirms where you
             // are rather than warning you — the grid you are looking at is the
             // marked one.
             <span
-              className="chip chip-private"
+              className="chip chip-private shrink-0"
               title="Marked private — hidden from Recent and from the unfiltered gallery."
             >
               NSFW
             </span>
           )}
-          <span className="mono ml-auto shrink-0 text-[10px] text-(--color-ink-faint)">
-            {formatTimestamp(generation.createdAt)}
-          </span>
+          {/* Verbatim, and the whole slug — this is what you would paste into
+              the docs. It takes the rest of the row now that the timestamp is
+              gone, so a long slug truncates far later than it used to. */}
+          <code
+            className="mono ml-auto min-w-0 truncate text-[10px] text-(--color-ink-faint)"
+            title={generation.modelSlug}
+          >
+            {generation.modelSlug}
+          </code>
         </div>
-
-        {/* Verbatim, and the whole slug — this is what you would paste into the docs. */}
-        <code className="mono truncate text-[10px] text-(--color-ink-faint)">
-          {generation.modelSlug}
-        </code>
 
         {prompt && (
           <p className="line-clamp-2 text-xs leading-snug text-(--color-ink-muted)">{prompt}</p>

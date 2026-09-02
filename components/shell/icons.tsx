@@ -286,3 +286,39 @@ export function Trash({ size, className }: IconProps) {
     </Svg>
   )
 }
+
+/** Re-run: the same input round again, not a "refresh". */
+export function Repeat({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M2.75 8V6.25A2.5 2.5 0 0 1 5.25 3.75h8M11.25 1.75l2 2-2 2" />
+      <path d="M13.25 8v1.75a2.5 2.5 0 0 1-2.5 2.5h-8M4.75 10.25l-2 2 2 2" />
+    </Svg>
+  )
+}
+
+/** Tweak: three parameter tracks with the knobs at different stops. */
+export function Sliders({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M2.25 4.25h1.85M6.9 4.25h6.85" />
+      <path d="M2.25 8h5.35M10.4 8h3.35" />
+      <path d="M2.25 11.75h2.85M7.9 11.75h5.85" />
+      <circle cx="5.5" cy="4.25" r="1.4" />
+      <circle cx="9" cy="8" r="1.4" />
+      <circle cx="6.5" cy="11.75" r="1.4" />
+    </Svg>
+  )
+}
+
+/** Private: hidden from the grid, not deleted from it. */
+export function EyeOff({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M7.16 3.38a7.16 7.16 0 0 1 7.47 4.39.67.67 0 0 1 0 .46 7.17 7.17 0 0 1-.96 1.66" />
+      <path d="M9.39 9.44a2 2 0 0 1-2.83-2.83" />
+      <path d="M11.65 11.67a7.17 7.17 0 0 1-10.28-3.44.67.67 0 0 1 0-.46 7.17 7.17 0 0 1 2.96-3.43" />
+      <path d="M1.75 1.75l12.5 12.5" />
+    </Svg>
+  )
+}

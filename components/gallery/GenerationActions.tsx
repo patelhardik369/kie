@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
-import { Star, Trash } from '@/components/shell/icons.tsx'
+import { EyeOff, Repeat, Sliders, Star, Trash } from '@/components/shell/icons.tsx'
 import { formatBytes } from '@/lib/gallery/display.ts'
 
 /**
@@ -24,6 +24,15 @@ import { formatBytes } from '@/lib/gallery/display.ts'
  * is no undo. It arms on the first click and commits on the second, rather than
  * raising a browser dialog — a confirm() cannot say how many files are about to
  * go, and it looks the same as every other page's confirm().
+ *
+ * All five share one bar and one button box (`.btn`), so every icon sits beside
+ * its label on a single line at a single height. They were hand-rolled `<button>`
+ * elements before, and Tailwind's preflight makes an `<svg>` `display: block` —
+ * so in a non-flex button the icon stacked on top of its own label and each
+ * control was a different height. Grouping matters as much as alignment: the two
+ * things that make a new generation lead, the two flags that describe this one
+ * follow a rule, and the one thing that destroys it sits alone at the far end,
+ * out of reach of the controls you press by habit.
  */
 export function GenerationActions({
   id,
@@ -153,34 +162,35 @@ export function GenerationActions({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="panel flex flex-wrap items-center gap-2 p-2">
+        {/* Make something new from this one. */}
         <button
           type="button"
           onClick={rerun}
           disabled={rerunning}
           className="btn btn-primary"
         >
+          <Repeat size={14} />
           {rerunning ? 'Submitting…' : 'Re-run identical'}
         </button>
 
-        <Link
-          href={`/generate/${modelSlug}?from=${id}`}
-          className="btn btn-ghost"
-        >
+        <Link href={`/generate/${modelSlug}?from=${id}`} className="btn btn-ghost">
+          <Sliders size={14} />
           Tweak
         </Link>
 
+        <span className="bar-sep mx-1 hidden sm:block" aria-hidden />
+
+        {/* Describe this one. Both are toggles, and both say which state they
+            are in rather than which state a click would produce. */}
         <button
           type="button"
           onClick={toggleFavorite}
           aria-pressed={favorite}
-          className={`rounded-md border px-3 py-2 text-sm transition ${
-            favorite
-              ? 'border-(--color-warn)/60 bg-(--color-warn)/10 text-(--color-warn)'
-              : 'border-(--color-border) text-(--color-ink-muted) hover:border-(--color-ink-muted)'
-          }`}
+          title={favorite ? 'Remove from favorites' : 'Add to favorites'}
+          className={`btn ${favorite ? 'btn-on-warn' : 'btn-ghost'}`}
         >
-          <Star size={13} filled={favorite} />
+          <Star size={14} filled={favorite} />
           {favorite ? 'Favorited' : 'Favorite'}
         </button>
 
@@ -193,23 +203,16 @@ export function GenerationActions({
               ? 'Hidden from Recent and from the unfiltered gallery.'
               : 'Hide this from Recent and from the gallery grid.'
           }
-          className={`rounded-md border px-3 py-2 text-sm transition ${
-            nsfw
-              ? 'border-(--color-private)/60 bg-(--color-private)/10 text-(--color-private)'
-              : 'border-(--color-border) text-(--color-ink-muted) hover:border-(--color-ink-muted)'
-          }`}
+          className={`btn ${nsfw ? 'btn-on-private' : 'btn-ghost'}`}
         >
-          {nsfw ? 'NSFW — private' : 'Mark private'}
+          <EyeOff size={14} />
+          {nsfw ? 'Private' : 'Mark private'}
         </button>
 
         {/* Pushed to the far end, away from the controls you press by habit. */}
         <div className="ml-auto flex items-center gap-2">
           {armed && (
-            <button
-              type="button"
-              onClick={() => setArmed(false)}
-              className="btn btn-ghost btn-sm text-xs"
-            >
+            <button type="button" onClick={() => setArmed(false)} className="btn btn-quiet">
               Keep it
             </button>
           )}
@@ -222,13 +225,9 @@ export function GenerationActions({
                 ? 'Still running — the poller is writing to this generation. Delete it once it finishes.'
                 : 'Delete this generation and its files from disk.'
             }
-            className={`rounded-md border px-3 py-2 text-sm transition disabled:opacity-40 ${
-              armed
-                ? 'border-(--color-bad) bg-(--color-bad) text-white'
-                : 'border-(--color-border) text-(--color-ink-muted) hover:border-(--color-bad)/60 hover:text-(--color-bad)'
-            }`}
+            className={`btn ${armed ? 'btn-on-bad' : 'btn-ghost btn-danger'}`}
           >
-            <Trash size={13} />
+            <Trash size={14} />
             {deleting ? 'Deleting…' : armed ? 'Delete for good' : 'Delete'}
           </button>
         </div>
@@ -267,18 +266,27 @@ export function GenerationActions({
       )}
 
       <label className="block">
-        <span className="text-xs text-(--color-ink-muted)">Notes</span>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-xs text-(--color-ink-muted)">Notes</span>
+          {/* On the same line as its label, on the right, where the state of a
+              field belongs — under the box it pushed the whole page down by a
+              line every time the text changed. */}
+          <span
+            className={`text-[11px] ${
+              notes === savedNotes ? 'text-(--color-ink-faint)' : 'text-(--color-warn-ink)'
+            }`}
+          >
+            {notes === savedNotes ? 'Saved' : 'Unsaved — click away to save'}
+          </span>
+        </div>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           onBlur={saveNotes}
           rows={2}
           placeholder="What were you trying here?"
-          className="input mt-1 resize-y"
+          className="input mt-1.5 resize-y"
         />
-        <span className="text-[11px] text-(--color-ink-muted)">
-          {notes === savedNotes ? 'Saved' : 'Unsaved — click away to save'}
-        </span>
       </label>
     </div>
   )
