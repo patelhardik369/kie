@@ -1,13 +1,14 @@
 import Link from 'next/link'
 
 import { PresetRow } from '@/components/library/PresetRow.tsx'
+import { PageHeader } from '@/components/shell/PageHeader.tsx'
 import { getModel } from '@/lib/kie/registry/index.ts'
 import { listPresets } from '@/lib/library/queries.ts'
 import { applyPreset, summarizePreset } from '@/lib/presets/apply.ts'
 
 export const dynamic = 'force-dynamic'
 
-export const metadata = { title: 'Presets — Kie Studio' }
+export const metadata = { title: 'Presets' }
 
 /**
  * Saved parameter sets, grouped by model.
@@ -27,56 +28,45 @@ export default async function PresetsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
-      <header className="border-b border-(--color-border) pb-5">
-        <Link href="/" className="text-sm text-(--color-ink-muted) hover:underline">
-          ← Kie Studio
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Presets</h1>
-        <p className="mt-1.5 text-sm text-(--color-ink-muted)">
-          Model-scoped parameter sets. Applying one is a starting point — every
-          field stays editable afterwards.
-        </p>
-      </header>
+    <main className="mx-auto max-w-4xl px-4 pt-6 pb-16">
+      <PageHeader
+        title="Presets"
+        description="Model-scoped parameter sets. Applying one is a starting point — every field stays editable afterwards."
+      />
 
       {presets.length === 0 ? (
-        <div className="mt-16 flex flex-col items-center gap-3 text-center">
-          <p className="text-sm text-(--color-ink-muted)">
+        <div className="rounded-xl border border-dashed border-(--color-border) px-6 py-16 text-center">
+          <p className="text-[13px] text-(--color-ink-muted)">
             No presets yet. Save one from the generation form once you have
             parameters worth keeping.
           </p>
-          <Link
-            href="/generate"
-            className="rounded-md bg-(--color-accent) px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
-          >
+          <Link href="/generate" className="btn btn-ghost btn-sm mt-4">
             Choose a model
           </Link>
         </div>
       ) : (
-        <div className="mt-6 space-y-8">
+        <div className="space-y-7">
           {[...byModel.entries()].map(([slug, items]) => {
             const model = getModel(slug)
 
             return (
               <section key={slug}>
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h2 className="text-sm font-medium">
+                  <h2 className="text-[13px] font-medium">
                     {model?.label ?? slug}
-                    <code className="ml-2 font-mono text-xs text-(--color-ink-muted)">
-                      {slug}
-                    </code>
+                    <code className="mono ml-2 text-(--color-ink-faint)">{slug}</code>
                   </h2>
                   {!model && (
                     <span
                       title="This model is no longer in the registry, so these presets cannot be applied."
-                      className="rounded border border-amber-400/50 bg-amber-400/10 px-1.5 py-0.5 text-[11px] text-amber-300"
+                      className="chip chip-warn"
                     >
                       model not in registry
                     </span>
                   )}
                 </div>
 
-                <ul className="mt-2 divide-y divide-(--color-border) overflow-hidden rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
+                <ul className="panel-flush mt-2.5 divide-y divide-(--color-border)">
                   {items.map((preset) => {
                     const stored = safeParse(preset.paramsJson)
                     // Computed here so the list can warn before you apply, not after.

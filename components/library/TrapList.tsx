@@ -1,3 +1,4 @@
+import { ChevronRight } from '@/components/shell/icons.tsx'
 import type { Trap } from '@/lib/models/traps.ts'
 
 /**
@@ -16,38 +17,38 @@ const KIND_LABEL: Record<Trap['kind'], string> = {
 }
 
 const KIND_TONE: Record<Trap['kind'], string> = {
-  type: 'border-red-400/50 bg-red-400/10 text-red-300',
-  enum: 'border-amber-400/50 bg-amber-400/10 text-amber-300',
-  naming: 'border-amber-400/50 bg-amber-400/10 text-amber-300',
-  note: 'border-(--color-border) bg-(--color-surface) text-(--color-ink-muted)',
+  type: 'chip-bad',
+  enum: 'chip-warn',
+  naming: 'chip-warn',
+  note: '',
 }
 
 export function TrapList({ traps }: { traps: Trap[] }) {
   if (traps.length === 0) {
     return (
-      <p className="rounded-lg border border-dashed border-(--color-border) px-4 py-6 text-center text-sm text-(--color-ink-muted)">
+      <p className="rounded-xl border border-dashed border-(--color-border) px-4 py-8 text-center text-sm text-(--color-ink-muted)">
         No inconsistencies found across these models.
       </p>
     )
   }
 
   return (
-    <ul className="divide-y divide-(--color-border) overflow-hidden rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
+    <ul className="panel-flush divide-y divide-(--color-border)">
       {traps.map((trap, index) => (
         <li key={`${trap.kind}-${trap.key ?? index}`}>
           <details className="group">
-            <summary className="flex cursor-pointer flex-wrap items-center gap-2 px-4 py-2.5">
-              <span
-                className={`rounded-full border px-1.5 py-0.5 text-[11px] ${KIND_TONE[trap.kind]}`}
-              >
-                {KIND_LABEL[trap.kind]}
-              </span>
-              <span className="text-sm">{renderTitle(trap.title)}</span>
-              <span className="ml-auto font-mono text-[11px] text-(--color-ink-muted)">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center gap-2 px-3.5 py-2.5 transition-colors duration-(--dur-fast) hover:bg-(--color-surface-hover)">
+              <ChevronRight
+                size={12}
+                className="text-(--color-ink-faint) transition-transform duration-(--dur) group-open:rotate-90"
+              />
+              <span className={`chip ${KIND_TONE[trap.kind]}`}>{KIND_LABEL[trap.kind]}</span>
+              <span className="text-[13px]">{renderTitle(trap.title)}</span>
+              <span className="ml-auto font-mono text-[11px] text-(--color-ink-faint)">
                 {trap.models.length} model{trap.models.length === 1 ? '' : 's'}
               </span>
             </summary>
-            <div className="space-y-2 border-t border-(--color-border) px-4 py-3">
+            <div className="space-y-2 border-t border-(--color-border) bg-(--color-surface) px-3.5 py-3">
               <p className="text-xs leading-relaxed text-(--color-ink-muted)">
                 {trap.detail}
               </p>
@@ -55,7 +56,7 @@ export function TrapList({ traps }: { traps: Trap[] }) {
                 {trap.models.map((slug) => (
                   <li
                     key={slug}
-                    className="rounded border border-(--color-border) px-1.5 py-0.5 font-mono text-[11px] text-(--color-ink-muted)"
+                    className="chip font-mono"
                   >
                     {slug}
                   </li>

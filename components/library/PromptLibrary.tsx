@@ -111,7 +111,7 @@ export function PromptLibrary({
 
   return (
     <div className="space-y-6">
-      <section className="space-y-2 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+      <section className="panel space-y-2 p-4">
         <h2 className="text-sm font-medium">Save a prompt</h2>
         <input
           value={title}
@@ -137,12 +137,12 @@ export function PromptLibrary({
             type="button"
             onClick={save}
             disabled={saving || !body.trim()}
-            className="rounded-md bg-(--color-accent) px-4 py-2 text-sm font-medium text-black transition hover:opacity-90 disabled:opacity-40"
+            className="btn btn-primary"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
-        {error && <p className="text-sm text-red-300">{error}</p>}
+        {error && <p className="text-sm text-(--color-bad)">{error}</p>}
       </section>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -176,7 +176,7 @@ export function PromptLibrary({
           {prompts.length === 0 ? 'No saved prompts yet.' : 'Nothing matches.'}
         </p>
       ) : (
-        <ul className="divide-y divide-(--color-border) overflow-hidden rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
+        <ul className="panel-flush divide-y divide-(--color-border)">
           {visible.map((prompt) => (
             <li key={prompt.id} className="px-4 py-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -200,14 +200,14 @@ export function PromptLibrary({
                 <button
                   type="button"
                   onClick={() => void navigator.clipboard?.writeText(prompt.body)}
-                  className="ml-auto rounded-md border border-(--color-border) px-2 py-0.5 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted)"
+                  className="btn btn-ghost btn-sm ml-auto px-2 py-0.5 text-xs"
                 >
                   Copy
                 </button>
                 <button
                   type="button"
                   onClick={() => void remove(prompt.id)}
-                  className="rounded-md border border-(--color-border) px-2 py-0.5 text-xs text-(--color-ink-muted) transition hover:border-red-400 hover:text-red-400"
+                  className="btn btn-ghost btn-danger btn-sm px-2 py-0.5 text-xs"
                 >
                   Delete
                 </button>

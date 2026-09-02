@@ -1,66 +1,750 @@
 @import 'tailwindcss';
 
-/*
- * Dark by default — media is the content, chrome stays quiet (docs/UX-SPEC.md).
- * Tokens land here as the Studio shell is built in Phase 3.
- */
+/* ==========================================================================
+   Tokens
+   --------------------------------------------------------------------------
+   Two independent systems, deliberately:
+
+   1. **The shell is fixed.** Canvas, panels, borders and text are a neutral
+      near-black ramp and never move. A tool should read as one stable dark
+      surface; tinting the neutrals with the accent is what makes an app look
+      sprayed with a colour instead of built around one.
+
+   2. **The accent is derived at runtime** from the hex chosen in Settings
+      (lib/theme/accent.ts writes it onto <html>, which out-specifies :root).
+      The values here are the fallback for a no-JavaScript render, and match
+      what the default accent produces.
+   ========================================================================== */
 @theme {
-  --color-surface: oklch(0.16 0.008 265);
-  --color-surface-raised: oklch(0.21 0.009 265);
-  --color-border: oklch(0.31 0.011 265);
-  --color-ink: oklch(0.95 0.005 265);
-  --color-ink-muted: oklch(0.68 0.011 265);
-  --color-accent: oklch(0.72 0.15 250);
+  /* --- The fixed shell ---------------------------------------------------
+     A cool near-black ramp. Pure #000 is avoided on purpose: it flattens the
+     elevation steps and shows banding on OLED panels. */
+  --color-bg: #09090b;
+  --color-bg-deep: #050506;
+  --color-surface: #0f0f12;
+  --color-surface-raised: #141417;
+  --color-surface-hover: #1c1c21;
+  --color-border: #23232a;
+  --color-border-strong: #34343e;
+  --color-ink: #ededf0;
+  --color-ink-muted: #8b8b93;
+  --color-ink-faint: #5c5c64;
+
+  /* --- The accent (overwritten at runtime) --- */
+  --color-accent: oklch(0.66 0.185 262);
+  --color-accent-strong: oklch(0.73 0.178 262);
+  --color-accent-dim: oklch(0.52 0.157 262);
+  --color-accent-soft: oklch(0.66 0.185 262 / 0.15);
+  --color-accent-softer: oklch(0.66 0.185 262 / 0.07);
+  --color-accent-line: oklch(0.66 0.185 262 / 0.4);
+  --color-accent-ring: oklch(0.66 0.185 262 / 0.3);
+  --color-accent-glow: oklch(0.66 0.185 262 / 0.35);
+  --color-accent-ink: oklch(0.16 0.04 262);
+
+  /* --- Status — fixed hues on purpose. "Failed" must read as failed however
+     the accent moves, or the one colour that has to mean something loses it. */
+  --color-ok: #30a46c;
+  --color-ok-ink: #3dd68c;
+  --color-warn: #ffb224;
+  --color-warn-ink: #f1a10d;
+  --color-bad: #e5484d;
+  --color-bad-ink: #ff6369;
+  --color-private: #d6409f;
+  --color-private-ink: #f65cb6;
+
+  /* --- Radii ---
+     Small and consistent. Big pills on every surface is a template tell; a
+     tool reads sharper. */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.875rem;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-html,
+/* --------------------------------------------------------------------------
+   Motion tokens.
+
+   This is a utility surface — a dashboard, not a landing page — so the whole
+   language sits between 110ms and 220ms. Four durations and three easings,
+   reused everywhere: uncoordinated one-off timings are what make an interface
+   feel assembled rather than designed.
+   -------------------------------------------------------------------------- */
+:root {
+  --dur-press: 110ms;
+  --dur-fast: 140ms;
+  --dur: 180ms;
+  --dur-slow: 220ms;
+
+  /* Material 3 standard / decelerate / accelerate. Entrances decelerate;
+     `--ease-in` is only ever for something leaving the screen. */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0, 0, 0, 1);
+  --ease-in: cubic-bezier(0.3, 0, 1, 1);
+
+  /* Elevation. Shadows stay tight and dark — a dark UI reads depth from the
+     border and the top highlight far more than from a soft glow. */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.45);
+  --shadow-md: 0 6px 20px -6px rgb(0 0 0 / 0.6);
+  --shadow-lg: 0 18px 48px -16px rgb(0 0 0 / 0.75);
+  /* The hairline of light along a raised edge — the cheapest, most reliable
+     cue that a surface sits above the canvas. */
+  --edge: inset 0 1px 0 rgb(255 255 255 / 0.045);
+}
+
+html {
+  color-scheme: dark;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
-  background: var(--color-surface);
+  background-color: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  /* Geist is drawn tight; the default tracking reads loose at UI sizes. */
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100dvh;
+}
+
+/* Optical correction: as type gets larger, tracking must get tighter or a
+   heading looks gappy next to the body text under it. */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.021em;
+}
+
+::selection {
+  background: var(--color-accent-soft);
   color: var(--color-ink);
 }
 
+/* ==========================================================================
+   Focus — one ring for the whole app, :focus-visible only, so a mouse click on
+   a card leaves no halo but every keyboard path stays visible.
+   ========================================================================== */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm);
+}
+
+/* ==========================================================================
+   Scrollbars
+   ========================================================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 9999px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-strong);
+  background-clip: content-box;
+}
+
+/* ==========================================================================
+   Component primitives
+   --------------------------------------------------------------------------
+   Ordinary classes rather than @utility, because these are multi-property
+   recipes that markup then adjusts with utilities (`btn text-xs`, `input
+   w-auto`).
+
+   `@layer components` is load-bearing, not decoration. Tailwind declares
+   `theme, base, components, utilities` in that order, and a layered rule always
+   loses to a later layer regardless of specificity or source position.
+   Unlayered CSS beats every layer — so leaving these at the top level would
+   make `.input { width: 100% }` silently win over a `w-auto` sitting right
+   next to it in the markup.
+   ========================================================================== */
+@layer components {
+  /* --- Surfaces --------------------------------------------------------- */
+  .panel {
+    background-color: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--edge);
+  }
+
+  .panel-flush {
+    background-color: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--edge);
+    overflow: hidden;
+  }
+
+  /*
+   * A row in a list — the workhorse of this app, and the reason it can be
+   * dense. No lift, no shadow, no radius: rows live inside a panel that
+   * already has all three, and a row that pops out of its container on hover
+   * is the single most common "designed by nobody" tell.
+   */
+  .row {
+    position: relative;
+    display: block;
+    transition: background-color var(--dur-fast) var(--ease);
+  }
+
+  .row:hover {
+    background-color: var(--color-surface-hover);
+  }
+
+  /* The accent rule that wipes in along a hovered row's leading edge. */
+  .row::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 2px;
+    background: var(--color-accent);
+    transform: scaleY(0);
+    transform-origin: center;
+    transition: transform var(--dur-fast) var(--ease);
+  }
+
+  .row:hover::before,
+  .row:focus-visible::before {
+    transform: scaleY(1);
+  }
+
+  /* A media tile. The one place a small lift is right: the card IS the object,
+     not a container around one. */
+  .tile {
+    background-color: var(--color-surface-raised);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    transition:
+      border-color var(--dur-fast) var(--ease),
+      box-shadow var(--dur) var(--ease),
+      transform var(--dur) var(--ease);
+  }
+
+  .tile:hover {
+    border-color: var(--color-border-strong);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+  }
+
+  /* --- Buttons ---------------------------------------------------------- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: var(--radius-md);
+    padding: 0 0.75rem;
+    height: 2rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    line-height: 1;
+    white-space: nowrap;
+    border: 1px solid transparent;
+    cursor: pointer;
+    user-select: none;
+    transition:
+      background-color var(--dur-fast) var(--ease),
+      border-color var(--dur-fast) var(--ease),
+      color var(--dur-fast) var(--ease),
+      opacity var(--dur-fast) var(--ease),
+      transform var(--dur-press) var(--ease);
+  }
+
+  /* ~110ms, scale to 0.97 — the tactile press everyone recognises and nobody
+     consciously notices. */
+  .btn:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+    transform: none;
+  }
+
+  /* The one call to action per screen. */
+  .btn-primary {
+    background-color: var(--color-accent);
+    color: var(--color-accent-ink);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--color-accent-strong);
+  }
+
+  .btn-ghost {
+    background-color: var(--color-surface-raised);
+    border-color: var(--color-border);
+    color: var(--color-ink);
+    box-shadow: var(--edge);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background-color: var(--color-surface-hover);
+    border-color: var(--color-border-strong);
+  }
+
+  .btn-quiet {
+    background-color: transparent;
+    color: var(--color-ink-muted);
+  }
+
+  .btn-quiet:hover:not(:disabled) {
+    background-color: var(--color-surface-hover);
+    color: var(--color-ink);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--color-bad) 60%, transparent);
+    color: var(--color-bad-ink);
+  }
+
+  .btn-sm {
+    height: 1.625rem;
+    padding: 0 0.5rem;
+    font-size: 0.75rem;
+    gap: 0.3rem;
+  }
+
+  .btn-icon {
+    width: 2rem;
+    padding: 0;
+  }
+
+  .btn-icon.btn-sm {
+    width: 1.625rem;
+  }
+
+  /* --- Fields ----------------------------------------------------------- */
+  .input {
+    width: 100%;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    padding: 0.375rem 0.625rem;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: var(--color-ink);
+    outline: none;
+    transition:
+      border-color var(--dur-fast) var(--ease),
+      box-shadow var(--dur-fast) var(--ease);
+  }
+
+  .input::placeholder {
+    color: var(--color-ink-faint);
+  }
+
+  .input:hover:not(:disabled):not(:focus) {
+    border-color: var(--color-border-strong);
+  }
+
+  .input:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-ring);
+  }
+
+  /* The field ring already marks focus; a second outline on top of it reads as
+     a rendering fault. */
+  .input:focus-visible {
+    outline: none;
+  }
+
+  .input:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  /* --- Chips ------------------------------------------------------------ */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    padding: 0 0.375rem;
+    height: 1.25rem;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: 0;
+    color: var(--color-ink-muted);
+    white-space: nowrap;
+  }
+
+  .chip-accent {
+    border-color: var(--color-accent-line);
+    background-color: var(--color-accent-soft);
+    color: var(--color-accent);
+  }
+
+  .chip-ok {
+    border-color: color-mix(in srgb, var(--color-ok) 45%, transparent);
+    background-color: color-mix(in srgb, var(--color-ok) 14%, transparent);
+    color: var(--color-ok-ink);
+  }
+
+  .chip-warn {
+    border-color: color-mix(in srgb, var(--color-warn) 40%, transparent);
+    background-color: color-mix(in srgb, var(--color-warn) 12%, transparent);
+    color: var(--color-warn-ink);
+  }
+
+  .chip-bad {
+    border-color: color-mix(in srgb, var(--color-bad) 45%, transparent);
+    background-color: color-mix(in srgb, var(--color-bad) 13%, transparent);
+    color: var(--color-bad-ink);
+  }
+
+  .chip-private {
+    border-color: color-mix(in srgb, var(--color-private) 45%, transparent);
+    background-color: color-mix(in srgb, var(--color-private) 13%, transparent);
+    color: var(--color-private-ink);
+  }
+
+  /* --- Type ------------------------------------------------------------- */
+  .eyebrow {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-ink-faint);
+  }
+
+  .h-page {
+    font-size: 1.375rem;
+    font-weight: 600;
+    letter-spacing: -0.026em;
+    line-height: 1.2;
+  }
+
+  /* Slugs, ids, paths, counts. Tabular figures stop numbers from jittering as
+     they update in a polling view. */
+  .mono {
+    font-family: var(--font-mono);
+    font-feature-settings: 'tnum';
+    font-size: 0.75rem;
+    letter-spacing: 0;
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- Callouts --------------------------------------------------------- */
+  .note {
+    border-left: 2px solid var(--color-accent);
+    background-color: var(--color-accent-softer);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: var(--color-ink-muted);
+  }
+
+  .note-warn {
+    border-left-color: var(--color-warn);
+    background-color: color-mix(in srgb, var(--color-warn) 8%, transparent);
+    color: var(--color-warn-ink);
+  }
+
+  .note-bad {
+    border-left-color: var(--color-bad);
+    background-color: color-mix(in srgb, var(--color-bad) 8%, transparent);
+    color: var(--color-bad-ink);
+  }
+
+  /* --- Divided grid ------------------------------------------------------
+     Cells share hairlines instead of floating in a gapped row. One bordered
+     block reads as a built instrument; four drifting cards read as a template.
+     The 1px gap lets the container show through, which is what draws the
+     rules — cheaper and more even than per-cell borders that double up. */
+  .grid-divided {
+    display: grid;
+    gap: 1px;
+    background-color: var(--color-border);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+  }
+
+  .grid-divided > * {
+    background-color: var(--color-surface-raised);
+    transition: background-color var(--dur-fast) var(--ease);
+  }
+
+  .grid-divided > a:hover,
+  .grid-divided > button:hover {
+    background-color: var(--color-surface-hover);
+  }
+}
+
+/* ==========================================================================
+   Native control repairs
+   --------------------------------------------------------------------------
+   Element selectors, deliberately unlayered: these fix what the browser draws
+   by default, and nothing in the markup should opt out of them by accident.
+   ========================================================================== */
+
 /*
- * Native dropdowns render their own arrow hard against the right border, with
- * no way to move it — its position is not stylable. So the arrow is turned off
- * and redrawn: inset from the edge, with the text padded clear of it.
+ * Native dropdowns draw their own arrow hard against the right border, with no
+ * way to move it — its position is not stylable. So the arrow is turned off and
+ * redrawn: inset from the edge, with the text padded clear of it.
  *
  * Written as `select.select-field` rather than a bare element rule because a
  * Tailwind utility (`px-3`) would otherwise out-specify the padding and put the
  * label back under the chevron.
  *
- * The stroke colour is --color-ink-muted, written out because a data URI cannot
- * read a custom property. Change it with the token above.
+ * The stroke colour is written out because a data URI cannot read a custom
+ * property; it is a neutral grey that holds against every accent.
  */
 select.select-field {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.75 4.5 6 7.75 9.25 4.5' fill='none' stroke='%23a3a7b5' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.75 4.75 6 8l3.25-3.25' fill='none' stroke='%238b8b93' stroke-width='1.25' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  /* The gap between the arrow and the border. */
-  background-position: right 0.7rem center;
+  background-position: right 0.5rem center;
   background-size: 0.7rem 0.7rem;
-  /* 0.7 border gap + 0.7 arrow + 0.55 breathing room before the text. */
-  padding-inline-end: 1.95rem;
-}
-
-/*
- * Date fields have the same defect from the same cause: the picker icon is
- * drawn at the content edge with no inset. It cannot be repositioned, but it
- * can be given room.
- */
-input[type='date']::-webkit-calendar-picker-indicator {
-  margin-inline-start: 0.45rem;
-  opacity: 0.55;
+  /* 0.5 border gap + 0.7 arrow + 0.45 breathing room before the text. */
+  padding-inline-end: 1.65rem;
   cursor: pointer;
 }
 
+/* Date fields have the same defect from the same cause: the picker icon is
+   drawn at the content edge with no inset. It cannot be repositioned, but it
+   can be given room. */
+input[type='date']::-webkit-calendar-picker-indicator {
+  margin-inline-start: 0.35rem;
+  opacity: 0.4;
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
 input[type='date']::-webkit-calendar-picker-indicator:hover {
-  opacity: 0.9;
+  opacity: 0.85;
+}
+
+/* Range inputs: a themed track, which the browser will not draw on its own. */
+input[type='range'] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 1rem;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--color-border-strong);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -5.5px;
+  height: 14px;
+  width: 14px;
+  border-radius: 9999px;
+  background: var(--color-ink);
+  border: none;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+  transition: box-shadow var(--dur-fast) var(--ease);
+}
+
+input[type='range']:hover::-webkit-slider-thumb,
+input[type='range']:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.6),
+    0 0 0 4px var(--color-accent-ring);
+}
+
+input[type='range']::-moz-range-track {
+  height: 3px;
+  border-radius: 9999px;
+  background: var(--color-border-strong);
+}
+
+input[type='range']::-moz-range-thumb {
+  height: 14px;
+  width: 14px;
+  border: none;
+  border-radius: 9999px;
+  background: var(--color-ink);
 }
 
 /*
- * The option list is drawn by the OS, not by us. Without this it renders light
- * on a dark page — the one part of a dropdown no stylesheet can reach.
+ * Checkboxes. `accent-color` alone only recolours the tick and leaves the
+ * platform's light chrome box behind, which is why the one checkbox in the
+ * generation form read as a hole in the panel. Drawn from scratch instead: the
+ * tick is a background image because ::before does not render on a replaced
+ * element.
  */
-html {
-  color-scheme: dark;
+input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease);
+}
+
+input[type='checkbox']:hover:not(:disabled) {
+  border-color: var(--color-ink-faint);
+}
+
+input[type='checkbox']:checked {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5 6.5 11.5l6-7' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+}
+
+/* The private toggle is the one checkbox that is not the accent — it marks a
+   generation, and that meaning must not move when the theme does. */
+input[type='checkbox'].check-private:checked {
+  background-color: var(--color-private);
+  border-color: var(--color-private);
+}
+
+input[type='checkbox']:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* The native colour swatch draws its own inset border and padding; strip both
+   so the control reads as a flat chip of colour. */
+input[type='color'] {
+  -webkit-appearance: none;
+  appearance: none;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+}
+
+input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+input[type='color']::-webkit-color-swatch {
+  border: none;
+  border-radius: inherit;
+}
+
+/* Native marker on <summary>; every disclosure here draws its own chevron. */
+summary::-webkit-details-marker {
+  display: none;
+}
+
+/* ==========================================================================
+   Motion
+   --------------------------------------------------------------------------
+   Utility register: state feedback only. There is no load choreography and no
+   scroll-triggered anything — content on a tool appears immediately, and
+   animating a dashboard's arrival is the fastest way to make it feel slow.
+   ========================================================================== */
+
+/* The indeterminate progress bar on a running generation. The only looping
+   motion in the app, and it means something: work is in flight. */
+@keyframes kie-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(400%);
+  }
+}
+
+.bar-indeterminate {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-border);
+}
+
+.bar-indeterminate::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 25%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-accent),
+    transparent
+  );
+  animation: kie-indeterminate 1.4s var(--ease) infinite;
+}
+
+/* A popover growing from its trigger rather than from nowhere — origin-aware
+   motion is most of what separates a considered menu from a div that appeared. */
+@keyframes kie-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.pop {
+  animation: kie-pop var(--dur) var(--ease-out) both;
+  transform-origin: top left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* Reduced motion removes movement, not meaning: the running bar stops
+     travelling and becomes a static accent fill that still says "in flight". */
+  .bar-indeterminate::after {
+    width: 100%;
+    background: var(--color-accent-soft);
+  }
+
+  .tile:hover {
+    transform: none;
+  }
+
+  .btn:active:not(:disabled) {
+    transform: none;
+  }
 }

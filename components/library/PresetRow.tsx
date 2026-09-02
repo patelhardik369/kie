@@ -58,8 +58,8 @@ export function PresetRow({
       <p className="mt-1 truncate font-mono text-xs text-(--color-ink-muted)">{summary}</p>
 
       {droppedCount > 0 && (
-        <details className="mt-2 rounded border border-amber-400/40 bg-amber-400/10 px-2 py-1.5">
-          <summary className="cursor-pointer text-xs text-amber-300">
+        <details className="mt-2 rounded border border-(--color-warn)/40 bg-(--color-warn)/10 px-2 py-1.5">
+          <summary className="cursor-pointer text-xs text-(--color-warn)">
             {droppedCount} field{droppedCount === 1 ? '' : 's'} will be dropped —
             the registry has changed since this was saved
           </summary>
@@ -77,7 +77,7 @@ export function PresetRow({
         {applicable ? (
           <Link
             href={`/generate/${modelSlug}?preset=${id}`}
-            className="rounded-md border border-(--color-border) px-2.5 py-1 text-xs transition hover:border-(--color-ink-muted)"
+            className="btn btn-ghost btn-sm text-xs"
           >
             Apply in Studio
           </Link>
@@ -90,7 +90,7 @@ export function PresetRow({
           type="button"
           onClick={remove}
           disabled={busy}
-          className="rounded-md border border-(--color-border) px-2.5 py-1 text-xs text-(--color-ink-muted) transition hover:border-red-400 hover:text-red-400 disabled:opacity-40"
+          className="btn btn-ghost btn-danger btn-sm text-xs"
         >
           {busy ? 'Deleting…' : 'Delete'}
         </button>

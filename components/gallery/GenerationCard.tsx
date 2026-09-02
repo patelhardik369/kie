@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useState } from 'react'
 
+import { Alert, Film, Image as ImageIcon, Star, Wave } from '@/components/shell/icons.tsx'
 import {
   assetHref,
   formatTimestamp,
@@ -56,6 +57,7 @@ export function GenerationCard({
   const [favorite, setFavorite] = useState(generation.favorite)
   const [saving, setSaving] = useState(false)
   const prompt = promptOf(generation.input)
+  const running = isInFlight(generation.state)
 
   const toggleFavorite = async (event: React.MouseEvent) => {
     // The whole tile is a link; the star must not navigate.
@@ -80,16 +82,20 @@ export function GenerationCard({
   }
 
   return (
-    <Link
-      href={`/gallery/${generation.id}`}
-      className="group relative flex flex-col overflow-hidden rounded-lg border border-(--color-border) bg-(--color-surface-raised) transition hover:border-(--color-ink-muted)"
-    >
-      <div className="relative aspect-square w-full overflow-hidden bg-black">
+    <Link href={`/gallery/${generation.id}`} className="tile group relative flex flex-col">
+      <div className="relative aspect-square w-full overflow-hidden bg-(--color-bg-deep)">
         {thumbnail ? (
           <Preview asset={thumbnail} />
         ) : (
           <Placeholder generation={generation} />
         )}
+
+        {/* A scrim under the overlay controls only. Dimming the whole thumbnail
+            to make one 13px star legible would be a bad trade. */}
+        <span
+          className="pointer-events-none absolute inset-x-0 top-0 h-14 bg-linear-to-b from-black/50 to-transparent opacity-0 transition-opacity duration-(--dur) group-hover:opacity-100"
+          aria-hidden
+        />
 
         <button
           type="button"
@@ -97,61 +103,59 @@ export function GenerationCard({
           disabled={saving}
           aria-label={favorite ? 'Remove from favorites' : 'Add to favorites'}
           aria-pressed={favorite}
-          className={`absolute top-2 right-2 rounded-full border px-2 py-1 text-xs backdrop-blur transition ${
+          className={`absolute top-1.5 right-1.5 grid h-6 w-6 place-items-center rounded-md backdrop-blur-md transition duration-(--dur-fast) ${
             favorite
-              ? 'border-amber-300/60 bg-black/50 text-amber-300'
-              : 'border-white/20 bg-black/40 text-white/60 opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+              ? 'bg-black/50 text-(--color-warn-ink)'
+              : 'bg-black/45 text-white/75 opacity-0 group-hover:opacity-100 hover:text-white focus-visible:opacity-100'
           }`}
         >
-          {favorite ? '★' : '☆'}
+          <Star size={13} filled={favorite} />
         </button>
 
         {assetCount > 1 && (
-          <span className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 font-mono text-[11px] text-white/80 backdrop-blur">
-            {assetCount} files
+          <span className="absolute right-1.5 bottom-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[10px] text-white/85 backdrop-blur-md">
+            {assetCount}
           </span>
+        )}
+
+        {/* Work in flight, readable from across the room. */}
+        {running && (
+          <span className="bar-indeterminate absolute inset-x-0 bottom-0 h-0.5" aria-hidden />
         )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-1.5 border-t border-(--color-border) p-3">
-        <div className="flex items-center gap-2">
-          <span
-            className={`rounded-full border px-1.5 py-0.5 text-[11px] ${stateTone(generation.state)}`}
-          >
-            {isInFlight(generation.state) && (
-              <span className="mr-1 inline-block animate-pulse" aria-hidden>
-                ●
-              </span>
-            )}
-            {stateLabel(generation.state)}
-          </span>
+      <div className="flex flex-1 flex-col gap-1.5 border-t border-(--color-border) p-2.5">
+        <div className="flex items-center gap-1.5">
+          <span className={stateTone(generation.state)}>{stateLabel(generation.state)}</span>
           {generation.nsfw && (
             // Only reachable with the NSFW filter on, so this confirms where you
             // are rather than warning you — the grid you are looking at is the
             // marked one.
             <span
-              className="rounded-full border border-fuchsia-400/50 bg-fuchsia-400/10 px-1.5 py-0.5 text-[11px] text-fuchsia-300"
+              className="chip chip-private"
               title="Marked private — hidden from Recent and from the unfiltered gallery."
             >
               NSFW
             </span>
           )}
-          <span className="ml-auto font-mono text-[11px] text-(--color-ink-muted)">
+          <span className="mono ml-auto shrink-0 text-[10px] text-(--color-ink-faint)">
             {formatTimestamp(generation.createdAt)}
           </span>
         </div>
 
         {/* Verbatim, and the whole slug — this is what you would paste into the docs. */}
-        <code className="truncate font-mono text-[11px] text-(--color-ink-muted)">
+        <code className="mono truncate text-[10px] text-(--color-ink-faint)">
           {generation.modelSlug}
         </code>
 
-        {prompt && <p className="line-clamp-2 text-xs leading-snug">{prompt}</p>}
+        {prompt && (
+          <p className="line-clamp-2 text-xs leading-snug text-(--color-ink-muted)">{prompt}</p>
+        )}
 
         {generation.failMsg && (
-          <p className="line-clamp-3 rounded border-l-2 border-red-400 bg-red-400/10 px-2 py-1 text-[11px] leading-snug text-(--color-ink-muted)">
+          <p className="note note-bad line-clamp-3 px-2 py-1 text-[11px] leading-snug">
             {generation.failCode && (
-              <code className="mr-1 font-mono text-red-300">{generation.failCode}</code>
+              <code className="mr-1 font-mono font-medium">{generation.failCode}</code>
             )}
             {generation.failMsg}
           </p>
@@ -186,8 +190,8 @@ function Preview({ asset }: { asset: CardAsset }) {
 
   if (asset.kind === 'audio') {
     return (
-      <div className="flex h-full w-full items-center justify-center text-3xl text-(--color-ink-muted)">
-        ♪
+      <div className="flex h-full w-full items-center justify-center text-(--color-ink-faint)">
+        <Wave size={28} />
       </div>
     )
   }
@@ -202,15 +206,28 @@ function Preview({ asset }: { asset: CardAsset }) {
 /** What a tile shows before there are bytes — or when there never will be. */
 function Placeholder({ generation }: { generation: CardGeneration }) {
   const running = isInFlight(generation.state)
+  const failed = !running && generation.state !== 'complete'
+
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center">
       <span
-        className={`text-2xl ${running ? 'animate-pulse text-(--color-accent)' : 'text-(--color-ink-muted)'}`}
-        aria-hidden
+        className={
+          failed
+            ? 'text-(--color-bad-ink)'
+            : running
+              ? 'text-(--color-accent)'
+              : 'text-(--color-ink-faint)'
+        }
       >
-        {running ? '◐' : generation.state === 'complete' ? '◻' : '⚠'}
+        {failed ? (
+          <Alert size={20} />
+        ) : generation.family === 'bytedance' ? (
+          <ImageIcon size={20} />
+        ) : (
+          <Film size={20} />
+        )}
       </span>
-      <span className="text-[11px] text-(--color-ink-muted)">
+      <span className="text-[11px] text-(--color-ink-faint)">
         {stateLabel(generation.state)}
       </span>
     </div>

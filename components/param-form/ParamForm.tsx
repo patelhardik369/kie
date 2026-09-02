@@ -8,6 +8,7 @@ import type { ModelDefinition, ParamGroup } from '@/lib/kie/registry/types.ts'
 import { buildRequestInput } from '@/lib/kie/request.ts'
 import { openingValues, studioDefaults } from '@/lib/kie/studio-defaults.ts'
 import { validateInput } from '@/lib/kie/validate.ts'
+import { ChevronRight } from '@/components/shell/icons.tsx'
 import { Field } from './Field.tsx'
 import { SavePreset } from './SavePreset.tsx'
 import {
@@ -312,8 +313,8 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
   const dismiss = (id: string) => setJobs((prev) => prev.filter((job) => job !== id))
 
   return (
-    <div className="space-y-6">
-      <section className="space-y-5 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-5">
+    <div className="space-y-4">
+      <section className="panel space-y-4 p-4">
         {primary.map((param) => (
           <Field
             key={param.key}
@@ -332,25 +333,29 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
       </section>
 
       {secondary.length > 0 && (
-        <section className="rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
+        <section className="panel-flush">
           <button
             type="button"
             onClick={() => setShowAdvanced((v) => !v)}
-            className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left"
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors duration-(--dur-fast) hover:bg-(--color-surface-hover)"
+            aria-expanded={showAdvanced}
           >
-            <span className="flex items-center gap-2 text-sm font-medium">
-              <span className="text-(--color-ink-muted)">{showAdvanced ? '▾' : '▸'}</span>
+            <span className="flex items-center gap-2 text-[13px] font-medium">
+              <ChevronRight
+                size={13}
+                className={`text-(--color-ink-faint) transition-transform duration-(--dur) ${
+                  showAdvanced ? 'rotate-90' : ''
+                }`}
+              />
               Advanced
-              <span className="rounded-full border border-(--color-border) px-2 py-0.5 font-mono text-xs text-(--color-ink-muted)">
-                {secondary.length}
-              </span>
+              <span className="chip font-mono">{secondary.length}</span>
             </span>
             {!showAdvanced && changedAdvanced.length > 0 && (
               <span className="flex flex-wrap justify-end gap-1">
                 {changedAdvanced.map((p) => (
                   <span
                     key={p.key}
-                    className="rounded border border-(--color-accent)/40 bg-(--color-accent)/10 px-1.5 py-0.5 font-mono text-xs"
+                    className="chip chip-accent font-mono"
                   >
                     {p.key}={JSON.stringify(values[p.key])}
                   </span>
@@ -367,7 +372,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
           <div
             className={
               showAdvanced
-                ? 'space-y-5 border-t border-(--color-border) px-5 py-5'
+                ? 'space-y-4 border-t border-(--color-border) px-4 py-4'
                 : 'hidden'
             }
           >
@@ -390,20 +395,26 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
         </section>
       )}
 
-      <section className="rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
+      <section className="panel-flush">
         <button
           type="button"
           onClick={() => setShowPreview((v) => !v)}
-          className="flex w-full items-center gap-2 px-5 py-3 text-left text-sm"
+          className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-[13px] transition-colors duration-(--dur-fast) hover:bg-(--color-surface-hover)"
+          aria-expanded={showPreview}
         >
-          <span className="text-(--color-ink-muted)">{showPreview ? '▾' : '▸'}</span>
+          <ChevronRight
+            size={13}
+            className={`text-(--color-ink-faint) transition-transform duration-(--dur) ${
+              showPreview ? 'rotate-90' : ''
+            }`}
+          />
           Request preview
-          <span className="font-mono text-xs text-(--color-ink-muted)">
+          <span className="mono ml-auto text-(--color-ink-faint)">
             POST /api/v1/jobs/createTask
           </span>
         </button>
         {showPreview && (
-          <pre className="overflow-x-auto border-t border-(--color-border) px-5 py-4 font-mono text-xs leading-relaxed">
+          <pre className="overflow-x-auto border-t border-(--color-border) bg-(--color-bg-deep) px-4 py-3 font-mono text-[11px] leading-relaxed text-(--color-ink-muted)">
             {JSON.stringify({ model: model.slug, input: payload }, null, 2)}
           </pre>
         )}
@@ -417,24 +428,22 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
       />
 
       <label
-        className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 transition ${
+        className={`flex cursor-pointer items-start gap-2.5 rounded-xl border px-3.5 py-2.5 transition-colors duration-(--dur-fast) ${
           keepPrivate
-            ? 'border-fuchsia-400/50 bg-fuchsia-400/5'
-            : 'border-(--color-border) bg-(--color-surface-raised)'
+            ? 'border-[color-mix(in_srgb,var(--color-private)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-private)_8%,transparent)]'
+            : 'border-(--color-border) bg-(--color-surface-raised) hover:border-(--color-border-strong)'
         }`}
       >
         <input
           type="checkbox"
           checked={keepPrivate}
           onChange={(e) => setKeepPrivate(e.target.checked)}
-          className="mt-0.5 h-4 w-4 accent-fuchsia-400"
+          className="check-private mt-0.5"
         />
-        <span className="text-sm">
+        <span className="text-[13px]">
           Keep private
-          <span className="ml-2 rounded-full border border-fuchsia-400/50 px-1.5 py-0.5 text-[11px] text-fuchsia-300">
-            NSFW
-          </span>
-          <span className="mt-0.5 block text-xs text-(--color-ink-muted)">
+          <span className="chip chip-private ml-2">NSFW</span>
+          <span className="mt-1 block text-xs leading-relaxed text-(--color-ink-muted)">
             Kept out of Recent on the home page and out of the gallery grid; it
             appears only under the gallery&rsquo;s NSFW filter. Nothing about the
             generation itself changes &mdash; this is not sent to Kie
@@ -443,19 +452,17 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
         </span>
       </label>
 
-      <section className="space-y-3">
+      <section className="space-y-2.5">
         {prefill.state === 'loading' && (
-          <p className="rounded border-l-2 border-(--color-accent) bg-(--color-accent)/10 px-3 py-2 text-sm text-(--color-ink-muted)">
-            Loading parameters from the generation you are tweaking…
-          </p>
+          <p className="note">Loading parameters from the generation you are tweaking…</p>
         )}
         {prefill.state === 'error' && (
-          <p className="rounded border-l-2 border-amber-400 bg-amber-400/10 px-3 py-2 text-sm text-amber-300">
+          <p className="note note-warn">
             {prefill.message} Showing this model&rsquo;s defaults instead.
           </p>
         )}
         {presetReport && (
-          <div className="rounded border border-(--color-border) bg-(--color-surface-raised) px-3 py-2">
+          <div className="panel px-3 py-2">
             <p className="text-xs text-(--color-ink-muted)">
               Applied preset <span className="text-(--color-ink)">{presetReport.name}</span>
               . Every field stays editable.
@@ -463,8 +470,8 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
             {presetReport.dropped.length > 0 && (
               // Reported, never silently swallowed: the registry has moved since
               // this preset was saved, and you should know what did not survive.
-              <div className="mt-1.5 rounded border border-amber-400/40 bg-amber-400/10 px-2 py-1.5">
-                <p className="text-xs text-amber-300">
+              <div className="note note-warn mt-1.5 px-2 py-1.5">
+                <p className="text-xs">
                   {presetReport.dropped.length} field
                   {presetReport.dropped.length === 1 ? '' : 's'} could not be applied:
                 </p>
@@ -493,16 +500,14 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
         {(attempted ? blocking : []).map((message) => (
           <p
             key={message}
-            className="rounded border-l-2 border-red-400 bg-red-400/10 px-3 py-2 text-sm text-(--color-ink-muted)"
+            className="note note-bad"
           >
             {message}
           </p>
         ))}
 
         {submitError && (
-          <p className="rounded border-l-2 border-red-400 bg-red-400/10 px-3 py-2 text-sm text-red-300">
-            {submitError}
-          </p>
+          <p className="note note-bad">{submitError}</p>
         )}
 
         <div className="flex flex-wrap items-center gap-3">
@@ -510,7 +515,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
             type="button"
             onClick={submit}
             disabled={!canSubmit}
-            className="rounded-md bg-(--color-accent) px-5 py-2.5 text-sm font-medium text-black transition disabled:cursor-not-allowed disabled:opacity-40"
+            className="btn btn-primary"
           >
             {submitting
               ? 'Submitting…'
@@ -518,7 +523,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
                 ? `Generate ${resolution.runs} runs`
                 : 'Generate'}
           </button>
-          <span className="text-sm text-(--color-ink-muted)">
+          <span className="text-xs text-(--color-ink-muted)">
             {attempted && !ready
               ? `${validation.issues.length} issue${validation.issues.length === 1 ? '' : 's'} to resolve.`
               : 'Runs on the server — it keeps going if you close this tab.'}
@@ -531,7 +536,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
       </section>
 
       {jobs.length > 0 && (
-        <section className="space-y-3 border-t border-(--color-border) pt-6">
+        <section className="space-y-3 border-t border-(--color-border) pt-5">
           {jobs.map((id) => (
             <GenerationStatus key={id} id={id} onDismiss={dismiss} />
           ))}

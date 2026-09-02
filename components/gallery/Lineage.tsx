@@ -133,16 +133,16 @@ function RowLink({ row, varying }: { row: LineageRow; varying: string[] }) {
     <li>
       <Link
         href={`/gallery/${row.id}`}
-        className="flex items-center gap-3 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 transition hover:border-(--color-ink-muted)"
+        className="row flex items-center gap-3 rounded-lg border border-(--color-border) bg-(--color-surface-raised) px-3 py-2"
       >
         <span
-          className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[11px] ${stateTone(row.state)}`}
+          className={`${stateTone(row.state)} shrink-0`}
         >
           {stateLabel(row.state)}
         </span>
 
         {row.nsfw && (
-          <span className="shrink-0 rounded-full border border-fuchsia-400/50 bg-fuchsia-400/10 px-1.5 py-0.5 text-[11px] text-fuchsia-300">
+          <span className="shrink-0 rounded-full border border-(--color-private)/50 bg-(--color-private)/10 px-1.5 py-0.5 text-[11px] text-(--color-private)">
             NSFW
           </span>
         )}

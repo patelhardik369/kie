@@ -11,7 +11,79 @@ the credit balance and a live count of running jobs. A right-hand **queue rail**
 screen: running jobs with state and elapsed time, most recent first. Generation is asynchronous and
 slow; you should never have to navigate somewhere to find out whether your video is done.
 
-Dark by default. Media is the content; chrome stays quiet.
+A persistent 48px top bar carries the mark, the sections, Settings, and the New-generation action.
+It is static — chrome that restyles itself as you scroll competes with the content every time and is
+noticed exactly once.
+
+Dark by default, on a fixed near-black canvas. Media is the content; chrome stays quiet.
+
+---
+
+## Theming
+
+Two systems that do not touch.
+
+**The shell is fixed.** Canvas, panels, borders and text are a neutral near-black ramp
+(`#09090b` → `#ededf0`) that never moves. A tool should read as one stable dark surface; tinting the
+neutrals is what makes an app look sprayed with a colour rather than built around one.
+
+**The accent is derived at runtime** from one hex chosen in Settings, and colours only what is
+interactive or stateful: the primary action, focus, selection, links, the running state. Presets are
+eleven starting points around the hue circle; the picker itself takes any value.
+
+| Piece | Where |
+|---|---|
+| Derivation + the pre-paint bootstrap | `lib/theme/accent.ts` |
+| Inline `<script>` in `<head>` | `components/theme/AccentScript.tsx` |
+| The control | `components/theme/AccentPicker.tsx` |
+| Token fallbacks + component primitives | `app/globals.css` |
+
+Rules the implementation holds to:
+
+1. **OKLCH, not HSL.** Only there does holding lightness constant while swapping hue actually look
+   constant — an HSL ramp makes yellow glare and blue vanish at the same nominal lightness.
+2. **The pick is corrected, never honoured blindly.** Lightness is pulled into `0.58…0.80` and chroma
+   capped at `0.19`, because a near-black accent cannot carry a button label on a black shell and an
+   over-saturated one clips its own derived tints out of gamut. Hue always survives.
+3. **The accent never reaches the neutrals.** The canvas is the same black under every choice — see
+   above.
+4. **Status colours do not move.** `--color-ok`, `--color-warn`, `--color-bad` and `--color-private`
+   are fixed hues. "Failed" must read as failed under every accent.
+5. **Applied before first paint.** An inline script in `<head>`, not an effect — otherwise every load
+   flashes the default blue first.
+6. **Browser-local.** The chosen hex lives in `localStorage` and never reaches Kie or the database.
+   Storage being unavailable degrades to a session-only theme, never to an error.
+
+Markup consumes recipes (`.panel`, `.row`, `.tile`, `.btn`, `.input`, `.chip`, `.note`,
+`.grid-divided`), not raw colours. They live in `@layer components` so a utility beside them in the
+markup still wins — unlayered, `.input { width: 100% }` would silently beat the `w-auto` next to it.
+
+---
+
+## Type, density and motion
+
+**Type.** Geist Sans and Geist Mono, shipped as an npm package rather than fetched from Google Fonts:
+the files sit in `node_modules`, so a build never needs the network and there is no third-party
+request at runtime. Sans and Mono share a skeleton, which is why a table of slugs reads as typeset
+rather than as two fonts colliding. Body is 14px at `-0.011em`; headings tighten to `-0.021em`
+because tracking that looks right at 14px looks gappy at 22px. Slugs, ids, paths and counts use
+`.mono` (12px, tabular figures) so numbers do not jitter as a polling view updates.
+
+**Density.** This is a workspace, not a document. Rows are 2.5rem-ish, buttons are 2rem, panel
+padding is 1rem, and the home screen is two columns rather than one centred stack. There is no hero:
+a hero on the screen you open fifty times a day is fifty wasted screenfuls.
+
+**Icons.** One hand-drawn set on a 16px grid at 1.5 stroke (`components/shell/icons.tsx`), all
+`currentColor`. Unicode glyphs (★ ▶ ✕ →) were doing this job and cannot: they render in whatever
+font the platform picks, sit off the baseline, and ignore stroke weight.
+
+**Motion.** Utility register — feedback and state only. Four durations (110/140/180/220ms) and three
+easings, tokenised in `:root` and reused everywhere; uncoordinated one-off timings are what make an
+interface feel assembled. There is no load choreography and nothing scroll-triggered: content on a
+tool appears immediately, and animating a dashboard's arrival only makes it feel slow. Only
+`transform` and `opacity` are animated. The one looping animation in the app is the indeterminate bar
+on a running generation, and it means something. Under `prefers-reduced-motion` that bar stops
+travelling and becomes a static accent fill — movement removed, meaning kept.
 
 ---
 
@@ -211,8 +283,9 @@ Dropped fields after a registry change are reported, not silently swallowed.
 
 **Prompts** — taggable saved prompts, searchable, insertable into any prompt field.
 
-**Settings** — API key status (never the value), credit balance and spend history, `KIE_OUTPUT_DIR`
-with disk usage, and the webhook URL when `KIE_PUBLIC_URL` is configured.
+**Settings** — the accent picker (see Theming), API key status (never the value), credit balance and
+spend history, `KIE_OUTPUT_DIR` with disk usage, and the webhook URL when `KIE_PUBLIC_URL` is
+configured.
 
 ## Interaction principles
 
@@ -222,3 +295,6 @@ with disk usage, and the webhook URL when `KIE_PUBLIC_URL` is configured.
 4. **Every output is traceable.** No item exists without the parameters that produced it.
 5. **Verbatim over friendly.** Model slugs, `failMsg`, and enum values appear exactly as the API
    spells them, so what you see here matches what you'd read in the docs.
+6. **One colour, everywhere.** No component hard-codes an accent; every interactive surface and
+   state pill reads the same tokens, so a theme change is instant and complete — and the canvas
+   underneath never moves.

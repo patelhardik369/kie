@@ -75,14 +75,14 @@ export function AssetLibrary({ initialAssets }: { initialAssets: LibraryAssetIte
         </p>
       )}
 
-      <ul className="divide-y divide-(--color-border) overflow-hidden rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
+      <ul className="panel-flush divide-y divide-(--color-border)">
         {assets.map((asset) => (
           <li key={asset.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5">
             <span
               className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[11px] ${
                 asset.live
-                  ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300'
-                  : 'border-amber-400/50 bg-amber-400/10 text-amber-300'
+                  ? 'border-(--color-ok)/50 bg-(--color-ok)/10 text-(--color-ok)'
+                  : 'border-(--color-warn)/50 bg-(--color-warn)/10 text-(--color-warn)'
               }`}
               title={
                 asset.live
@@ -105,14 +105,14 @@ export function AssetLibrary({ initialAssets }: { initialAssets: LibraryAssetIte
               type="button"
               onClick={() => void refresh(asset.id)}
               disabled={busy === asset.id}
-              className="shrink-0 rounded-md border border-(--color-border) px-2 py-1 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted) disabled:opacity-40"
+              className="btn btn-ghost btn-sm shrink-0 px-2 py-1 text-xs"
             >
               {busy === asset.id ? 'Checking…' : asset.live ? 'Get URL' : 'Renew'}
             </button>
             <button
               type="button"
               onClick={() => void remove(asset.id)}
-              className="shrink-0 rounded-md border border-(--color-border) px-2 py-1 text-xs text-(--color-ink-muted) transition hover:border-red-400 hover:text-red-400"
+              className="btn btn-ghost btn-danger btn-sm shrink-0 px-2 py-1 text-xs"
             >
               Delete
             </button>

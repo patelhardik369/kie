@@ -4,6 +4,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import { Star } from '@/components/shell/icons.tsx'
+
 /**
  * What you can do with a past generation.
  *
@@ -119,14 +121,14 @@ export function GenerationActions({
           type="button"
           onClick={rerun}
           disabled={rerunning}
-          className="rounded-md bg-(--color-accent) px-4 py-2 text-sm font-medium text-black transition hover:opacity-90 disabled:opacity-40"
+          className="btn btn-primary"
         >
           {rerunning ? 'Submitting…' : 'Re-run identical'}
         </button>
 
         <Link
           href={`/generate/${modelSlug}?from=${id}`}
-          className="rounded-md border border-(--color-border) px-4 py-2 text-sm transition hover:border-(--color-ink-muted)"
+          className="btn btn-ghost"
         >
           Tweak
         </Link>
@@ -137,11 +139,12 @@ export function GenerationActions({
           aria-pressed={favorite}
           className={`rounded-md border px-3 py-2 text-sm transition ${
             favorite
-              ? 'border-amber-300/60 bg-amber-400/10 text-amber-300'
+              ? 'border-(--color-warn)/60 bg-(--color-warn)/10 text-(--color-warn)'
               : 'border-(--color-border) text-(--color-ink-muted) hover:border-(--color-ink-muted)'
           }`}
         >
-          {favorite ? '★ Favorited' : '☆ Favorite'}
+          <Star size={13} filled={favorite} />
+          {favorite ? 'Favorited' : 'Favorite'}
         </button>
 
         <button
@@ -155,7 +158,7 @@ export function GenerationActions({
           }
           className={`rounded-md border px-3 py-2 text-sm transition ${
             nsfw
-              ? 'border-fuchsia-400/60 bg-fuchsia-400/10 text-fuchsia-300'
+              ? 'border-(--color-private)/60 bg-(--color-private)/10 text-(--color-private)'
               : 'border-(--color-border) text-(--color-ink-muted) hover:border-(--color-ink-muted)'
           }`}
         >
@@ -164,15 +167,15 @@ export function GenerationActions({
       </div>
 
       {nsfw && (
-        <p className="rounded border-l-2 border-fuchsia-400 bg-fuchsia-400/10 px-3 py-2 text-xs text-(--color-ink-muted)">
+        <p className="rounded border-l-2 border-(--color-private) bg-(--color-private)/10 px-3 py-2 text-xs text-(--color-ink-muted)">
           Hidden from Recent and from the gallery grid. It appears under the
-          gallery&rsquo;s <span className="text-fuchsia-300">NSFW</span> filter, and
+          gallery&rsquo;s <span className="text-(--color-private)">NSFW</span> filter, and
           here, where you asked for it by id. A re-run or tweak stays private too.
         </p>
       )}
 
       {error && (
-        <p className="rounded border-l-2 border-red-400 bg-red-400/10 px-3 py-2 text-sm text-red-300">
+        <p className="rounded border-l-2 border-(--color-bad) bg-(--color-bad)/10 px-3 py-2 text-sm text-(--color-bad)">
           {error}
         </p>
       )}
@@ -185,7 +188,7 @@ export function GenerationActions({
           onBlur={saveNotes}
           rows={2}
           placeholder="What were you trying here?"
-          className="mt-1 w-full resize-y rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm outline-none transition focus:border-(--color-accent)"
+          className="input mt-1 resize-y"
         />
         <span className="text-[11px] text-(--color-ink-muted)">
           {notes === savedNotes ? 'Saved' : 'Unsaved — click away to save'}

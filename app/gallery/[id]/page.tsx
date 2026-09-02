@@ -1,10 +1,11 @@
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { GenerationActions } from '@/components/gallery/GenerationActions.tsx'
 import { Lineage } from '@/components/gallery/Lineage.tsx'
 import { ParamProvenance } from '@/components/gallery/ParamProvenance.tsx'
 import { GenerationStatus } from '@/components/queue/GenerationStatus.tsx'
+import { BackLink } from '@/components/shell/PageHeader.tsx'
+import { ChevronRight, ExternalLink } from '@/components/shell/icons.tsx'
 import { assetTokenFor } from '@/lib/gallery/asset-token.ts'
 import {
   assetHref,
@@ -43,39 +44,36 @@ export default async function GenerationDetailPage({
   const live = isInFlight(generation.state) || isResumable(generation.state)
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <header className="border-b border-(--color-border) pb-5">
-        <Link href="/gallery" className="text-sm text-(--color-ink-muted) hover:underline">
-          ← Gallery
-        </Link>
+    <main className="mx-auto max-w-5xl px-4 pt-5 pb-16">
+      <BackLink href="/gallery">Gallery</BackLink>
 
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <span
-            className={`rounded-full border px-2.5 py-0.5 text-xs ${stateTone(generation.state)}`}
-          >
+      <header className="mt-4 border-b border-(--color-border) pb-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className={`${stateTone(generation.state)} px-2.5 text-xs`}>
             {stateLabel(generation.state)}
           </span>
-          <h1 className="text-xl font-semibold tracking-tight">
+          <h1 className="text-lg font-semibold tracking-[-0.022em]">
             {model?.label ?? generation.modelSlug}
           </h1>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-(--color-ink-muted)">
-          <code>{generation.modelSlug}</code>
-          <span>{generation.capability}</span>
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          <code className="chip font-mono">{generation.modelSlug}</code>
+          <span className="chip chip-accent">{generation.capability}</span>
           {model ? (
             <a
               href={model.docUrl}
               target="_blank"
               rel="noreferrer"
-              className="underline hover:text-(--color-ink)"
+              className="chip transition-colors duration-(--dur-fast) hover:border-(--color-accent-line) hover:text-(--color-accent)"
             >
               docs
+              <ExternalLink size={10} />
             </a>
           ) : (
             <span
               title="This model is no longer in the registry. The record below is unchanged."
-              className="text-amber-300"
+              className="chip chip-warn"
             >
               model not in registry
             </span>
@@ -89,31 +87,29 @@ export default async function GenerationDetailPage({
         generation updates itself and can resume a stalled one.
       */}
       {live && (
-        <section className="mt-6">
+        <section className="mt-5">
           <GenerationStatus id={generation.id} />
         </section>
       )}
 
       {assets.length > 0 && (
-        <section className="mt-6 space-y-4">
+        <section className="mt-5 space-y-3">
           {assets.map((asset) => (
-            <figure
-              key={asset.id}
-              className="overflow-hidden rounded-lg border border-(--color-border) bg-(--color-surface-raised)"
-            >
+            <figure key={asset.id} className="panel-flush">
               <Media
                 kind={asset.kind}
                 src={assetHref(asset.localPath, assetTokenFor(asset.localPath, generation.nsfw))}
                 layerMeta={asset.layerMeta}
               />
-              <figcaption className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-(--color-border) px-3 py-2 font-mono text-[11px] text-(--color-ink-muted)">
+              <figcaption className="mono flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-(--color-border) px-3.5 py-2 text-(--color-ink-faint)">
                 <a
                   href={assetHref(asset.localPath, assetTokenFor(asset.localPath, generation.nsfw))}
                   target="_blank"
                   rel="noreferrer"
-                  className="underline hover:text-(--color-ink)"
+                  className="inline-flex items-center gap-1 underline underline-offset-2 transition-colors duration-(--dur-fast) hover:text-(--color-accent)"
                 >
                   open
+                  <ExternalLink size={10} />
                 </a>
                 {asset.width && asset.height && (
                   <span>
@@ -134,9 +130,9 @@ export default async function GenerationDetailPage({
       )}
 
       {generation.failMsg && (
-        <section className="mt-6 rounded-lg border-l-2 border-red-400 bg-red-400/10 px-4 py-3">
+        <section className="note note-bad mt-6 px-4 py-3">
           {generation.failCode && (
-            <code className="font-mono text-xs text-red-300">{generation.failCode}</code>
+            <code className="font-mono text-xs font-medium">{generation.failCode}</code>
           )}
           {/* Verbatim — paraphrasing a moderation message makes it useless. */}
           <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap text-(--color-ink-muted)">
@@ -145,7 +141,7 @@ export default async function GenerationDetailPage({
         </section>
       )}
 
-      <section className="mt-8">
+      <section className="mt-6">
         <GenerationActions
           id={generation.id}
           modelSlug={generation.modelSlug}
@@ -156,28 +152,32 @@ export default async function GenerationDetailPage({
         />
       </section>
 
-      <section className="mt-8">
-        <h2 className="text-sm font-medium">Parameters</h2>
-        <p className="mt-0.5 text-xs text-(--color-ink-muted)">
+      <section className="mt-7">
+        <h2 className="text-[13px] font-medium">Parameters</h2>
+        <p className="mt-1 text-xs text-(--color-ink-muted)">
           Exactly what was sent to Kie, stored verbatim.
         </p>
-        <div className="mt-3">
+        <div className="mt-2.5">
           <ParamProvenance model={model} input={input} />
         </div>
 
-        <details className="mt-3 rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
-          <summary className="cursor-pointer px-3 py-2 text-xs text-(--color-ink-muted)">
+        <details className="panel-flush group mt-3">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 px-3.5 py-2 text-xs text-(--color-ink-muted) transition-colors duration-(--dur-fast) hover:text-(--color-ink)">
+            <ChevronRight
+              size={12}
+              className="text-(--color-ink-faint) transition-transform duration-(--dur) group-open:rotate-90"
+            />
             Raw input_json
           </summary>
-          <pre className="overflow-x-auto border-t border-(--color-border) px-3 py-3 font-mono text-xs leading-relaxed">
+          <pre className="overflow-x-auto border-t border-(--color-border) bg-(--color-bg-deep) px-3.5 py-3 font-mono text-[11px] leading-relaxed text-(--color-ink-muted)">
             {JSON.stringify(input, null, 2)}
           </pre>
         </details>
       </section>
 
-      <section className="mt-8">
-        <h2 className="text-sm font-medium">Run</h2>
-        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:grid-cols-3">
+      <section className="mt-7">
+        <h2 className="text-[13px] font-medium">Run</h2>
+        <dl className="panel mt-2.5 grid grid-cols-2 gap-x-6 gap-y-3 p-3.5 text-xs sm:grid-cols-3">
           <Fact label="Created">{formatTimestamp(generation.createdAt)}</Fact>
           <Fact label="Submitted">{formatTimestamp(generation.submittedAt)}</Fact>
           <Fact label="Completed">{formatTimestamp(generation.completedAt)}</Fact>
@@ -192,9 +192,9 @@ export default async function GenerationDetailPage({
         </dl>
       </section>
 
-      <section className="mt-8 border-t border-(--color-border) pt-6">
-        <h2 className="text-sm font-medium">Lineage</h2>
-        <div className="mt-3">
+      <section className="mt-8 border-t border-(--color-border) pt-5">
+        <h2 className="text-[13px] font-medium">Lineage</h2>
+        <div className="mt-2.5">
           <Lineage
             parent={parent}
             children={children}
@@ -210,8 +210,8 @@ export default async function GenerationDetailPage({
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-(--color-ink-muted)">{label}</dt>
-      <dd className="truncate font-mono" title={String(children)}>
+      <dt className="text-[11px] text-(--color-ink-faint)">{label}</dt>
+      <dd className="mono mt-0.5 truncate text-(--color-ink-muted)" title={String(children)}>
         {children}
       </dd>
     </div>
@@ -234,7 +234,7 @@ function Media({
       {layer && (
         // Layer decomposition returns z-ordering and names alongside the URLs;
         // showing the file without them discards what makes it useful.
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-(--color-border) px-3 py-2 text-xs text-(--color-ink-muted)">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-(--color-border) bg-(--color-surface) px-3.5 py-2 text-xs text-(--color-ink-muted)">
           {typeof layer.name === 'string' && (
             <span className="font-medium text-(--color-ink)">{layer.name}</span>
           )}
@@ -245,13 +245,13 @@ function Media({
         </div>
       )}
       {kind === 'video' ? (
-        <video src={src} controls playsInline className="w-full bg-black" />
+        <video src={src} controls playsInline className="w-full bg-(--color-bg-deep)" />
       ) : kind === 'audio' ? (
-        <audio src={src} controls className="w-full p-3" />
+        <audio src={src} controls className="w-full p-4" />
       ) : (
         // A plain <img>: a local file from our own route, and re-encoding a
         // generation output would misrepresent it.
-        <img src={src} alt="" className="w-full bg-black object-contain" />
+        <img src={src} alt="" className="w-full bg-(--color-bg-deep) object-contain" />
       )}
     </>
   )

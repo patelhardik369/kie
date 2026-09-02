@@ -1,5 +1,6 @@
 'use client'
 
+import { ArrowDown, ArrowUp, Close, Plus } from '@/components/shell/icons.tsx'
 import type { ParamDef } from '@/lib/kie/registry/types.ts'
 import { BboxListControl } from './RegionPicker.tsx'
 import {
@@ -75,16 +76,20 @@ export function Field({ reason, required, errors, studioDefault, ...rest }: Fiel
   return (
     <div className={disabled ? 'opacity-60' : undefined}>
       <div className="mb-1.5 flex items-baseline justify-between gap-3">
-        <label className="text-sm font-medium">
+        <label className="text-[13px] font-medium text-(--color-ink)">
           {param.label}
-          {isRequired && <span className="ml-1 text-(--color-accent)">*</span>}
+          {isRequired && (
+            <span className="ml-1 text-(--color-accent)" title="Required">
+              *
+            </span>
+          )}
         </label>
-        <code className="font-mono text-xs text-(--color-ink-muted)">{param.key}</code>
+        <code className="mono shrink-0 text-(--color-ink-faint)">{param.key}</code>
       </div>
 
       <Control {...props} />
 
-      <p className="mt-1.5 text-xs leading-relaxed text-(--color-ink-muted)">
+      <p className="mt-1.5 text-[11px] leading-relaxed text-(--color-ink-faint)">
         {param.describe}
         {param.default !== undefined && (
           <span className="ml-1 opacity-70">
@@ -99,13 +104,11 @@ export function Field({ reason, required, errors, studioDefault, ...rest }: Fiel
       </p>
 
       {disabled && reason && (
-        <p className="mt-1.5 rounded border-l-2 border-(--color-accent) bg-(--color-accent)/10 px-2 py-1 text-xs text-(--color-ink-muted)">
-          {reason}
-        </p>
+        <p className="note mt-2 py-1 text-[11px]">{reason}</p>
       )}
 
       {errors?.map((error) => (
-        <p key={error} className="mt-1.5 text-xs text-red-400">
+        <p key={error} className="mt-1.5 text-[11px] text-(--color-bad-ink)">
           {error}
         </p>
       ))}
@@ -139,10 +142,10 @@ function ObjectListControl({ param, value, onChange, disabled }: ControlProps) {
       {rows.map((row, index) => (
         <div
           key={index}
-          className="rounded-lg border border-(--color-border) bg-(--color-surface) p-3"
+          className="rounded-lg border border-(--color-border) bg-(--color-surface) p-3 transition-colors duration-(--dur-fast) hover:border-(--color-border-strong)"
         >
-          <div className="mb-3 flex items-center justify-between">
-            <span className="font-mono text-xs text-(--color-ink-muted)">
+          <div className="mb-2.5 flex items-center justify-between">
+            <span className="mono text-(--color-ink-muted)">
               {param.label} {index + 1}
             </span>
             <div className="flex gap-1">
@@ -150,28 +153,28 @@ function ObjectListControl({ param, value, onChange, disabled }: ControlProps) {
                 type="button"
                 disabled={disabled || index === 0}
                 onClick={() => move(index, index - 1)}
-                className="rounded border border-(--color-border) px-1.5 text-xs text-(--color-ink-muted) disabled:opacity-30"
+                className="btn btn-ghost btn-sm btn-icon"
                 aria-label="Move up"
               >
-                ↑
+                <ArrowUp size={12} />
               </button>
               <button
                 type="button"
                 disabled={disabled || index === rows.length - 1}
                 onClick={() => move(index, index + 1)}
-                className="rounded border border-(--color-border) px-1.5 text-xs text-(--color-ink-muted) disabled:opacity-30"
+                className="btn btn-ghost btn-sm btn-icon"
                 aria-label="Move down"
               >
-                ↓
+                <ArrowDown size={12} />
               </button>
               <button
                 type="button"
                 disabled={disabled}
                 onClick={() => setRows(rows.filter((_, i) => i !== index))}
-                className="rounded border border-(--color-border) px-1.5 text-xs text-(--color-ink-muted) transition hover:border-red-400 hover:text-red-400 disabled:opacity-30"
+                className="btn btn-ghost btn-danger btn-sm btn-icon"
                 aria-label="Remove"
               >
-                ✕
+                <Close size={12} />
               </button>
             </div>
           </div>
@@ -199,12 +202,13 @@ function ObjectListControl({ param, value, onChange, disabled }: ControlProps) {
           type="button"
           disabled={disabled || (ceiling !== undefined && rows.length >= ceiling)}
           onClick={() => setRows([...rows, blankRow(fields)])}
-          className="rounded-md border border-dashed border-(--color-border) px-3 py-1.5 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted) disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn btn-sm border-dashed border-(--color-border) text-(--color-ink-muted) hover:border-(--color-accent-line) hover:text-(--color-accent)"
         >
-          + Add {param.label.toLowerCase()}
+          <Plus size={12} />
+          Add {param.label.toLowerCase()}
         </button>
         {ceiling !== undefined && (
-          <span className="font-mono text-xs text-(--color-ink-muted)">
+          <span className="mono text-(--color-ink-faint)">
             {rows.length} / {ceiling}
           </span>
         )}

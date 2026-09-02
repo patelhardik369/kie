@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { Close } from '@/components/shell/icons.tsx'
 import {
   formatBytes,
   formatDuration,
@@ -117,19 +118,9 @@ export function GenerationStatus({
   const settled = settledState(state)
 
   return (
-    <article className="overflow-hidden rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-(--color-border) px-4 py-3">
-        <span
-          className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-            stateTone(state)
-          }`}
-        >
-          {!settled && (
-            <span className="mr-1.5 inline-block animate-pulse" aria-hidden>
-              ●
-            </span>
-          )}
-          {stateLabel(state)}
+    <article className="panel-flush">
+      <header className="flex flex-wrap items-center gap-x-2.5 gap-y-2 border-b border-(--color-border) px-3.5 py-2.5">
+        <span className={stateTone(state)}>{stateLabel(state)}
         </span>
 
         <code className="font-mono text-xs text-(--color-ink-muted)">{id.slice(0, 8)}</code>
@@ -142,7 +133,7 @@ export function GenerationStatus({
               type="button"
               onClick={resume}
               disabled={resuming}
-              className="rounded-md border border-(--color-border) px-2.5 py-1 text-xs transition hover:border-(--color-ink-muted) disabled:opacity-40"
+              className="btn btn-ghost btn-sm text-xs"
             >
               {resuming ? 'Resuming…' : 'Check again'}
             </button>
@@ -154,19 +145,19 @@ export function GenerationStatus({
               className="text-xs text-(--color-ink-muted) transition hover:text-(--color-ink)"
               aria-label="Dismiss"
             >
-              ✕
+              <Close size={12} />
             </button>
           )}
         </span>
       </header>
 
       <div className="space-y-3 px-4 py-3">
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-(--color-bad)">{error}</p>}
 
         {task?.failMsg && (
-          <div className="rounded border-l-2 border-red-400 bg-red-400/10 px-3 py-2">
+          <div className="rounded border-l-2 border-(--color-bad) bg-(--color-bad)/10 px-3 py-2">
             {task.failCode && (
-              <code className="font-mono text-xs text-red-300">{task.failCode}</code>
+              <code className="font-mono text-xs text-(--color-bad)">{task.failCode}</code>
             )}
             {/*
               Verbatim, never paraphrased: a moderation message is the only clue
@@ -212,15 +203,15 @@ function Timing({ task }: { task: TaskView }) {
 
 function AssetPreview({ asset }: { asset: TaskAsset }) {
   return (
-    <figure className="overflow-hidden rounded-md border border-(--color-border)">
+    <figure className="overflow-hidden rounded-lg border border-(--color-border) bg-(--color-bg-deep)">
       {asset.kind === 'video' ? (
-        <video src={asset.url} controls playsInline className="w-full bg-black" />
+        <video src={asset.url} controls playsInline className="w-full bg-(--color-bg-deep)" />
       ) : asset.kind === 'audio' ? (
         <audio src={asset.url} controls className="w-full p-3" />
       ) : (
         // A plain <img>, not next/image: these are local files served by our own
         // route, and re-encoding a generation output would misrepresent it.
-        <img src={asset.url} alt="" className="w-full bg-black object-contain" />
+        <img src={asset.url} alt="" className="w-full bg-(--color-bg-deep) object-contain" />
       )}
       <figcaption className="flex flex-wrap items-center gap-x-2 border-t border-(--color-border) px-2 py-1.5 font-mono text-[11px] text-(--color-ink-muted)">
         <a href={asset.url} target="_blank" rel="noreferrer" className="underline">

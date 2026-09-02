@@ -29,18 +29,22 @@ export const STATE_LABEL: Record<GenerationState, string> = {
  * Amber is deliberate for the recoverable states. `needs_retry` and `stalled`
  * are not failures — the generation was paid for and can still be finished —
  * and colouring them like `failed` would say otherwise.
+ *
+ * The value is a complete `.chip` recipe (see app/globals.css) rather than a
+ * loose set of colour utilities, so every state pill in the app is the same
+ * shape and picks up an accent change without being touched.
  */
 export const STATE_TONE: Record<GenerationState, string> = {
-  draft: 'border-(--color-border) bg-(--color-surface) text-(--color-ink-muted)',
-  waiting: 'border-(--color-accent)/50 bg-(--color-accent)/10 text-(--color-accent)',
-  queuing: 'border-(--color-accent)/50 bg-(--color-accent)/10 text-(--color-accent)',
-  generating: 'border-(--color-accent)/50 bg-(--color-accent)/10 text-(--color-accent)',
-  downloading: 'border-(--color-accent)/50 bg-(--color-accent)/10 text-(--color-accent)',
-  complete: 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300',
-  failed: 'border-red-400/50 bg-red-400/10 text-red-300',
-  needs_retry: 'border-amber-400/50 bg-amber-400/10 text-amber-300',
-  stalled: 'border-amber-400/50 bg-amber-400/10 text-amber-300',
-  orphaned: 'border-red-400/50 bg-red-400/10 text-red-300',
+  draft: 'chip',
+  waiting: 'chip chip-accent',
+  queuing: 'chip chip-accent',
+  generating: 'chip chip-accent',
+  downloading: 'chip chip-accent',
+  complete: 'chip chip-ok',
+  failed: 'chip chip-bad',
+  needs_retry: 'chip chip-warn',
+  stalled: 'chip chip-warn',
+  orphaned: 'chip chip-bad',
 }
 
 /** States where something is still expected to happen without being asked. */
@@ -80,10 +84,7 @@ export function stateLabel(state: string): string {
 }
 
 export function stateTone(state: string): string {
-  return (
-    STATE_TONE[state as GenerationState] ??
-    'border-(--color-border) bg-(--color-surface) text-(--color-ink-muted)'
-  )
+  return STATE_TONE[state as GenerationState] ?? 'chip'
 }
 
 /**

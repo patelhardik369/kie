@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+import { Close } from '@/components/shell/icons.tsx'
 import type { ControlProps } from './controls.tsx'
 
 /**
@@ -192,7 +193,7 @@ export function BboxListControl({
         return (
           <div
             key={`${url}-${image}`}
-            className="overflow-hidden rounded-md border border-(--color-border) bg-(--color-surface)"
+            className="overflow-hidden rounded-lg border border-(--color-border) bg-(--color-bg-deep)"
           >
             <div className="flex items-center gap-2 border-b border-(--color-border) px-3 py-1.5">
               <span className="font-mono text-[11px] text-(--color-ink-muted)">
@@ -282,10 +283,10 @@ export function BboxListControl({
                         disabled={disabled}
                         onPointerDown={(event) => event.stopPropagation()}
                         onClick={() => removeBox(image, index)}
-                        className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-(--color-accent) text-xs leading-none font-medium text-black"
+                        className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-(--color-accent) text-xs leading-none font-medium text-(--color-accent-ink)"
                         aria-label={`Remove region ${index + 1} on image ${image + 1}`}
                       >
-                        ✕
+                        <Close size={11} />
                       </button>
                     </div>
                   ))}
@@ -371,7 +372,7 @@ function BrokenImage({
                 onChange={(event) =>
                   onSet(index, axisIndex, Math.round(Number(event.target.value)))
                 }
-                className="w-20 rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 font-mono text-sm outline-none transition focus:border-(--color-accent) disabled:opacity-40"
+                className="input w-20 px-2 py-1 font-mono"
               />
             </label>
           ))}
@@ -379,10 +380,10 @@ function BrokenImage({
             type="button"
             disabled={disabled}
             onClick={() => onRemove(index)}
-            className="rounded-md border border-(--color-border) px-2 py-1 text-sm text-(--color-ink-muted) transition hover:border-red-400 hover:text-red-400 disabled:opacity-40"
+            className="btn btn-ghost btn-danger btn-sm px-2 py-1"
             aria-label="Remove region"
           >
-            ✕
+            <Close size={11} />
           </button>
         </div>
       ))}

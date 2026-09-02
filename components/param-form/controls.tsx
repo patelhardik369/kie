@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 
+import { Close, Dice, Plus, Upload } from '@/components/shell/icons.tsx'
 import type { ParamDef } from '@/lib/kie/registry/types.ts'
 
 /**
@@ -38,9 +39,14 @@ function isRequired(props: ControlProps): boolean {
   return props.required ?? Boolean(props.param.required)
 }
 
-const inputBase =
-  'w-full rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm ' +
-  'outline-none transition focus:border-(--color-accent) disabled:cursor-not-allowed disabled:opacity-40'
+/**
+ * Every field in the form is the same field.
+ *
+ * The recipe itself lives in app/globals.css as `.input`, so a control here can
+ * still bolt utilities on top (`w-28`, `font-mono`) without restating the
+ * border, focus ring and disabled treatment eleven times.
+ */
+const inputBase = 'input'
 
 export function TextControl(props: ControlProps) {
   const { param, value, onChange, disabled } = props
@@ -66,7 +72,7 @@ export function TextControl(props: ControlProps) {
           <span
             className={`ml-auto font-mono text-xs ${
               text.length > param.maxLength
-                ? 'text-red-400'
+                ? 'text-(--color-bad)'
                 : 'text-(--color-ink-muted)'
             }`}
           >
@@ -135,7 +141,7 @@ function PromptPicker({
           type="button"
           disabled={disabled}
           onClick={load}
-          className="text-xs text-(--color-ink-muted) underline transition hover:text-(--color-ink) disabled:opacity-40"
+          className="text-[11px] text-(--color-ink-muted) underline underline-offset-2 transition-colors duration-(--dur-fast) hover:text-(--color-accent) disabled:opacity-40"
         >
           Prompts
         </button>
@@ -144,7 +150,7 @@ function PromptPicker({
             type="button"
             disabled={disabled}
             onClick={save}
-            className="text-xs text-(--color-ink-muted) underline transition hover:text-(--color-ink) disabled:opacity-40"
+            className="text-[11px] text-(--color-ink-muted) underline underline-offset-2 transition-colors duration-(--dur-fast) hover:text-(--color-accent) disabled:opacity-40"
           >
             {saved ? 'Saved' : 'Save this'}
           </button>
@@ -152,7 +158,7 @@ function PromptPicker({
       </div>
 
       {open && (
-        <div className="absolute z-10 mt-1 max-h-64 w-96 overflow-y-auto rounded-md border border-(--color-border) bg-(--color-surface-raised) shadow-lg">
+        <div className="pop absolute z-20 mt-1 max-h-64 w-96 overflow-y-auto rounded-lg border border-(--color-border) bg-(--color-surface-raised) shadow-[var(--shadow-lg)]">
           {prompts === null ? (
             <p className="px-3 py-2 text-xs text-(--color-ink-muted)">Loading…</p>
           ) : prompts.length === 0 ? (
@@ -169,7 +175,7 @@ function PromptPicker({
                       onInsert(prompt.body)
                       setOpen(false)
                     }}
-                    className="block w-full px-3 py-2 text-left transition hover:bg-(--color-accent)/10"
+                    className="block w-full px-3 py-2 text-left transition hover:bg-(--color-accent-softer)"
                   >
                     <span className="block text-xs font-medium">{prompt.title}</span>
                     <span className="mt-0.5 block line-clamp-2 text-[11px] text-(--color-ink-muted)">
@@ -216,10 +222,10 @@ export function EnumControl(props: ControlProps) {
               type="button"
               disabled={disabled}
               onClick={() => onChange(selected && !required ? undefined : option)}
-              className={`rounded-md border px-3 py-1.5 font-mono text-xs transition disabled:cursor-not-allowed disabled:opacity-40 ${
+              className={`btn btn-sm font-mono text-xs ${
                 selected
-                  ? 'border-(--color-accent) bg-(--color-accent)/15 text-(--color-ink)'
-                  : 'border-(--color-border) text-(--color-ink-muted) hover:border-(--color-ink-muted)'
+                  ? 'border-(--color-accent-line) bg-(--color-accent-soft) text-(--color-accent)'
+                  : 'btn-ghost text-(--color-ink-muted)'
               }`}
             >
               {String(option)}
@@ -263,7 +269,7 @@ export function NumberControl(props: ControlProps) {
       {showSlider && (
         <input
           type="range"
-          className="flex-1 accent-(--color-accent) disabled:opacity-40"
+          className="flex-1 disabled:opacity-40"
           min={param.min}
           max={upper}
           step={param.step ?? 1}
@@ -299,15 +305,22 @@ export function BooleanControl({ value, onChange, disabled }: ControlProps) {
       aria-checked={on}
       disabled={disabled}
       onClick={() => onChange(!on)}
-      className={`relative h-6 w-11 rounded-full border transition disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors duration-(--dur-fast) disabled:cursor-not-allowed disabled:opacity-40 ${
         on
-          ? 'border-(--color-accent) bg-(--color-accent)/40'
-          : 'border-(--color-border) bg-(--color-surface)'
+          ? 'border-(--color-accent) bg-(--color-accent)'
+          : 'border-(--color-border-strong) bg-(--color-surface) hover:border-(--color-ink-faint)'
       }`}
     >
+      {/*
+        The knob travels on `transform`, not `left`. Animating `left` relayouts
+        the button on every frame of a 140ms tween — invisible on this machine,
+        visibly janky on a mid-tier laptop with a long form open.
+      */}
       <span
-        className={`absolute top-0.5 h-4.5 w-4.5 rounded-full transition-all ${
-          on ? 'left-5.5 bg-(--color-accent)' : 'left-0.5 bg-(--color-ink-muted)'
+        className={`absolute top-0.5 left-0.5 h-3.5 w-3.5 rounded-full shadow-[0_1px_2px_rgb(0_0_0/0.4)] transition-transform duration-(--dur-fast) ease-(--ease) ${
+          on
+            ? 'translate-x-4 bg-(--color-accent-ink)'
+            : 'translate-x-0 bg-(--color-ink-faint)'
         }`}
       />
     </button>
@@ -336,9 +349,10 @@ export function SeedControl({ param, value, onChange, disabled }: ControlProps) 
         type="button"
         disabled={disabled}
         onClick={() => onChange(Math.floor(Math.random() * 2147483647))}
-        className="shrink-0 rounded-md border border-(--color-border) px-3 text-sm text-(--color-ink-muted) transition hover:border-(--color-ink-muted) disabled:opacity-40"
+        className="btn btn-ghost shrink-0"
         title="Randomize"
       >
+        <Dice size={13} />
         Roll
       </button>
     </div>
@@ -429,12 +443,11 @@ function UploadButton({
         disabled={disabled || busy}
         onClick={() => inputRef.current?.click()}
         title={error ?? 'Upload a local file to Kie and use its URL'}
-        className={`shrink-0 rounded-md border px-3 py-1.5 text-xs transition disabled:opacity-40 ${
-          error
-            ? 'border-red-400 text-red-400'
-            : 'border-(--color-border) text-(--color-ink-muted) hover:border-(--color-ink-muted)'
+        className={`btn btn-sm shrink-0 text-xs ${
+          error ? 'border-(--color-bad) text-(--color-bad)' : 'btn-ghost'
         }`}
       >
+        <Upload size={12} />
         {busy ? 'Uploading…' : error ? 'Retry' : 'Upload'}
       </button>
       {/*
@@ -443,7 +456,7 @@ function UploadButton({
         "where did my file go?" rather than "what went wrong?".
       */}
       {error && (
-        <p className="basis-full text-xs text-red-400" role="alert">
+        <p className="basis-full text-xs text-(--color-bad)" role="alert">
           {error}
         </p>
       )}
@@ -501,10 +514,10 @@ export function UrlListControl({ param, value, onChange, disabled, max }: Contro
             type="button"
             disabled={disabled}
             onClick={() => update(list.filter((_, i) => i !== index))}
-            className="shrink-0 rounded-md border border-(--color-border) px-2 text-sm text-(--color-ink-muted) transition hover:border-red-400 hover:text-red-400 disabled:opacity-40"
+            className="btn btn-ghost btn-danger btn-icon shrink-0"
             aria-label="Remove"
           >
-            ✕
+            <Close size={12} />
           </button>
         </div>
       ))}
@@ -514,9 +527,10 @@ export function UrlListControl({ param, value, onChange, disabled, max }: Contro
           type="button"
           disabled={disabled || (ceiling !== undefined && list.length >= ceiling)}
           onClick={() => update([...list, ''])}
-          className="rounded-md border border-dashed border-(--color-border) px-3 py-1.5 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted) disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn btn-sm border-dashed border-(--color-border) text-(--color-ink-muted) hover:border-(--color-accent-line) hover:text-(--color-accent)"
         >
-          + Add {acceptHint(param)}
+          <Plus size={12} />
+          Add {acceptHint(param)}
         </button>
         {/*
           An upload that appends. Without it an empty list has no upload path at
@@ -588,7 +602,7 @@ export function ColorListControl({ param, value, onChange, disabled }: ControlPr
           <div key={index} className="flex items-center gap-2">
             <input
               type="color"
-              className="h-9 w-9 shrink-0 cursor-pointer rounded border border-(--color-border) bg-transparent disabled:opacity-40"
+              className="h-8 w-8 shrink-0 cursor-pointer rounded-md border border-(--color-border) bg-transparent transition-colors duration-(--dur-fast) hover:border-(--color-border-strong) disabled:opacity-40"
               value={/^#[0-9a-f]{6}$/i.test(stop.hex) ? stop.hex : '#888888'}
               disabled={disabled}
               onChange={(e) => update(index, { hex: e.target.value })}
@@ -605,7 +619,7 @@ export function ColorListControl({ param, value, onChange, disabled }: ControlPr
               // Not `inputBase`: its `w-full` and a `w-24` are the same
               // specificity, so which one wins depends on stylesheet order
               // rather than on the order written here.
-              className="w-24 shrink-0 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 font-mono text-sm outline-none transition focus:border-(--color-accent) disabled:cursor-not-allowed disabled:opacity-40"
+              className="input w-24 shrink-0 font-mono"
               value={parseRatio(stop.ratio)}
               disabled={disabled}
               onChange={(e) => update(index, { ratio: formatRatio(Number(e.target.value)) })}
@@ -616,10 +630,10 @@ export function ColorListControl({ param, value, onChange, disabled }: ControlPr
               type="button"
               disabled={disabled}
               onClick={() => onChange(list.filter((_, i) => i !== index))}
-              className="ml-auto shrink-0 rounded-md border border-(--color-border) px-2 py-1 text-sm text-(--color-ink-muted) transition hover:border-red-400 hover:text-red-400 disabled:opacity-40"
+              className="btn btn-ghost btn-danger btn-sm btn-icon ml-auto shrink-0"
               aria-label="Remove colour"
             >
-              ✕
+              <Close size={12} />
             </button>
           </div>
         ))}
@@ -633,21 +647,22 @@ export function ColorListControl({ param, value, onChange, disabled }: ControlPr
           // image. Adding a colour without rescaling the others leaves a palette
           // summing to 183%, which is not a proportion of anything.
           onClick={() => onChange(evenly([...list, { hex: '#888888', ratio: '0.00%' }]))}
-          className="rounded-md border border-dashed border-(--color-border) px-3 py-1.5 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted) disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn btn-sm border-dashed border-(--color-border) text-(--color-ink-muted) hover:border-(--color-accent-line) hover:text-(--color-accent)"
         >
-          + Colour
+          <Plus size={12} />
+          Colour
         </button>
         {list.length > 1 && (
           <button
             type="button"
             disabled={disabled}
             onClick={() => onChange(evenly(list))}
-            className="rounded-md border border-(--color-border) px-3 py-1.5 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted) disabled:opacity-40"
+            className="btn btn-ghost btn-sm text-xs"
           >
             Even shares
           </button>
         )}
-        <span className="font-mono text-xs text-(--color-ink-muted)">
+        <span className="mono text-(--color-ink-faint)">
           {list.length} / {ceiling}
           {list.length > 0 && ` · ${total.toFixed(2)}%`}
         </span>

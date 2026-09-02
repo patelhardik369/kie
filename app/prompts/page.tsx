@@ -1,11 +1,10 @@
-import Link from 'next/link'
-
 import { PromptLibrary } from '@/components/library/PromptLibrary.tsx'
+import { PageHeader } from '@/components/shell/PageHeader.tsx'
 import { listPrompts, parseTags, promptTags } from '@/lib/library/queries.ts'
 
 export const dynamic = 'force-dynamic'
 
-export const metadata = { title: 'Prompts — Kie Studio' }
+export const metadata = { title: 'Prompts' }
 
 /**
  * The prompt library: saved, taggable text insertable into any prompt field
@@ -15,18 +14,13 @@ export default async function PromptsPage() {
   const [rows, tags] = await Promise.all([listPrompts(), promptTags()])
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
-      <header className="border-b border-(--color-border) pb-5">
-        <Link href="/" className="text-sm text-(--color-ink-muted) hover:underline">
-          ← Kie Studio
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Prompts</h1>
-        <p className="mt-1.5 text-sm text-(--color-ink-muted)">
-          Saved text, insertable into any prompt field from the generation form.
-        </p>
-      </header>
+    <main className="mx-auto max-w-4xl px-4 pt-6 pb-16">
+      <PageHeader
+        title="Prompts"
+        description="Saved text, insertable into any prompt field from the generation form."
+      />
 
-      <div className="mt-6">
+      <div>
         <PromptLibrary
           initialPrompts={rows.map((p) => ({
             id: p.id,

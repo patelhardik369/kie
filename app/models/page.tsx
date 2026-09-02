@@ -1,12 +1,13 @@
 import Link from 'next/link'
 
 import { TrapList } from '@/components/library/TrapList.tsx'
+import { PageHeader } from '@/components/shell/PageHeader.tsx'
 import { ALL_MODELS, FAMILIES, capabilitiesOf } from '@/lib/kie/registry/index.ts'
 import type { Capability, Family } from '@/lib/kie/registry/types.ts'
 import { assetInputs, searchModels } from '@/lib/models/search.ts'
 import { differentiator, findTraps } from '@/lib/models/traps.ts'
 
-export const metadata = { title: 'Models — Kie Studio' }
+export const metadata = { title: 'Models' }
 
 const FAMILY_LABEL: Record<Family, string> = {
   kling: 'Kling',
@@ -52,48 +53,41 @@ export default async function ModelsPage({
   const derived = traps.filter((t) => t.kind !== 'note')
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10">
-      <header className="border-b border-(--color-border) pb-5">
-        <Link href="/" className="text-sm text-(--color-ink-muted) hover:underline">
-          ← Kie Studio
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Models</h1>
-        <p className="mt-1.5 text-sm text-(--color-ink-muted)">
-          {ALL_MODELS.length} models. Every parameter of every one is editable.
-        </p>
-      </header>
+    <main className="mx-auto max-w-5xl px-4 pt-6 pb-16">
+      <PageHeader
+        title="Models"
+        description={`${ALL_MODELS.length} models across Kling, ByteDance and Wan. Every parameter of every one is editable.`}
+      />
 
-      <section className="mt-6">
-        <h2 className="text-sm font-medium">
+      <section>
+        <h2 className="flex items-center gap-2 text-[13px] font-medium">
           Traps
-          <span className="ml-2 rounded-full border border-amber-400/50 bg-amber-400/10 px-2 py-0.5 font-mono text-xs text-amber-300">
-            {derived.length}
-          </span>
+          <span className="chip chip-warn font-mono">{derived.length}</span>
         </h2>
-        <p className="mt-0.5 text-xs text-(--color-ink-muted)">
+        <p className="mt-1 text-xs leading-relaxed text-(--color-ink-muted)">
           Derived from the registry, so they cannot go stale. These are the
           differences that read as a <code className="font-mono">422</code> naming
           a field but not a reason.
         </p>
-        <div className="mt-3">
+        <div className="mt-2.5">
           <TrapList traps={derived} />
         </div>
       </section>
 
-      <form className="mt-8 flex flex-wrap items-center gap-2" method="get">
+      <form className="mt-7 flex flex-wrap items-center gap-2" method="get">
         <input
           type="search"
           name="q"
           defaultValue={q ?? ''}
           placeholder="Search slugs, labels, parameters, notes…"
           aria-label="Search models"
-          className="min-w-56 flex-1 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm outline-none transition focus:border-(--color-accent)"
+          className="input min-w-56 flex-1"
         />
         <select
           name="family"
           defaultValue={family ?? ''}
           aria-label="Family"
-          className="select-field rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm outline-none transition focus:border-(--color-accent)"
+          className="select-field input w-auto"
         >
           <option value="">All families</option>
           {FAMILIES.map((f) => (
@@ -102,59 +96,47 @@ export default async function ModelsPage({
             </option>
           ))}
         </select>
-        <button
-          type="submit"
-          className="rounded-md border border-(--color-border) px-3 py-2 text-sm transition hover:border-(--color-ink-muted)"
-        >
+        <button type="submit" className="btn btn-ghost">
           Search
         </button>
         {(q || family) && (
-          <Link
-            href="/models"
-            className="rounded-md border border-(--color-border) px-3 py-2 text-sm text-(--color-ink-muted) transition hover:border-(--color-ink-muted)"
-          >
+          <Link href="/models" className="btn btn-quiet">
             Clear
           </Link>
         )}
-        <span className="ml-auto font-mono text-xs text-(--color-ink-muted)">
-          {matches.length} of {ALL_MODELS.length}
+        <span className="mono ml-auto text-(--color-ink-faint)">
+          {matches.length} / {ALL_MODELS.length}
         </span>
       </form>
 
       {matches.length === 0 ? (
-        <p className="mt-10 text-center text-sm text-(--color-ink-muted)">
+        <p className="mt-6 rounded-xl border border-dashed border-(--color-border) px-6 py-14 text-center text-sm text-(--color-ink-muted)">
           Nothing matches. Note the catalog is deliberately three families only —
           Veo, Runway, Sora and the rest are out of scope.
         </p>
       ) : (
-        <ul className="mt-4 divide-y divide-(--color-border) overflow-hidden rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
+        <ul className="panel-flush mt-4 divide-y divide-(--color-border)">
           {matches.map((model) => {
             const inputs = assetInputs(model)
             return (
               <li key={model.slug}>
                 <Link
                   href={`/models/${model.slug}`}
-                  className="block px-4 py-3 transition hover:bg-(--color-accent)/10"
+                  className="row group px-3.5 py-3"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                    <span className="text-sm font-medium">{model.label}</span>
+                    <span className="text-[13px] font-medium">{model.label}</span>
                     {/* Verbatim, always — this is what you would paste into the docs. */}
-                    <code className="font-mono text-xs text-(--color-ink-muted)">
-                      {model.slug}
-                    </code>
+                    <code className="mono text-(--color-ink-faint)">{model.slug}</code>
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--color-ink-muted)">
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px] text-(--color-ink-faint)">
                     <span>{capabilitiesOf(model).join(' · ')}</span>
                     {differentiator(model) && (
-                      <span className="text-(--color-ink)">{differentiator(model)}</span>
+                      <span className="text-(--color-ink-muted)">{differentiator(model)}</span>
                     )}
-                    <span className="font-mono">{model.params.length} params</span>
+                    <span className="mono">{model.params.length}p</span>
+                    {inputs.length > 0 && <span className="mono">takes {inputs.join(', ')}</span>}
                   </div>
-                  {inputs.length > 0 && (
-                    <div className="mt-1 font-mono text-[11px] text-(--color-ink-muted)">
-                      takes {inputs.join(', ')}
-                    </div>
-                  )}
                 </Link>
               </li>
             )

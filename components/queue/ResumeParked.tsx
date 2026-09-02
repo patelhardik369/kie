@@ -56,7 +56,7 @@ export function ResumeParked({
   }
 
   return (
-    <div className="mt-3 rounded-lg border border-amber-400/40 bg-amber-400/5 px-4 py-3">
+    <div className="mt-3 rounded-xl border border-(--color-warn)/40 bg-[color-mix(in_oklch,var(--color-warn)_6%,transparent)] px-4 py-3.5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm">
           <span className="font-mono">{total}</span> generation
@@ -70,7 +70,7 @@ export function ResumeParked({
           type="button"
           onClick={resume}
           disabled={busy}
-          className="rounded-md border border-amber-300/60 px-3 py-2 text-sm text-amber-300 transition hover:bg-amber-400/10 disabled:opacity-40"
+          className="btn btn-sm border-(--color-warn)/60 text-(--color-warn) transition hover:bg-[color-mix(in_oklch,var(--color-warn)_12%,transparent)]"
         >
           {busy ? 'Resuming…' : 'Resume all'}
         </button>

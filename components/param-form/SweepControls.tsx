@@ -94,7 +94,7 @@ export function SweepControls({
   const set = (patch: Partial<SweepState>) => onChange({ ...state, ...patch })
 
   return (
-    <div className="rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
+    <div className="panel-flush">
       <div className="flex flex-wrap items-center gap-2 border-b border-(--color-border) px-4 py-3">
         <Tab active={state.mode === 'single'} onClick={() => set({ mode: 'single' })}>
           Single
@@ -133,7 +133,7 @@ export function SweepControls({
           </label>
           {!hasSeed(model) && (
             // Said plainly rather than implying variation the model cannot give.
-            <p className="text-xs text-amber-300">
+            <p className="text-xs text-(--color-warn)">
               {model.slug} has no seed, so these runs are identical requests — N
               times the credits for N chances at the same output.
             </p>
@@ -184,7 +184,7 @@ export function SweepControls({
       {state.mode !== 'single' && (
         <p
           className={`border-t border-(--color-border) px-4 py-2 text-xs ${
-            resolution.error ? 'text-red-300' : 'text-(--color-ink-muted)'
+            resolution.error ? 'text-(--color-bad)' : 'text-(--color-ink-muted)'
           }`}
         >
           {resolution.error ?? resolution.summary}

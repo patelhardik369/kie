@@ -85,6 +85,8 @@ lib/
   library/
     queries.ts                   presets / prompts / assets / credits
     disk.ts                      KIE_OUTPUT_DIR usage
+  theme/
+    accent.ts                    accent -> interactive ramp, OKLCH       (pure)
   db/
     schema.ts  index.ts  migrations/
   env.ts                         validated server-only config
@@ -103,6 +105,13 @@ components/
     ParamProvenance.tsx  Lineage.tsx  GenerationActions.tsx
   library/
     TrapList.tsx  PresetRow.tsx  PromptLibrary.tsx  AssetLibrary.tsx
+  shell/
+    TopNav.tsx                   persistent nav, active section from path
+    PageHeader.tsx               masthead, back link, section heading
+    icons.tsx                    the icon set — 16px grid, 1.5 stroke
+  theme/
+    AccentScript.tsx             inline <head> script; applies before paint
+    AccentPicker.tsx             the Settings control
 ```
 
 ## Pure modules and where policy lives

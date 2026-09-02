@@ -99,7 +99,7 @@ export function SavePreset({
           }}
           autoFocus
           placeholder="Preset name"
-          className="min-w-48 flex-1 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm outline-none transition focus:border-(--color-accent)"
+          className="input min-w-48 flex-1 py-1.5"
         />
         <button
           type="button"
@@ -112,7 +112,7 @@ export function SavePreset({
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded-md border border-(--color-border) px-3 py-1.5 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted)"
+          className="btn btn-ghost btn-sm text-xs"
         >
           Cancel
         </button>
@@ -129,7 +129,7 @@ export function SavePreset({
         )}
         .
       </p>
-      {error && <p className="text-xs text-red-300">{error}</p>}
+      {error && <p className="text-xs text-(--color-bad)">{error}</p>}
     </div>
   )
 }

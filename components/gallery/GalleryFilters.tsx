@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
+import { Star } from '@/components/shell/icons.tsx'
 import {
   STATE_GROUPS,
   galleryHref,
@@ -51,9 +52,8 @@ const STATE_GROUP_LABEL: Record<StateGroup, string> = {
 
 const SEARCH_DEBOUNCE_MS = 300
 
-const controlClass =
-  'rounded-md border border-(--color-border) bg-(--color-surface) px-2.5 py-1.5 text-xs ' +
-  'outline-none transition focus:border-(--color-accent)'
+/** The shared `.input` recipe at the compact size this bar uses. */
+const controlClass = 'input w-auto text-xs'
 
 export function GalleryFilters({
   filter,
@@ -187,7 +187,8 @@ export function GalleryFilters({
           active={Boolean(filter.favorite)}
           onClick={() => go({ favorite: filter.favorite ? undefined : true })}
         >
-          ★ Favorites
+          <Star size={11} filled />
+          Favorites
         </Chip>
 
         {/*
@@ -239,7 +240,7 @@ export function GalleryFilters({
           />
         </label>
 
-        <span className="ml-auto font-mono text-xs text-(--color-ink-muted)">
+        <span className="mono ml-auto text-(--color-ink-faint)">
           {active ? `${shown} of ${browsable}` : `${browsable} generations`}
         </span>
 
@@ -247,7 +248,7 @@ export function GalleryFilters({
           <button
             type="button"
             onClick={() => router.push('/gallery')}
-            className="rounded-md border border-(--color-border) px-2.5 py-1.5 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted) hover:text-(--color-ink)"
+            className="btn btn-ghost btn-sm text-xs"
           >
             Clear filters
           </button>
@@ -274,10 +275,8 @@ function Chip({
       onClick={onClick}
       aria-pressed={active}
       title={title}
-      className={`rounded-full border px-2.5 py-1 text-xs transition ${
-        active
-          ? 'border-(--color-accent) bg-(--color-accent)/15 text-(--color-ink)'
-          : 'border-(--color-border) text-(--color-ink-muted) hover:border-(--color-ink-muted)'
+      className={`chip h-6 cursor-pointer px-2 transition-colors duration-(--dur-fast) ${
+        active ? 'chip-accent' : 'hover:border-(--color-border-strong) hover:text-(--color-ink)'
       }`}
     >
       {children}

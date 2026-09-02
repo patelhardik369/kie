@@ -2,13 +2,15 @@ import Link from 'next/link'
 
 import { GalleryFilters } from '@/components/gallery/GalleryFilters.tsx'
 import { GenerationCard } from '@/components/gallery/GenerationCard.tsx'
+import { PageHeader } from '@/components/shell/PageHeader.tsx'
+import { ArrowLeft, ArrowRight } from '@/components/shell/icons.tsx'
 import { assetTokenFor } from '@/lib/gallery/asset-token.ts'
 import { galleryHref, parseGalleryFilter } from '@/lib/gallery/filters.ts'
 import { getGalleryFacets, listGenerations } from '@/lib/gallery/queries.ts'
 
 export const dynamic = 'force-dynamic'
 
-export const metadata = { title: 'Gallery — Kie Studio' }
+export const metadata = { title: 'Gallery' }
 
 /**
  * Everything ever generated, newest first.
@@ -30,25 +32,13 @@ export default async function GalleryPage({
   ])
 
   return (
-    <main className="mx-auto max-w-7xl px-6 py-10">
-      <header className="border-b border-(--color-border) pb-5">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <div>
-            <Link href="/" className="text-sm text-(--color-ink-muted) hover:underline">
-              ← Kie Studio
-            </Link>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight">Gallery</h1>
-          </div>
-          <Link
-            href="/generate"
-            className="rounded-md bg-(--color-accent) px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
-          >
-            New generation
-          </Link>
-        </div>
-      </header>
+    <main className="mx-auto max-w-[1400px] px-4 pt-6 pb-16">
+      <PageHeader
+        title="Gallery"
+        description="Everything ever generated, newest first. Filters live in the URL, so a filtered view is a link you can keep."
+      />
 
-      <div className="mt-5">
+      <div>
         <GalleryFilters
           filter={filter}
           models={facets.models}
@@ -61,7 +51,7 @@ export default async function GalleryPage({
       {page.items.length === 0 ? (
         <EmptyState hasAny={facets.total > 0} />
       ) : (
-        <ul className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <ul className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
           {page.items.map(({ generation, thumbnail, assetCount }) => (
             <li key={generation.id}>
               <GenerationCard
@@ -96,23 +86,25 @@ export default async function GalleryPage({
 
       {page.pageCount > 1 && (
         <nav
-          className="mt-8 flex items-center justify-center gap-3"
+          className="mt-8 flex items-center justify-center gap-2"
           aria-label="Pagination"
         >
           <PageLink
             href={galleryHref({ ...filter, page: filter.page - 1 })}
             disabled={filter.page <= 1}
           >
-            ← Newer
+            <ArrowLeft size={12} />
+            Newer
           </PageLink>
-          <span className="font-mono text-xs text-(--color-ink-muted)">
-            page {page.page} of {page.pageCount}
+          <span className="mono text-(--color-ink-faint)">
+            {page.page} / {page.pageCount}
           </span>
           <PageLink
             href={galleryHref({ ...filter, page: filter.page + 1 })}
             disabled={filter.page >= page.pageCount}
           >
-            Older →
+            Older
+            <ArrowRight size={12} />
           </PageLink>
         </nav>
       )}
@@ -131,16 +123,11 @@ function PageLink({
 }) {
   if (disabled) {
     return (
-      <span className="rounded-md border border-(--color-border) px-3 py-1.5 text-xs opacity-40">
-        {children}
-      </span>
+      <span className="btn btn-ghost btn-sm text-xs opacity-40">{children}</span>
     )
   }
   return (
-    <Link
-      href={href}
-      className="rounded-md border border-(--color-border) px-3 py-1.5 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted) hover:text-(--color-ink)"
-    >
+    <Link href={href} className="btn btn-ghost btn-sm text-xs">
       {children}
     </Link>
   )
@@ -148,21 +135,18 @@ function PageLink({
 
 function EmptyState({ hasAny }: { hasAny: boolean }) {
   return (
-    <div className="mt-16 flex flex-col items-center gap-3 text-center">
-      <p className="text-sm text-(--color-ink-muted)">
+    <div className="mt-6 rounded-xl border border-dashed border-(--color-border) px-6 py-16 text-center">
+      <p className="text-[13px] text-(--color-ink-muted)">
         {hasAny
           ? 'No generation matches these filters.'
           : 'Nothing generated yet.'}
       </p>
       {hasAny ? (
-        <Link href="/gallery" className="text-sm text-(--color-accent) hover:underline">
+        <Link href="/gallery" className="btn btn-ghost btn-sm mt-4">
           Clear filters
         </Link>
       ) : (
-        <Link
-          href="/generate"
-          className="rounded-md bg-(--color-accent) px-4 py-2 text-sm font-medium text-black transition hover:opacity-90"
-        >
+        <Link href="/generate" className="btn btn-primary btn-sm mt-4">
           Choose a model
         </Link>
       )}

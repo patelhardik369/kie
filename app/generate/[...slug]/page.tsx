@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { ParamForm } from '@/components/param-form/ParamForm.tsx'
+import { BackLink } from '@/components/shell/PageHeader.tsx'
+import { ExternalLink } from '@/components/shell/icons.tsx'
 import { ALL_MODELS, capabilitiesOf, getModel } from '@/lib/kie/registry/index.ts'
 
 /**
@@ -35,50 +37,53 @@ export default async function GeneratePage({
   const nested = model.params.reduce((sum, p) => sum + (p.fields?.length ?? 0), 0)
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
-      <header className="border-b border-(--color-border) pb-6">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/generate"
-            className="text-sm text-(--color-ink-muted) hover:underline"
-          >
-            ← All models
-          </Link>
-          <Link
-            href={`/gallery?model=${encodeURIComponent(model.slug)}`}
-            className="text-sm text-(--color-ink-muted) hover:underline"
-          >
-            Past runs of this model
-          </Link>
+    <main className="mx-auto max-w-3xl px-4 pt-5 pb-20">
+      <BackLink href="/generate">All models</BackLink>
+
+      <header className="mt-4 border-b border-(--color-border) pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+          <h1 className="h-page">{model.label}</h1>
+          <nav className="flex shrink-0 items-center gap-3 pt-1">
+            <Link
+              href={`/models/${model.slug}`}
+              className="text-xs text-(--color-ink-muted) transition-colors duration-(--dur-fast) hover:text-(--color-ink)"
+            >
+              Reference
+            </Link>
+            <Link
+              href={`/gallery?model=${encodeURIComponent(model.slug)}`}
+              className="text-xs text-(--color-ink-muted) transition-colors duration-(--dur-fast) hover:text-(--color-ink)"
+            >
+              Past runs
+            </Link>
+            <a
+              href={model.docUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-(--color-ink-muted) transition-colors duration-(--dur-fast) hover:text-(--color-ink)"
+            >
+              Docs
+              <ExternalLink size={11} />
+            </a>
+          </nav>
         </div>
 
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight">{model.label}</h1>
-
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-(--color-ink-muted)">
-          <code>{model.slug}</code>
-          <span>{capabilitiesOf(model).join(' · ')}</span>
-          <span>
-            {paramCount} parameters
-            {nested > 0 ? ` (+${nested} nested)` : ''}
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          <code className="chip font-mono">{model.slug}</code>
+          {capabilitiesOf(model).map((capability) => (
+            <span key={capability} className="chip chip-accent">
+              {capability}
+            </span>
+          ))}
+          <span className="chip">
+            {paramCount} params{nested > 0 ? ` · ${nested} nested` : ''}
           </span>
-          <a
-            href={model.docUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="underline hover:text-(--color-ink)"
-          >
-            docs
-          </a>
         </div>
 
-        {model.notes && (
-          <p className="mt-4 rounded border-l-2 border-(--color-accent) bg-(--color-accent)/10 px-3 py-2 text-sm leading-relaxed text-(--color-ink-muted)">
-            {model.notes}
-          </p>
-        )}
+        {model.notes && <p className="note mt-3">{model.notes}</p>}
       </header>
 
-      <div className="mt-8">
+      <div className="mt-6">
         <ParamForm model={model} />
       </div>
     </main>

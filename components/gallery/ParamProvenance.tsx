@@ -39,7 +39,7 @@ export function ParamProvenance({
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-lg border border-(--color-border)">
+      <div className="panel-flush">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-(--color-border) bg-(--color-surface) text-xs text-(--color-ink-muted)">
@@ -56,7 +56,7 @@ export function ParamProvenance({
       </div>
 
       {omitted.length > 0 && (
-        <details className="rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
+        <details className="panel-flush">
           <summary className="cursor-pointer px-3 py-2 text-xs text-(--color-ink-muted)">
             {omitted.length} documented parameter{omitted.length === 1 ? '' : 's'} not sent
           </summary>
@@ -100,7 +100,7 @@ function Row({
           {!param && (
             <span
               title="Not in the current registry — Kie may have renamed or removed it since this ran."
-              className="rounded border border-amber-400/50 bg-amber-400/10 px-1 py-0.5 text-[10px] text-amber-300"
+              className="rounded border border-(--color-warn)/50 bg-(--color-warn)/10 px-1 py-0.5 text-[10px] text-(--color-warn)"
             >
               unknown
             </span>
