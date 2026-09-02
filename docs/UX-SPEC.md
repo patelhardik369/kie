@@ -92,6 +92,20 @@ expressed in a model's own vocabulary is dropped rather than approximated, so no
 value in the form that the model would reject: `seedream/5-pro-layer-decomposition` keeps its `auto`
 size, which follows the source image rather than downscaling it to 1K.
 
+### When validation speaks
+
+Validation runs from the first render — the submit path depends on it — but a message is only shown
+once it is about something you did:
+
+| Moment | What is visible |
+|---|---|
+| Form opens | Nothing. A required field is marked `*` with a `Required` placeholder, which is guidance, not a complaint |
+| A field is edited | That field's messages, and only that field's |
+| Generate is pressed | Everything outstanding, plus the issue count beside the button. An advanced field among them opens the drawer |
+
+Generate stays **enabled** on an incomplete form, and pressing it is what reveals the problem. A
+disabled Generate is the version of this screen that cannot answer "why not?".
+
 ### Constraints in the UI
 
 When a `Constraint` is violated, the app **prevents** the state rather than reporting it afterwards.

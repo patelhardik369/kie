@@ -37,6 +37,18 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
   /** Only the overridden keys, so a field can show both numbers. */
   const preferences = useMemo(() => studioDefaults(model), [model])
   const [values, setValues] = useState<Record<string, unknown>>(opening)
+  /**
+   * Which fields the user has actually edited, and whether Generate has been
+   * pressed.
+   *
+   * A form that opens shouting "Prompt is required." is telling you off for
+   * something you have not had the chance to do yet. Validation runs from the
+   * first render either way — the submit path depends on it — but a message only
+   * becomes visible once the field has been touched, or once you have asked to
+   * generate and it is genuinely what stopped you.
+   */
+  const [touched, setTouched] = useState<ReadonlySet<string>>(() => new Set())
+  const [attempted, setAttempted] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -170,13 +182,19 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
     return map
   }, [validation])
 
-  const set = (key: string, value: unknown) =>
+  const set = (key: string, value: unknown) => {
+    setTouched((prev) => (prev.has(key) ? prev : new Set(prev).add(key)))
     setValues((prev) => {
       const next = { ...prev }
       if (value === undefined) delete next[key]
       else next[key] = value
       return next
     })
+  }
+
+  /** A field's messages, once it is fair to show them. */
+  const errorsFor = (key: string) =>
+    attempted || touched.has(key) ? errorsByKey[key] : undefined
 
   const inGroups = (groups: ParamGroup[]) =>
     model.params.filter((p) => groups.includes(p.group))
@@ -199,12 +217,18 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
 
   const resolution = useMemo(() => resolveSweep(model, sweep), [model, sweep])
 
-  const canSubmit =
+  /** Everything the request needs is present and legal. */
+  const ready =
     validation.ok &&
     pending.length === 0 &&
-    !submitting &&
-    prefill.state !== 'loading' &&
     (sweep.mode === 'single' || resolution.plan !== null)
+
+  /**
+   * The button stays live on an incomplete form, and pressing it reveals what is
+   * missing. A disabled Generate that silently does nothing is the version of
+   * this screen that cannot answer "why not?".
+   */
+  const canSubmit = !submitting && prefill.state !== 'loading'
 
   /**
    * Submits and immediately hands the job (or jobs) to the server runner.
@@ -218,6 +242,15 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
    * any of them, so a bad value cannot leave half a batch submitted.
    */
   const submit = async () => {
+    // From here on, every outstanding message is fair to show: you asked.
+    setAttempted(true)
+    if (!ready) {
+      // Never report an issue inside a drawer that is closed — "3 issues to
+      // resolve" above a form with nothing marked is worse than no message.
+      if (secondary.some((p) => errorsByKey[p.key]?.length)) setShowAdvanced(true)
+      return
+    }
+
     setSubmitting(true)
     setSubmitError(null)
     try {
@@ -267,7 +300,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
             reason={derived[param.key]?.reason}
             required={derived[param.key]?.required}
             max={derived[param.key]?.max}
-            errors={errorsByKey[param.key]}
+            errors={errorsFor(param.key)}
             studioDefault={preferences[param.key] as string | number | undefined}
           />
         ))}
@@ -323,7 +356,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
                   reason={derived[param.key]?.reason}
                   required={derived[param.key]?.required}
                   max={derived[param.key]?.max}
-                  errors={errorsByKey[param.key]}
+                  errors={errorsFor(param.key)}
                   studioDefault={preferences[param.key] as string | number | undefined}
                 />
             ))}
@@ -404,7 +437,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
           </p>
         )}
 
-        {blocking.map((message) => (
+        {(attempted ? blocking : []).map((message) => (
           <p
             key={message}
             className="rounded border-l-2 border-red-400 bg-red-400/10 px-3 py-2 text-sm text-(--color-ink-muted)"
@@ -433,9 +466,9 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
                 : 'Generate'}
           </button>
           <span className="text-sm text-(--color-ink-muted)">
-            {validation.ok
-              ? 'Runs on the server — it keeps going if you close this tab.'
-              : `${validation.issues.length} issue${validation.issues.length === 1 ? '' : 's'} to resolve.`}
+            {attempted && !ready
+              ? `${validation.issues.length} issue${validation.issues.length === 1 ? '' : 's'} to resolve.`
+              : 'Runs on the server — it keeps going if you close this tab.'}
           </span>
 
           <span className="ml-auto">
