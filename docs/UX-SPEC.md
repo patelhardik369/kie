@@ -228,6 +228,18 @@ Each tile: the media, the model slug, and a favorite toggle. Hover reveals re-ru
 actions. Failed generations appear as cards showing `failCode` / `failMsg`, not as gaps — a failure
 you can read is worth more than a clean grid.
 
+### Deleting
+
+Not everything generated is worth keeping, so a tile and a detail page can both throw one away.
+
+| | |
+|---|---|
+| What goes | The row, its asset rows, and the files those rows point at, inside `KIE_OUTPUT_DIR`. Folders the delete empties are pruned |
+| How it is asked | Two clicks, never a `confirm()`. The tile's trash arms to **Sure?** and disarms when the pointer leaves; the detail page's **Delete** arms to **Delete for good** and says how many files and how many bytes are about to go |
+| What it refuses | Anything in flight — `waiting`, `queuing`, `generating`, `downloading`. The runner is still writing to that row and its downloader would recreate what the delete removed. **409**, with a message saying to wait |
+| Lineage | Children are re-pointed at the deleted generation's own parent. Deleting a middle link shortens the chain rather than breaking it |
+| Not soft | There is no trash and no undo. `nsfw` already covers "keep it, stop showing it", and a delete that only hid the row would be a second way to do that |
+
 ### Marked private
 
 A generation can be marked private — **Keep private** in the Studio before it runs, or **Mark

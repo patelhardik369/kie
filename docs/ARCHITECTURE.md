@@ -38,7 +38,7 @@ app/
     kie/webhook/route.ts         signed callback (only live with KIE_PUBLIC_URL)
     kie/recover/route.ts         GET = what is parked; POST = resume all of it
     kie/credits/route.ts         balance passthrough
-    generations/[id]/route.ts    PATCH favorite / notes
+    generations/[id]/route.ts    PATCH favorite / notes / nsfw; DELETE row + files
     presets/  presets/[id]/      save, apply (drift-resolved), rename, delete
     prompts/  prompts/[id]/      the prompt library
     input-assets/                the asset library

@@ -278,3 +278,11 @@ export function Check({ size, className }: IconProps) {
     </Svg>
   )
 }
+
+export function Trash({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M2.75 4.25h10.5M6.25 4.25V2.75h3.5v1.5M4 4.25l.6 8.35a.9.9 0 0 0 .9.65h5a.9.9 0 0 0 .9-.65l.6-8.35M6.6 6.75v4M9.4 6.75v4" />
+    </Svg>
+  )
+}

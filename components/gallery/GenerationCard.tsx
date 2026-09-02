@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
-import { Alert, Film, Image as ImageIcon, Star, Wave } from '@/components/shell/icons.tsx'
+import { Alert, Film, Image as ImageIcon, Star, Trash, Wave } from '@/components/shell/icons.tsx'
 import {
   assetHref,
   formatTimestamp,
@@ -20,6 +21,12 @@ import {
  * gap in the grid (docs/UX-SPEC.md). A failure you can read is worth more than
  * a clean grid — it is usually a moderation message, and it is the only clue to
  * what tripped it.
+ *
+ * The tile carries a delete, because "that one is bad" is a judgement you make
+ * while scrolling the grid, not one worth opening a page for. It arms on the
+ * first click and commits on the second, and disarms the moment the pointer
+ * leaves — a one-click destructive control inside a link you click to navigate
+ * would eventually delete something by accident.
  */
 
 export interface CardAsset {
@@ -54,8 +61,13 @@ export function GenerationCard({
   thumbnail?: CardAsset
   assetCount: number
 }) {
+  const router = useRouter()
   const [favorite, setFavorite] = useState(generation.favorite)
   const [saving, setSaving] = useState(false)
+  const [armed, setArmed] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [removed, setRemoved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const prompt = promptOf(generation.input)
   const running = isInFlight(generation.state)
 
@@ -81,8 +93,44 @@ export function GenerationCard({
     }
   }
 
+  const remove = async (event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (!armed) {
+      setArmed(true)
+      return
+    }
+
+    setDeleting(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/generations/${generation.id}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data?.error ?? 'Could not delete this generation.')
+      }
+      // Gone from the grid at once, then a refresh so the counts, the facets and
+      // the page boundaries agree with what is left.
+      setRemoved(true)
+      router.refresh()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+      setDeleting(false)
+      setArmed(false)
+    }
+  }
+
+  if (removed) return null
+
   return (
-    <Link href={`/gallery/${generation.id}`} className="tile group relative flex flex-col">
+    <Link
+      href={`/gallery/${generation.id}`}
+      onMouseLeave={() => setArmed(false)}
+      className="tile group relative flex flex-col"
+    >
       <div className="relative aspect-square w-full overflow-hidden bg-(--color-bg-deep)">
         {thumbnail ? (
           <Preview asset={thumbnail} />
@@ -111,6 +159,37 @@ export function GenerationCard({
         >
           <Star size={13} filled={favorite} />
         </button>
+
+        {/* Left corner, opposite the star: the two destructive-adjacent clicks
+            never share a hit area. Hidden while the runner still owns the row —
+            the API refuses it, and an enabled control that cannot work lies. */}
+        {!running && (
+          <button
+            type="button"
+            onClick={remove}
+            disabled={deleting}
+            aria-label={armed ? 'Confirm delete' : 'Delete this generation'}
+            title={
+              armed
+                ? 'Click again to delete this generation and its files. No undo.'
+                : 'Delete this generation'
+            }
+            className={`absolute top-1.5 left-1.5 flex h-6 items-center justify-center gap-1 rounded-md backdrop-blur-md transition duration-(--dur-fast) ${
+              armed
+                ? 'bg-(--color-bad) px-2 text-[10px] font-medium text-white'
+                : 'w-6 bg-black/45 text-white/75 opacity-0 group-hover:opacity-100 hover:text-white focus-visible:opacity-100'
+            }`}
+          >
+            <Trash size={13} />
+            {armed && <span>{deleting ? 'Deleting…' : 'Sure?'}</span>}
+          </button>
+        )}
+
+        {error && (
+          <span className="absolute inset-x-1.5 bottom-1.5 rounded bg-(--color-bad) px-1.5 py-1 text-[10px] leading-snug text-white">
+            {error}
+          </span>
+        )}
 
         {assetCount > 1 && (
           <span className="absolute right-1.5 bottom-1.5 rounded bg-black/65 px-1.5 py-0.5 font-mono text-[10px] text-white/85 backdrop-blur-md">

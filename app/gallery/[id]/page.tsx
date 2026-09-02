@@ -149,6 +149,9 @@ export default async function GenerationDetailPage({
           favorite={generation.favorite}
           nsfw={generation.nsfw}
           notes={generation.notes}
+          inFlight={isInFlight(generation.state)}
+          fileCount={assets.length}
+          fileBytes={assets.reduce((sum, asset) => sum + (asset.bytes ?? 0), 0)}
         />
       </section>
 

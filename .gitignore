@@ -9,9 +9,11 @@ data/
 *.db-journal
 *.db-wal
 
-# Generated outputs live in KIE_OUTPUT_DIR, but ignore a local override too
-output/
-generations/
+# Generated outputs live in KIE_OUTPUT_DIR, but ignore a local override too.
+# Anchored with a leading slash: unanchored, `generations/` also matched
+# app/api/generations/, and quietly kept that route out of the repository.
+/output/
+/generations/
 
 # Dependencies and build
 node_modules/
