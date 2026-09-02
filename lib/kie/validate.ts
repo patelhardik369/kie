@@ -199,6 +199,23 @@ function checkParam(
       })
     }
 
+    /*
+     * A blank entry is not a URL. The form prunes these at the boundary, so
+     * reaching here means a re-run, a preset, or a hand-written payload — and
+     * `""` reaches Kie as an unfetchable image rather than as an omission.
+     */
+    if (param.type === 'url[]') {
+      value.forEach((entry, index) => {
+        if (typeof entry === 'string' && entry.trim().length === 0) {
+          issues.push({
+            key: `${key}[${index}]`,
+            code: 'required',
+            message: `${param.label} item ${index + 1} is empty — give it a URL or remove it.`,
+          })
+        }
+      })
+    }
+
     if (param.type === 'color[]') {
       value.forEach((entry, index) => {
         const stop = entry as { hex: string; ratio: string }

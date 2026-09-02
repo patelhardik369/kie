@@ -483,6 +483,18 @@ describe('Wan 2.7 image edit regions', () => {
     assert.match(messages(result), /one entry per input_urls item/)
   })
 
+  it('rejects a blank entry in the image list', () => {
+    // buildRequestInput prunes these, so this only fires on a re-run, a preset,
+    // or a hand-written payload — where "" would reach Kie as an unfetchable
+    // image rather than as an omission.
+    const result = validateInput(wan27Image, {
+      prompt: PROMPT,
+      input_urls: [image, ''],
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /item 2 is empty/)
+  })
+
   it('rejects regions with no images to attach them to', () => {
     const result = validateInput(wan27Image, {
       prompt: PROMPT,

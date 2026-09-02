@@ -20,6 +20,12 @@ import type { ControlProps } from './controls.tsx'
  * An image that will not load still has to be usable: a URL can be remote,
  * expired, or blocked. That case falls back to four number inputs for the image
  * in question, so the control degrades instead of disappearing.
+ *
+ * A row with no URL yet is a THIRD case, and not a broken one. "+ Add" appends
+ * an empty row to the image list, and that row arrives here as `''`. It gets a
+ * placeholder, never an `<img>`: an empty `src` makes the browser re-request the
+ * current page as an image, which is both a wasted round trip and the warning
+ * React prints for it.
  */
 
 /** A box in source-image pixels. */
@@ -52,31 +58,41 @@ export function BboxListControl({
    * Always exactly as long as the image list. Kie requires the two to match, so
    * the value is shaped to the images rather than trusted from storage — an
    * image removed after a box was drawn would otherwise leave a stale entry.
+   *
+   * A slot whose URL has been cleared is emptied here too: regions in that
+   * position would otherwise be sent for whichever image the user types in next.
    */
-  const boxes: Box[][] = images.map((_, index) =>
-    Array.isArray(stored[index]) ? stored[index]! : [],
+  const boxes: Box[][] = images.map((url, index) =>
+    isDrawable(url) && Array.isArray(stored[index]) ? stored[index]! : [],
   )
 
   const [draft, setDraft] = useState<Draft | null>(null)
-  const [natural, setNatural] = useState<Record<number, { w: number; h: number }>>({})
-  const [broken, setBroken] = useState<Record<number, boolean>>({})
+  /*
+   * Keyed by URL rather than by position. Keyed by position, "image 2 could not
+   * load" would outlive the URL that failed — correcting a typo would leave a
+   * perfectly good image stranded in the coordinate fallback, with no way back.
+   */
+  const [natural, setNatural] = useState<Record<string, { w: number; h: number }>>({})
+  const [broken, setBroken] = useState<Record<string, boolean>>({})
   const surfaces = useRef<Record<number, HTMLDivElement | null>>({})
 
   const drawn = boxes.some((list) => list.length > 0)
 
   /**
-   * Re-aligns the stored value when the image list changes length.
+   * Re-aligns the stored value whenever the image list changes.
    *
-   * Only when it actually differs, and only when something is drawn — an unused
-   * `bbox_list` should stay absent from the payload rather than appear as
-   * `[[], []]`.
+   * Compared by content, not just by length: clearing one image's URL drops that
+   * slot's regions without changing how many slots there are, and a
+   * length-only check would leave those regions in the payload. Only when it
+   * actually differs, and only when something is drawn — an unused `bbox_list`
+   * should stay absent from the payload rather than appear as `[[], []]`.
    */
   useEffect(() => {
     if (!drawn) {
       if (stored.length > 0) onChange(undefined)
       return
     }
-    if (stored.length !== images.length) onChange(boxes)
+    if (JSON.stringify(stored) !== JSON.stringify(boxes)) onChange(boxes)
   })
 
   const commit = (next: Box[][]) => {
@@ -118,7 +134,9 @@ export function BboxListControl({
   }
 
   const onPointerDown = (image: number) => (event: React.PointerEvent) => {
-    if (disabled || broken[image] || boxes[image]!.length >= perImage) return
+    const url = images[image]
+    if (!isDrawable(url) || broken[url]) return
+    if (disabled || boxes[image]!.length >= perImage) return
     if (event.button !== 0) return
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -136,7 +154,7 @@ export function BboxListControl({
     if (!draft || draft.image !== image) return
     event.currentTarget.releasePointerCapture(event.pointerId)
 
-    const size = natural[image]
+    const size = natural[images[image]!]
     const width = Math.abs(draft.x2 - draft.x1)
     const height = Math.abs(draft.y2 - draft.y1)
     setDraft(null)
@@ -167,8 +185,9 @@ export function BboxListControl({
     <div className="space-y-3">
       {images.map((url, image) => {
         const list = boxes[image]!
-        const size = natural[image]
+        const size = natural[url]
         const full = list.length >= perImage
+        const pending = !isDrawable(url)
 
         return (
           <div
@@ -189,7 +208,17 @@ export function BboxListControl({
               </span>
             </div>
 
-            {broken[image] ? (
+            {pending ? (
+              /*
+               * An empty row, waiting on a URL. Rendering nothing here would
+               * make the card look broken; rendering an <img> with no src makes
+               * the browser fetch the page again as an image.
+               */
+              <p className="px-3 py-6 text-center text-xs text-(--color-ink-muted)">
+                No URL for image {image + 1} yet. Paste one — or upload a file —
+                in the row above, and it will appear here to draw on.
+              </p>
+            ) : broken[url] ? (
               <BrokenImage
                 url={url}
                 list={list}
@@ -228,10 +257,12 @@ export function BboxListControl({
                     const el = event.currentTarget
                     setNatural((prev) => ({
                       ...prev,
-                      [image]: { w: el.naturalWidth, h: el.naturalHeight },
+                      [url]: { w: el.naturalWidth, h: el.naturalHeight },
                     }))
+                    // A URL that loads is not broken, whatever it did last time.
+                    setBroken((prev) => (prev[url] ? { ...prev, [url]: false } : prev))
                   }}
-                  onError={() => setBroken((prev) => ({ ...prev, [image]: true }))}
+                  onError={() => setBroken((prev) => ({ ...prev, [url]: true }))}
                 />
 
                 {size &&
@@ -277,9 +308,11 @@ export function BboxListControl({
             <div className="border-t border-(--color-border) px-3 py-1.5">
               {list.length === 0 ? (
                 <p className="text-[11px] text-(--color-ink-muted)">
-                  {broken[image]
-                    ? 'Image could not be displayed — enter coordinates instead.'
-                    : `Drag on the image to mark a region to edit. Up to ${perImage}.`}
+                  {pending
+                    ? 'Nothing to draw on until this image has a URL.'
+                    : broken[url]
+                      ? 'Image could not be displayed — enter coordinates instead.'
+                      : `Drag on the image to mark a region to edit. Up to ${perImage}.`}
                 </p>
               ) : (
                 <ul className="space-y-0.5">
@@ -367,4 +400,15 @@ function BrokenImage({
 
 function clamp01(n: number): number {
   return Math.min(1, Math.max(0, n))
+}
+
+/**
+ * Whether a slot holds something that can actually be fetched and drawn on.
+ *
+ * A blank row is a placeholder the user has not filled in yet — it keeps its
+ * position in the list (so region indices stay pinned to image indices) but it
+ * is never handed to an `<img>`.
+ */
+function isDrawable(url: string | undefined): url is string {
+  return typeof url === 'string' && url.trim().length > 0
 }
