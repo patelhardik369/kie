@@ -18,3 +18,49 @@ body {
   background: var(--color-surface);
   color: var(--color-ink);
 }
+
+/*
+ * Native dropdowns render their own arrow hard against the right border, with
+ * no way to move it — its position is not stylable. So the arrow is turned off
+ * and redrawn: inset from the edge, with the text padded clear of it.
+ *
+ * Written as `select.select-field` rather than a bare element rule because a
+ * Tailwind utility (`px-3`) would otherwise out-specify the padding and put the
+ * label back under the chevron.
+ *
+ * The stroke colour is --color-ink-muted, written out because a data URI cannot
+ * read a custom property. Change it with the token above.
+ */
+select.select-field {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.75 4.5 6 7.75 9.25 4.5' fill='none' stroke='%23a3a7b5' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  /* The gap between the arrow and the border. */
+  background-position: right 0.7rem center;
+  background-size: 0.7rem 0.7rem;
+  /* 0.7 border gap + 0.7 arrow + 0.55 breathing room before the text. */
+  padding-inline-end: 1.95rem;
+}
+
+/*
+ * Date fields have the same defect from the same cause: the picker icon is
+ * drawn at the content edge with no inset. It cannot be repositioned, but it
+ * can be given room.
+ */
+input[type='date']::-webkit-calendar-picker-indicator {
+  margin-inline-start: 0.45rem;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator:hover {
+  opacity: 0.9;
+}
+
+/*
+ * The option list is drawn by the OS, not by us. Without this it renders light
+ * on a dark page — the one part of a dropdown no stylesheet can reach.
+ */
+html {
+  color-scheme: dark;
+}

@@ -119,7 +119,7 @@ export function GalleryFilters({
           value={filter.family ?? ''}
           onChange={(e) => go({ family: (e.target.value || undefined) as Family })}
           aria-label="Family"
-          className={controlClass}
+          className={`select-field ${controlClass}`}
         >
           <option value="">All families</option>
           {FAMILIES.map((family) => (
@@ -135,7 +135,7 @@ export function GalleryFilters({
             go({ capability: (e.target.value || undefined) as Capability })
           }
           aria-label="Capability"
-          className={controlClass}
+          className={`select-field ${controlClass}`}
         >
           <option value="">All capabilities</option>
           {CAPABILITIES.map((capability) => (
@@ -149,7 +149,7 @@ export function GalleryFilters({
           value={filter.model ?? ''}
           onChange={(e) => go({ model: e.target.value || undefined })}
           aria-label="Model"
-          className={`${controlClass} max-w-56`}
+          className={`select-field ${controlClass} max-w-56`}
         >
           {/* Only models that have generations — the other 50-odd would be dead options. */}
           <option value="">All models</option>

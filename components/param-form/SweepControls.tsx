@@ -148,7 +148,7 @@ export function SweepControls({
               value={state.key}
               onChange={(e) => set({ key: e.target.value, raw: '' })}
               aria-label="Parameter to sweep"
-              className={controlClass}
+              className={`select-field ${controlClass}`}
             >
               {sweepable.map((p) => (
                 <option key={p.key} value={p.key}>

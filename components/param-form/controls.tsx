@@ -224,7 +224,7 @@ export function EnumControl(props: ControlProps) {
 
   return (
     <select
-      className={`${inputBase} font-mono`}
+      className={`select-field ${inputBase} font-mono`}
       value={value === undefined ? '' : String(value)}
       disabled={disabled}
       onChange={(e) => {

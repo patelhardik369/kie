@@ -93,7 +93,7 @@ export default async function ModelsPage({
           name="family"
           defaultValue={family ?? ''}
           aria-label="Family"
-          className="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm outline-none transition focus:border-(--color-accent)"
+          className="select-field rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm outline-none transition focus:border-(--color-accent)"
         >
           <option value="">All families</option>
           {FAMILIES.map((f) => (

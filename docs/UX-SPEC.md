@@ -58,7 +58,7 @@ You always know what you're sending.
 |---|---|
 | `text` | Auto-growing textarea with a live `n / maxLength` counter |
 | `string` | Single-line input |
-| `enum` | Segmented control at ≤4 options, select above that |
+| `enum` | Segmented control at ≤4 options, select above that (`.select-field`) |
 | `number` | Slider **plus** a numeric input — the slider for feel, the box for exactness. Honors `step` |
 | `boolean` | Switch, with cost implications labelled ("increases generation cost") |
 | `url` | Dropzone: drag-drop, file picker, paste a URL, or pick from the asset library. Shows a thumbnail once set |
@@ -68,6 +68,11 @@ You always know what you're sending.
 
 Every control shows its `describe` text on hover, and its documented default is visibly marked as
 default so a deliberate change reads as deliberate.
+
+Every `<select>` carries `.select-field`. A native dropdown draws its arrow hard against the right
+border and the position is not stylable, so the arrow is turned off and redrawn inset from the edge
+with the label padded clear of it — the same treatment the date fields' picker icon gets. New
+dropdowns need the class; a bare `<select>` will not pick it up on its own.
 
 ### What a fresh form opens on
 
