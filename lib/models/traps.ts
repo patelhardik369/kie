@@ -68,10 +68,11 @@ function wireType(param: ParamDef): string {
     case 'url':
       return 'string'
     case 'url[]':
-    case 'color[]':
       return 'string[]'
-    case 'bbox[]':
-      return 'number[][]'
+    case 'color[]':
+      return '{ hex, ratio }[]'
+    case 'bbox[][]':
+      return 'number[4][][]'
     case 'object[]':
       return 'object[]'
     default:

@@ -345,7 +345,151 @@ describe('Wan 2.7 image conditional maximum', () => {
       thinking_mode: true,
     })
     assert.equal(result.ok, false)
-    assert.match(messages(result), /cannot be combined with sequential/)
+    assert.match(messages(result), /unavailable in sequential mode/)
+  })
+
+  it('rejects thinking mode once an input image is supplied', () => {
+    // The half of the rule no `equals` test can express: the doc says thinking
+    // mode is available only while `input_urls` is EMPTY.
+    const result = validateInput(wan27Image, {
+      prompt: PROMPT,
+      input_urls: ['https://x/a.png'],
+      thinking_mode: true,
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /text-to-image only/)
+  })
+
+  it('allows thinking mode with no images and sequential off', () => {
+    const result = validateInput(wan27Image, {
+      prompt: PROMPT,
+      thinking_mode: true,
+    })
+    assert.equal(result.ok, true, messages(result))
+  })
+})
+
+describe('Wan 2.7 image colour palette', () => {
+  const palette = [
+    { hex: '#C2D1E6', ratio: '23.51%' },
+    { hex: '#1A1A1A', ratio: '38.00%' },
+    { hex: '#F0E6C2', ratio: '38.49%' },
+  ]
+
+  it('accepts { hex, ratio } objects', () => {
+    const result = validateInput(wan27Image, { prompt: PROMPT, color_palette: palette })
+    assert.equal(result.ok, true, messages(result))
+  })
+
+  it('rejects bare hex strings, which is what the form used to send', () => {
+    const result = validateInput(wan27Image, {
+      prompt: PROMPT,
+      color_palette: ['#C2D1E6', '#1A1A1A', '#F0E6C2'],
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /hex.*ratio/s)
+  })
+
+  it('rejects a ratio that is not two decimals and a percent sign', () => {
+    // Kie's pattern is `^\d{1,3}\.\d{2}%$` — "23.5%" and "24" both fail.
+    for (const ratio of ['23.5%', '24', '23.510%', '23.51']) {
+      const result = validateInput(wan27Image, {
+        prompt: PROMPT,
+        color_palette: [{ hex: '#C2D1E6', ratio }, ...palette.slice(1)],
+      })
+      assert.equal(result.ok, false, `${ratio} should be rejected`)
+      assert.match(messages(result), /two decimal places/)
+    }
+  })
+
+  it('rejects a malformed hex', () => {
+    const result = validateInput(wan27Image, {
+      prompt: PROMPT,
+      color_palette: [{ hex: 'C2D1E6', ratio: '23.51%' }, ...palette.slice(1)],
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /#C2D1E6/)
+  })
+
+  it('still enforces the documented 3-10 range', () => {
+    const result = validateInput(wan27Image, {
+      prompt: PROMPT,
+      color_palette: palette.slice(0, 2),
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /at least 3/)
+  })
+
+  it('rejects a palette in sequential mode', () => {
+    const result = validateInput(wan27Image, {
+      prompt: PROMPT,
+      enable_sequential: true,
+      color_palette: palette,
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /unavailable in sequential mode/)
+  })
+})
+
+describe('Wan 2.7 image edit regions', () => {
+  const image = 'https://x/a.png'
+
+  it('accepts one list of boxes per input image', () => {
+    const result = validateInput(wan27Image, {
+      prompt: PROMPT,
+      input_urls: [image, 'https://x/b.png'],
+      bbox_list: [[[10, 10, 200, 200]], []],
+    })
+    assert.equal(result.ok, true, messages(result))
+  })
+
+  it('rejects the flat shape the form used to send', () => {
+    const result = validateInput(wan27Image, {
+      prompt: PROMPT,
+      input_urls: [image],
+      bbox_list: [[10, 10, 200, 200]],
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /one list of \[x1, y1, x2, y2\] boxes per input image/)
+  })
+
+  it('caps boxes per image rather than in total', () => {
+    // Three boxes on one image is too many; three spread over two images is not.
+    const tooMany = validateInput(wan27Image, {
+      prompt: PROMPT,
+      input_urls: [image],
+      bbox_list: [[[0, 0, 1, 1], [2, 2, 3, 3], [4, 4, 5, 5]]],
+    })
+    assert.equal(tooMany.ok, false)
+    assert.match(messages(tooMany), /at most 2 are allowed per image/)
+
+    const spread = validateInput(wan27Image, {
+      prompt: PROMPT,
+      input_urls: [image, 'https://x/b.png'],
+      bbox_list: [[[0, 0, 1, 1], [2, 2, 3, 3]], [[4, 4, 5, 5]]],
+    })
+    assert.equal(spread.ok, true, messages(spread))
+  })
+
+  it('rejects an outer list that does not match the image list', () => {
+    // The outer list is indexed BY input_urls, so a mismatch does not fail
+    // loudly — it applies regions to the wrong picture.
+    const result = validateInput(wan27Image, {
+      prompt: PROMPT,
+      input_urls: [image, 'https://x/b.png'],
+      bbox_list: [[[10, 10, 200, 200]]],
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /one entry per input_urls item/)
+  })
+
+  it('rejects regions with no images to attach them to', () => {
+    const result = validateInput(wan27Image, {
+      prompt: PROMPT,
+      bbox_list: [[[10, 10, 200, 200]]],
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /add at least one image/)
   })
 })
 

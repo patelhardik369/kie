@@ -203,6 +203,18 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
     })
   }
 
+  /**
+   * The images a `drawsOn` control annotates, read from the sibling it names.
+   *
+   * The link is declared in the ParamDef, so this stays a lookup rather than a
+   * model-specific branch — the form still does not know what a bbox is.
+   */
+  const sourceUrlsFor = (param: { drawsOn?: string }): string[] | undefined => {
+    if (!param.drawsOn) return undefined
+    const urls = values[param.drawsOn]
+    return Array.isArray(urls) ? (urls as string[]) : []
+  }
+
   /** A field's messages, once it is fair to show them. */
   const errorsFor = (key: string) =>
     attempted || touched.has(key) ? errorsByKey[key] : undefined
@@ -314,6 +326,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
             max={derived[param.key]?.max}
             errors={errorsFor(param.key)}
             studioDefault={preferences[param.key] as string | number | undefined}
+            sourceUrls={sourceUrlsFor(param)}
           />
         ))}
       </section>
@@ -370,6 +383,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
                   max={derived[param.key]?.max}
                   errors={errorsFor(param.key)}
                   studioDefault={preferences[param.key] as string | number | undefined}
+                  sourceUrls={sourceUrlsFor(param)}
                 />
             ))}
           </div>

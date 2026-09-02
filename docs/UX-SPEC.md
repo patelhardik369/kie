@@ -65,6 +65,8 @@ You always know what you're sending.
 | `url[]` | Same, multiple, reorderable, with an `n / maxItems` counter |
 | `seed` | Number input with a dice button, and a "lock" that carries the seed to the next run |
 | `object[]` | Repeating card list with add / remove / drag-reorder |
+| `color[]` | Swatch plus a share-of-image percentage per stop, with a running total and an even-shares button. The `xx.xx%` string Kie demands is produced from the number, never typed |
+| `bbox[][]` | One drawing surface per image in the param's `drawsOn` list: drag a rectangle on the picture and the box is recorded in that image's own pixels. Falls back to four number inputs for an image the browser cannot load |
 
 Every control shows its `describe` text on hover, and its documented default is visibly marked as
 default so a deliberate change reads as deliberate.

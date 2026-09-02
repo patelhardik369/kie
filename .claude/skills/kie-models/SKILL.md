@@ -55,8 +55,8 @@ export type ParamType =
   | 'url[]'     // ordered list of asset URLs
   | 'seed'      // integer with a randomize affordance
   | 'object[]'  // repeating group (multi_prompt, kling_elements, elements)
-  | 'color[]'   // ordered colors (wan/2-7-image color_palette)
-  | 'bbox[]'    // [x1,y1,x2,y2] regions on an input image (wan bbox_list)
+  | 'color[]'   // { hex, ratio } stops, NOT bare strings (wan/2-7-image color_palette)
+  | 'bbox[][]'  // one list of [x1,y1,x2,y2] boxes PER image in `drawsOn` (wan bbox_list)
 
 export type ParamGroup = 'core' | 'framing' | 'motion' | 'audio' | 'advanced'
 

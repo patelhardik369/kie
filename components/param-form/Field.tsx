@@ -1,8 +1,8 @@
 'use client'
 
 import type { ParamDef } from '@/lib/kie/registry/types.ts'
+import { BboxListControl } from './RegionPicker.tsx'
 import {
-  BboxListControl,
   BooleanControl,
   ColorListControl,
   EnumControl,
@@ -58,7 +58,7 @@ function Control(props: ControlProps) {
       return <UrlListControl {...props} />
     case 'color[]':
       return <ColorListControl {...props} />
-    case 'bbox[]':
+    case 'bbox[][]':
       return <BboxListControl {...props} />
     case 'object[]':
       return <ObjectListControl {...props} />

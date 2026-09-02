@@ -311,11 +311,16 @@ through the same endpoint — supplying `input_urls` switches it to edit mode.
 | `n` | integer | | **1–4** normally, **1–12** when sequential | `4` | Number of images |
 | `resolution` | string | | `'1K'` `'2K'` `'4K'` | `'2K'` | 4K only for text-to-image in standard mode |
 | `thinking_mode` | boolean | | — | `false` | **Unavailable** when `enable_sequential` is true or `input_urls` is set |
-| `color_palette` | string[] | | 3–10 items | — | Custom color theme; 8 recommended |
-| `bbox_list` | array | | max 2 per image | — | Interactive editing regions, `[x1, y1, x2, y2]` |
+| `color_palette` | object[] | | 3–10 items | — | `{ hex, ratio }`, **both required** — `{"hex":"#C2D1E6","ratio":"23.51%"}`. `hex` matches `^#[0-9A-Fa-f]{6}$`, `ratio` matches `^\d{1,3}\.\d{2}%$` (two decimals, `23.5%` is rejected). **Unavailable** when `enable_sequential` is true |
+| `bbox_list` | array[][] | | max 2 boxes **per image** | — | Interactive editing regions. Outer list length must match `input_urls`, one entry per image in the same order; each entry holds up to 2 boxes of `[x1, y1, x2, y2]` integers. `[[]]` leaves an image unboxed |
 | `watermark` | boolean | | — | `false` | |
 | `seed` | integer | | 0–2147483647 | `0` | |
 | `nsfw_checker` | boolean | | — | `false` | |
 
-**Constraints:** `thinking_mode` conflicts with both `enable_sequential` and `input_urls`; `n`'s upper
-bound depends on `enable_sequential`; `aspect_ratio` is inert once `input_urls` is present.
+**Constraints:** `thinking_mode` conflicts with both `enable_sequential` and `input_urls`;
+`color_palette` conflicts with `enable_sequential`; `n`'s upper bound depends on `enable_sequential`
+(and so does Kie's own default — 4 outside it, 12 inside); `bbox_list` requires `input_urls` and its
+length must match; `aspect_ratio` is inert once `input_urls` is present.
+
+**Two shapes worth re-reading before transcribing.** `color_palette` is objects, not strings, and
+`bbox_list` is doubly nested. Both look like the simpler thing in a summary and fail as a 422.

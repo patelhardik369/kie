@@ -316,7 +316,9 @@ function wan27Image(slug: string, label: string, page: string): ModelDefinition 
         key: 'n',
         type: 'number',
         label: 'Images',
-        describe: 'How many images to generate. 1-4 normally, 1-12 in sequential mode.',
+        describe:
+          'How many images to generate. 1-4 normally (Kie defaults to 4), ' +
+          '1-12 in sequential mode (Kie defaults to 12).',
         group: 'core',
         min: 1,
         max: 12,
@@ -344,16 +346,24 @@ function wan27Image(slug: string, label: string, page: string): ModelDefinition 
         key: 'color_palette',
         type: 'color[]',
         label: 'Color palette',
-        describe: 'Custom color theme. Between 3 and 10 colors; 8 is recommended.',
+        describe:
+          'Custom color theme, each colour paired with the share of the image it ' +
+          'should occupy. Between 3 and 10 colours; 8 is recommended. ' +
+          'Unavailable in sequential mode.',
         group: 'advanced',
         minItems: 3,
         maxItems: 10,
       },
       {
         key: 'bbox_list',
-        type: 'bbox[]',
+        type: 'bbox[][]',
         label: 'Edit regions',
-        describe: 'Interactive editing areas as [x1, y1, x2, y2]. Up to 2 per image.',
+        // One entry per input image, in the same order. `maxItems` is the
+        // per-image ceiling here, not the length of the outer list.
+        drawsOn: 'input_urls',
+        describe:
+          'Regions to edit, drawn on each input image. Up to 2 per image, in the ' +
+          "source image's own pixels as [x1, y1, x2, y2].",
         group: 'advanced',
         maxItems: 2,
       },
@@ -364,9 +374,17 @@ function wan27Image(slug: string, label: string, page: string): ModelDefinition 
     constraints: [
       {
         kind: 'forbiddenWhen',
-        keys: ['thinking_mode'],
+        keys: ['thinking_mode', 'color_palette'],
         when: { key: 'enable_sequential', equals: true },
-        message: 'Thinking mode cannot be combined with sequential mode.',
+        message: 'Thinking mode and the colour palette are unavailable in sequential mode.',
+      },
+      {
+        // The second half of the thinking-mode rule: the doc says it is only
+        // available when input_urls is EMPTY, which no `equals` test can express.
+        kind: 'forbiddenWhen',
+        keys: ['thinking_mode'],
+        when: { key: 'input_urls', present: true },
+        message: 'Thinking mode is text-to-image only — it is unavailable once an input image is supplied.',
       },
       {
         kind: 'maxWhen',
@@ -375,9 +393,19 @@ function wan27Image(slug: string, label: string, page: string): ModelDefinition 
         max: 4,
         message: 'Outside sequential mode this model generates at most 4 images.',
       },
+      {
+        // The outer list is per input image, so regions without images have
+        // nothing to attach to and Kie would reject the length mismatch.
+        kind: 'requires',
+        keys: ['bbox_list'],
+        requires: 'input_urls',
+        message: 'Edit regions are drawn on input images — add at least one image first.',
+      },
     ],
     notes:
-      'Widest aspect-ratio set of any in-scope model. thinking_mode is also unavailable whenever input_urls is set, which the form must enforce alongside the sequential-mode rule.',
+      'Widest aspect-ratio set of any in-scope model. color_palette items are ' +
+      '{ hex, ratio } objects, not bare hex strings, and bbox_list is one list of ' +
+      'boxes PER input image — both are transcribed wrong easily and fail as a 422.',
   }
 }
 

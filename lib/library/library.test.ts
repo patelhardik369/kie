@@ -58,16 +58,34 @@ before(async () => {
 
     if (url.includes('file-stream-upload')) {
       uploadCalls++
+      // Kie's REAL response shape, verified against the live endpoint: the link
+      // is `downloadUrl`, there is no `fileUrl`, and the only timestamp is
+      // `uploadedAt`. The previous fake invented a `fileUrl` — so it passed
+      // while the app silently dropped every upload.
       return new Response(
         JSON.stringify({
+          success: true,
           code: 200,
-          msg: 'success',
+          msg: 'File uploaded successfully',
           data: {
-            fileUrl: `https://kieai.redpandaai.co/uploads/file-${uploadCalls}.png`,
+            success: true,
+            fileName: `file-${uploadCalls}.png`,
+            filePath: `kieai/1/kie-studio/file-${uploadCalls}.png`,
+            downloadUrl: `https://tempfile.redpandaai.co/kieai/1/kie-studio/file-${uploadCalls}.png`,
+            fileSize: 1024,
             mimeType: 'image/png',
-            expiresAt: new Date(Date.now() + uploadTtlMs).toISOString(),
+            uploadedAt: new Date(Date.now() - (24 * 60 * 60 * 1000 - uploadTtlMs)).toISOString(),
           },
         }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }
+
+    if (url.includes('file-base64-upload')) {
+      uploadCalls++
+      // The variant that answers without a usable link at all.
+      return new Response(
+        JSON.stringify({ code: 200, msg: 'ok', data: { fileName: 'x.png', fileSize: 1 } }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       )
     }
@@ -116,6 +134,38 @@ beforeEach(async () => {
 const bytes = (text: string) => new TextEncoder().encode(text)
 
 // ------------------------------------------------------------------ assets
+
+describe('what an upload returns', () => {
+  it('resolves the model-ready URL from Kie’s downloadUrl', async () => {
+    // The bug this pins: `UploadedFile` declared a `fileUrl` field that the API
+    // does not have. Reading it gave undefined, JSON.stringify dropped the key,
+    // and the form appended nothing — an upload that succeeded and vanished.
+    const stored = await storeUpload({ content: bytes('a lemon'), filename: 'lemon.png' })
+
+    assert.equal(typeof stored.fileUrl, 'string')
+    assert.match(stored.fileUrl, /^https:\/\/tempfile\.redpandaai\.co\//)
+    assert.equal(stored.mime, 'image/png')
+  })
+
+  it('fails loudly when the response carries no usable URL', async () => {
+    // Better a visible error than a file that quietly attaches to nothing.
+    const { uploadBase64 } = await import('../kie/upload.ts')
+    await assert.rejects(
+      () => uploadBase64('data:image/png;base64,AAAA'),
+      /returned no downloadUrl/,
+    )
+  })
+
+  it('dates the 24h expiry from Kie’s uploadedAt, not from now', async () => {
+    const stored = await storeUpload({ content: bytes('timed'), filename: 'timed.png' })
+    // The fake reports an uploadedAt that leaves `uploadTtlMs` of life left.
+    const remaining = stored.expiresAt - Date.now()
+    assert.ok(
+      Math.abs(remaining - uploadTtlMs) < 5_000,
+      `expected about ${uploadTtlMs}ms of life, got ${remaining}ms`,
+    )
+  })
+})
 
 describe('an asset reused inside 24h', () => {
   it('is not re-uploaded', async () => {

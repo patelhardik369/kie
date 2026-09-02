@@ -149,6 +149,8 @@ Cost the most time when forgotten:
 
 - `recordInfo` answers an **unknown `taskId` with `code: 422`, `msg: "recordInfo is null"`** — never a
   404. Mapped to `not_found` in `tasks.ts` so the generation lands in `orphaned` rather than `stalled`.
+- The file-upload endpoints return the usable link as **`downloadUrl`**. There is no `fileUrl` field;
+  reading one yields `undefined` and an upload that silently attaches nothing.
 - `resultJson` is a **JSON-encoded string**. Parse it.
 - It can be `null` on non-terminal states.
 - `resultUrls` is an array even for single-output models.

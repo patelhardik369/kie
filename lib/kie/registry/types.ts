@@ -44,10 +44,21 @@ export type ParamType =
   | 'seed'
   /** Repeating group — multi_prompt, kling_elements, elements. */
   | 'object[]'
-  /** Ordered list of colors — Wan 2.7 Image's `color_palette`. */
+  /**
+   * Ordered colour theme — Wan 2.7 Image's `color_palette`.
+   *
+   * Items are `{ hex, ratio }`, NOT bare strings: Kie wants each colour paired
+   * with the share of the image it should occupy, `"23.51%"`, both required.
+   */
   | 'color[]'
-  /** Regions drawn on an input image as [x1, y1, x2, y2] — Wan's `bbox_list`. */
-  | 'bbox[]'
+  /**
+   * Regions drawn on input images — Wan's `bbox_list`.
+   *
+   * Doubly nested, and the nesting is the contract: one entry per image in the
+   * `drawsOn` parameter, in the same order, each holding up to `maxItems` boxes
+   * of `[x1, y1, x2, y2]` in the source image's own pixels.
+   */
+  | 'bbox[][]'
 
 /**
  * Drives basic/advanced placement only. Grouping is a UI hint — every parameter
@@ -80,7 +91,28 @@ export interface ParamDef {
   accept?: AssetKind[]
   /** For `object[]`. */
   fields?: ParamDef[]
+  /**
+   * For `bbox[][]`: the key of the `url[]` parameter whose images this
+   * annotates.
+   *
+   * The link is declared here rather than assumed by the control, so the form
+   * can render a drawing surface per image without knowing which model it is
+   * looking at — and so the outer array can never disagree with the image list,
+   * which is the shape Kie requires.
+   */
+  drawsOn?: string
 }
+
+/**
+ * The test a conditional constraint applies to another field.
+ *
+ * `equals` covers a switch with a known value; `present` covers "the user put
+ * something in it", which is what an array-valued field like `input_urls` needs
+ * — there is no single value to compare it against.
+ */
+export type ConstraintWhen =
+  | { key: string; equals: unknown; present?: never }
+  | { key: string; present: boolean; equals?: never }
 
 export type Constraint =
   | {
@@ -109,14 +141,14 @@ export type Constraint =
       /** `keys` become required when `when` holds. */
       kind: 'requiredWhen'
       keys: string[]
-      when: { key: string; equals: unknown }
+      when: ConstraintWhen
       message: string
     }
   | {
       /** `keys` must NOT be set when `when` holds. */
       kind: 'forbiddenWhen'
       keys: string[]
-      when: { key: string; equals: unknown }
+      when: ConstraintWhen
       message: string
     }
   | {
@@ -133,7 +165,7 @@ export type Constraint =
        */
       kind: 'maxWhen'
       keys: string[]
-      when: { key: string; equals: unknown }
+      when: ConstraintWhen
       max: number
       message: string
     }

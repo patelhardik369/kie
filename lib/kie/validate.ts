@@ -1,4 +1,4 @@
-import type { Constraint, ModelDefinition, ParamDef } from './registry/types.ts'
+import type { Constraint, ConstraintWhen, ModelDefinition, ParamDef } from './registry/types.ts'
 
 /**
  * Validates a request `input` against a ModelDefinition.
@@ -20,6 +20,8 @@ export type IssueCode =
   | 'step'
   | 'length'
   | 'items'
+  /** The value is the right type but the wrong shape — a hex, a percentage. */
+  | 'format'
   | 'constraint'
 
 export interface ValidationIssue {
@@ -71,21 +73,37 @@ function typeOk(param: ParamDef, value: unknown): boolean {
     case 'boolean':
       return typeof value === 'boolean'
     case 'url[]':
-    case 'color[]':
       return Array.isArray(value) && value.every((v) => typeof v === 'string')
-    case 'bbox[]':
-      return (
-        Array.isArray(value) &&
-        value.every(
-          (v) => Array.isArray(v) && v.length === 4 && v.every((n) => typeof n === 'number'),
-        )
-      )
+    // `{ hex, ratio }`, both required — a bare hex string is what Kie rejects.
+    case 'color[]':
+      return Array.isArray(value) && value.every(isColorStop)
+    // One entry per source image, each a list of [x1, y1, x2, y2].
+    case 'bbox[][]':
+      return Array.isArray(value) && value.every((image) => Array.isArray(image) && image.every(isBox))
     case 'object[]':
       return (
         Array.isArray(value) &&
         value.every((v) => typeof v === 'object' && v !== null && !Array.isArray(v))
       )
   }
+}
+
+/** `{ hex: '#C2D1E6', ratio: '23.51%' }` — both required, both format-checked. */
+export const HEX_PATTERN = /^#[0-9A-Fa-f]{6}$/
+export const RATIO_PATTERN = /^\d{1,3}\.\d{2}%$/
+
+function isColorStop(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const stop = value as { hex?: unknown; ratio?: unknown }
+  return typeof stop.hex === 'string' && typeof stop.ratio === 'string'
+}
+
+function isBox(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length === 4 &&
+    value.every((n) => typeof n === 'number' && Number.isFinite(n))
+  )
 }
 
 function checkParam(
@@ -181,6 +199,41 @@ function checkParam(
       })
     }
 
+    if (param.type === 'color[]') {
+      value.forEach((entry, index) => {
+        const stop = entry as { hex: string; ratio: string }
+        if (!HEX_PATTERN.test(stop.hex)) {
+          issues.push({
+            key: `${key}[${index}].hex`,
+            code: 'format',
+            message: `${param.label} colour ${index + 1}: hex must look like "#C2D1E6".`,
+          })
+        }
+        if (!RATIO_PATTERN.test(stop.ratio)) {
+          // Kie's pattern is strict about the two decimals: "23.5%" is rejected.
+          issues.push({
+            key: `${key}[${index}].ratio`,
+            code: 'format',
+            message: `${param.label} colour ${index + 1}: ratio must look like "23.51%" — two decimal places.`,
+          })
+        }
+      })
+    }
+
+    if (param.type === 'bbox[][]' && param.maxItems !== undefined) {
+      // maxItems counts boxes PER IMAGE here, not entries in the outer list —
+      // the outer list is pinned to the image count by the check below.
+      value.forEach((boxes, index) => {
+        if (Array.isArray(boxes) && boxes.length > param.maxItems!) {
+          issues.push({
+            key: `${key}[${index}]`,
+            code: 'items',
+            message: `${param.label}: image ${index + 1} has ${boxes.length} regions; at most ${param.maxItems} are allowed per image.`,
+          })
+        }
+      })
+    }
+
     if (param.type === 'object[]' && param.fields) {
       value.forEach((entry, index) => {
         const row = entry as Record<string, unknown>
@@ -211,15 +264,33 @@ function describeType(param: ParamDef): string {
     case 'boolean':
       return 'true or false'
     case 'url[]':
-    case 'color[]':
       return 'an array of strings'
-    case 'bbox[]':
-      return 'an array of [x1, y1, x2, y2] number arrays'
+    case 'color[]':
+      return 'an array of { hex: "#RRGGBB", ratio: "12.34%" } objects'
+    case 'bbox[][]':
+      return 'one list of [x1, y1, x2, y2] boxes per input image'
     case 'object[]':
       return 'an array of objects'
     default:
       return 'a string'
   }
+}
+
+/**
+ * Whether a conditional constraint's trigger holds.
+ *
+ * Two forms, because two questions get asked: "is this switch on" (`equals`,
+ * resolved against the documented default so an omitted field still counts) and
+ * "did the user put anything in this" (`present`, which is the only sensible
+ * test for a list like `input_urls`).
+ */
+export function whenHolds(
+  when: ConstraintWhen,
+  input: Record<string, unknown>,
+  params: ParamDef[],
+): boolean {
+  if (when.present !== undefined) return isPresent(input[when.key]) === when.present
+  return resolved(input, when.key, params) === when.equals
 }
 
 function checkConstraint(
@@ -252,7 +323,7 @@ function checkConstraint(
       break
     }
     case 'requiredWhen': {
-      if (resolved(input, constraint.when.key, params) === constraint.when.equals) {
+      if (whenHolds(constraint.when, input, params)) {
         for (const key of constraint.keys) {
           if (!present(key)) {
             issues.push({ key, code: 'constraint', message: constraint.message })
@@ -262,7 +333,7 @@ function checkConstraint(
       break
     }
     case 'forbiddenWhen': {
-      if (resolved(input, constraint.when.key, params) === constraint.when.equals) {
+      if (whenHolds(constraint.when, input, params)) {
         for (const key of constraint.keys) {
           if (present(key)) {
             issues.push({ key, code: 'constraint', message: constraint.message })
@@ -278,7 +349,7 @@ function checkConstraint(
       break
     }
     case 'maxWhen': {
-      if (resolved(input, constraint.when.key, params) === constraint.when.equals) {
+      if (whenHolds(constraint.when, input, params)) {
         for (const key of constraint.keys) {
           const value = input[key]
           if (typeof value === 'number' && value > constraint.max) {
@@ -330,6 +401,26 @@ export function validateInput(
     }
 
     checkParam(param, value, issues)
+
+    /*
+     * A `drawsOn` parameter is indexed BY the list it names — Kie reads
+     * `bbox_list[2]` as "the boxes for input_urls[2]" — so a length mismatch is
+     * not a detail, it silently applies regions to the wrong image. The form
+     * cannot produce one, but a re-run, a preset, or a hand-written payload can.
+     */
+    if (param.drawsOn && Array.isArray(value)) {
+      const source = input[param.drawsOn]
+      const expected = Array.isArray(source) ? source.length : 0
+      if (value.length !== expected) {
+        issues.push({
+          key: param.key,
+          code: 'items',
+          message:
+            `${param.label} must have one entry per ${param.drawsOn} item, in the same order ` +
+            `— got ${value.length} for ${expected} image(s). Use [] for an image with no regions.`,
+        })
+      }
+    }
   }
 
   for (const constraint of model.constraints ?? []) {

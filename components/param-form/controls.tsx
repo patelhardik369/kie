@@ -23,6 +23,14 @@ export interface ControlProps<T = unknown> {
    * required (or vice versa), so controls must not read param.required directly.
    */
   required?: boolean
+  /**
+   * The images this control annotates, for a param that declares `drawsOn`.
+   *
+   * The only sibling value any control sees, and it arrives because the ParamDef
+   * asked for it by key — not because the component knows which model it is
+   * rendering. Extending the schema is what keeps this generic.
+   */
+  sourceUrls?: string[]
 }
 
 /** The effective requiredness, honouring constraint-derived overrides. */
@@ -388,7 +396,13 @@ function UploadButton({
       const response = await fetch('/api/upload', { method: 'POST', body })
       const data = await response.json()
       if (!response.ok) throw new Error(data?.error ?? 'Upload failed.')
-      onUploaded(data.fileUrl as string)
+      // A 200 carrying no URL used to be the worst case here: the value went
+      // into the list as `undefined`, was filtered straight back out, and the
+      // file simply vanished with the counter still on 0.
+      if (typeof data.fileUrl !== 'string' || !data.fileUrl) {
+        throw new Error('Kie accepted the file but returned no URL for it.')
+      }
+      onUploaded(data.fileUrl)
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
@@ -423,6 +437,16 @@ function UploadButton({
       >
         {busy ? 'Uploading…' : error ? 'Retry' : 'Upload'}
       </button>
+      {/*
+        Spelled out, not left in a tooltip. A failed upload that only recolours a
+        small button reads as "nothing happened", and the question it prompts is
+        "where did my file go?" rather than "what went wrong?".
+      */}
+      {error && (
+        <p className="basis-full text-xs text-red-400" role="alert">
+          {error}
+        </p>
+      )}
     </>
   )
 }
@@ -513,99 +537,128 @@ export function UrlListControl({ param, value, onChange, disabled, max }: Contro
   )
 }
 
+export interface ColorStop {
+  hex: string
+  ratio: string
+}
+
+/** Kie's format, exactly: three digits, a dot, two decimals, a percent sign. */
+function formatRatio(percent: number): string {
+  return `${Math.min(999, Math.max(0, percent)).toFixed(2)}%`
+}
+
+function parseRatio(ratio: string): number {
+  const n = Number.parseFloat(ratio)
+  return Number.isFinite(n) ? n : 0
+}
+
+/**
+ * Wan 2.7 Image's `color_palette`.
+ *
+ * Each stop is a colour AND the share of the image it should occupy — Kie
+ * requires both, and rejects a ratio that is not `xx.xx%` to two decimals. The
+ * percentage is therefore never typed as a raw string: the input takes a number
+ * and the format is produced here, so the strict pattern cannot be missed.
+ */
 export function ColorListControl({ param, value, onChange, disabled }: ControlProps) {
-  const list = Array.isArray(value) ? (value as string[]) : []
+  const list = Array.isArray(value) ? (value as ColorStop[]) : []
   const ceiling = param.maxItems ?? 10
+  const floor = param.minItems ?? 0
+  const total = list.reduce((sum, stop) => sum + parseRatio(stop.ratio), 0)
+
+  const update = (index: number, patch: Partial<ColorStop>) => {
+    onChange(list.map((stop, i) => (i === index ? { ...stop, ...patch } : stop)))
+  }
+
+  /** Even shares that still add to exactly 100 — the remainder goes on the first. */
+  const evenly = (stops: ColorStop[]): ColorStop[] => {
+    if (stops.length === 0) return stops
+    const each = Math.floor((100 / stops.length) * 100) / 100
+    const remainder = Math.round((100 - each * stops.length) * 100) / 100
+    return stops.map((stop, i) => ({
+      ...stop,
+      ratio: formatRatio(i === 0 ? each + remainder : each),
+    }))
+  }
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
-        {list.map((color, index) => (
-          <div key={index} className="flex flex-col items-center gap-1">
+      <div className="space-y-1.5">
+        {list.map((stop, index) => (
+          <div key={index} className="flex items-center gap-2">
             <input
               type="color"
-              className="h-9 w-9 cursor-pointer rounded border border-(--color-border) bg-transparent disabled:opacity-40"
-              value={/^#[0-9a-f]{6}$/i.test(color) ? color : '#888888'}
+              className="h-9 w-9 shrink-0 cursor-pointer rounded border border-(--color-border) bg-transparent disabled:opacity-40"
+              value={/^#[0-9a-f]{6}$/i.test(stop.hex) ? stop.hex : '#888888'}
               disabled={disabled}
-              onChange={(e) => {
-                const next = [...list]
-                next[index] = e.target.value
-                onChange(next)
-              }}
+              onChange={(e) => update(index, { hex: e.target.value })}
+              aria-label={`Colour ${index + 1}`}
             />
+            <code className="w-20 shrink-0 font-mono text-xs text-(--color-ink-muted)">
+              {stop.hex}
+            </code>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.01}
+              // Not `inputBase`: its `w-full` and a `w-24` are the same
+              // specificity, so which one wins depends on stylesheet order
+              // rather than on the order written here.
+              className="w-24 shrink-0 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 font-mono text-sm outline-none transition focus:border-(--color-accent) disabled:cursor-not-allowed disabled:opacity-40"
+              value={parseRatio(stop.ratio)}
+              disabled={disabled}
+              onChange={(e) => update(index, { ratio: formatRatio(Number(e.target.value)) })}
+              aria-label={`Colour ${index + 1} share`}
+            />
+            <span className="shrink-0 text-xs text-(--color-ink-muted)">% of image</span>
             <button
               type="button"
               disabled={disabled}
               onClick={() => onChange(list.filter((_, i) => i !== index))}
-              className="text-xs text-(--color-ink-muted) hover:text-red-400 disabled:opacity-40"
-              aria-label="Remove color"
+              className="ml-auto shrink-0 rounded-md border border-(--color-border) px-2 py-1 text-sm text-(--color-ink-muted) transition hover:border-red-400 hover:text-red-400 disabled:opacity-40"
+              aria-label="Remove colour"
             >
               ✕
             </button>
           </div>
         ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           disabled={disabled || list.length >= ceiling}
-          onClick={() => onChange([...list, '#888888'])}
-          className="h-9 rounded-md border border-dashed border-(--color-border) px-3 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted) disabled:cursor-not-allowed disabled:opacity-40"
+          // Re-balanced on every add, so the shares always describe a whole
+          // image. Adding a colour without rescaling the others leaves a palette
+          // summing to 183%, which is not a proportion of anything.
+          onClick={() => onChange(evenly([...list, { hex: '#888888', ratio: '0.00%' }]))}
+          className="rounded-md border border-dashed border-(--color-border) px-3 py-1.5 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted) disabled:cursor-not-allowed disabled:opacity-40"
         >
-          + Color
+          + Colour
         </button>
-      </div>
-      <p className="font-mono text-xs text-(--color-ink-muted)">
-        {list.length} / {ceiling}
-        {param.minItems !== undefined && list.length > 0 && list.length < param.minItems
-          ? ` — needs at least ${param.minItems}`
-          : ''}
-      </p>
-    </div>
-  )
-}
-
-export function BboxListControl({ param, value, onChange, disabled }: ControlProps) {
-  const list = Array.isArray(value) ? (value as number[][]) : []
-  const ceiling = param.maxItems ?? 2
-
-  return (
-    <div className="space-y-2">
-      {list.map((box, index) => (
-        <div key={index} className="flex items-center gap-2">
-          {(['x1', 'y1', 'x2', 'y2'] as const).map((axis, axisIndex) => (
-            <label key={axis} className="flex items-center gap-1">
-              <span className="font-mono text-xs text-(--color-ink-muted)">{axis}</span>
-              <input
-                type="number"
-                className={`${inputBase} w-20 font-mono`}
-                value={box[axisIndex] ?? 0}
-                disabled={disabled}
-                onChange={(e) => {
-                  const next = list.map((b) => [...b])
-                  next[index]![axisIndex] = Number(e.target.value)
-                  onChange(next)
-                }}
-              />
-            </label>
-          ))}
+        {list.length > 1 && (
           <button
             type="button"
             disabled={disabled}
-            onClick={() => onChange(list.filter((_, i) => i !== index))}
-            className="rounded-md border border-(--color-border) px-2 py-1 text-sm text-(--color-ink-muted) transition hover:border-red-400 hover:text-red-400 disabled:opacity-40"
-            aria-label="Remove region"
+            onClick={() => onChange(evenly(list))}
+            className="rounded-md border border-(--color-border) px-3 py-1.5 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted) disabled:opacity-40"
           >
-            ✕
+            Even shares
           </button>
-        </div>
-      ))}
-      <button
-        type="button"
-        disabled={disabled || list.length >= ceiling}
-        onClick={() => onChange([...list, [0, 0, 100, 100]])}
-        className="rounded-md border border-dashed border-(--color-border) px-3 py-1.5 text-xs text-(--color-ink-muted) transition hover:border-(--color-ink-muted) disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        + Region ({list.length} / {ceiling})
-      </button>
+        )}
+        <span className="font-mono text-xs text-(--color-ink-muted)">
+          {list.length} / {ceiling}
+          {list.length > 0 && ` · ${total.toFixed(2)}%`}
+        </span>
+      </div>
+
+      {list.length > 0 && list.length < floor && (
+        <p className="text-xs text-(--color-ink-muted)">
+          Needs at least {floor} colours.
+        </p>
+      )}
     </div>
   )
 }
+

@@ -91,7 +91,7 @@ describe('the schema layer covers every parameter in the registry', () => {
     'seed',
     'object[]',
     'color[]',
-    'bbox[]',
+    'bbox[][]',
   ]
 
   it('uses only types the Field dispatch handles', () => {

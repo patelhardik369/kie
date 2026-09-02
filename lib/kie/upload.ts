@@ -3,6 +3,7 @@ import 'server-only'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { KIE_UPLOAD_BASE, UPLOAD_TIMEOUT_MS, kieRequest } from './client.ts'
+import { KieError } from './errors.ts'
 
 /**
  * File uploads.
@@ -24,24 +25,72 @@ export const URL_UPLOAD_MAX_BYTES = 100 * 1024 * 1024
 /** Observed upload lifetime. Used to compute `input_assets.expires_at`. */
 export const UPLOAD_TTL_MS = 24 * 60 * 60 * 1000
 
-export interface UploadedFile {
-  fileId?: string
-  /** Pass THIS to the model. */
-  fileUrl: string
-  downloadUrl?: string
+/**
+ * What the file endpoints actually return in `data`.
+ *
+ * Verified against the live API and
+ * https://docs.kie.ai/file-upload-api/upload-file-stream.md: the usable link is
+ * **`downloadUrl`**, and there is no `fileUrl` field at all. Reading `fileUrl`
+ * yields `undefined`, which JSON.stringify then drops from a response — the
+ * failure is silent all the way to an upload that appears to do nothing.
+ */
+interface UploadResponse {
   fileName?: string
-  originalName?: string
+  filePath?: string
+  /** The URL to hand a model. Kie's name for it. */
+  downloadUrl?: string
   fileSize?: number
   mimeType?: string
-  uploadPath?: string
-  uploadTime?: string
-  expiresAt?: string
+  uploadedAt?: string
 }
 
-/** When this upload stops being usable, for the input_assets cache. */
+export interface UploadedFile {
+  /** Pass THIS to the model. Normalized from Kie's `downloadUrl`. */
+  fileUrl: string
+  fileName?: string
+  filePath?: string
+  fileSize?: number
+  mimeType?: string
+  uploadedAt?: string
+}
+
+/**
+ * Turns a raw response into an `UploadedFile`, or throws.
+ *
+ * Throwing is the point. An upload whose URL cannot be found is useless, and
+ * returning it with an undefined `fileUrl` is how a file silently fails to
+ * attach itself to anything.
+ */
+function normalizeUpload(response: UploadResponse | null): UploadedFile {
+  const fileUrl = response?.downloadUrl
+  if (!fileUrl) {
+    throw new KieError({
+      code: 200,
+      kind: 'unknown',
+      retryable: false,
+      message: 'Kie accepted the upload but returned no downloadUrl for it.',
+      detail: JSON.stringify(response),
+    })
+  }
+  return {
+    fileUrl,
+    fileName: response.fileName,
+    filePath: response.filePath,
+    fileSize: response.fileSize,
+    mimeType: response.mimeType,
+    uploadedAt: response.uploadedAt,
+  }
+}
+
+/**
+ * When this upload stops being usable, for the input_assets cache.
+ *
+ * Kie returns no expiry of its own — only `uploadedAt` — so the ~24h lifetime is
+ * measured from the upload time when we have it, and from now when we do not.
+ */
 export function uploadExpiryMs(file: UploadedFile, now = Date.now()): number {
-  const parsed = file.expiresAt ? Date.parse(file.expiresAt) : NaN
-  return Number.isFinite(parsed) ? parsed : now + UPLOAD_TTL_MS
+  const parsed = file.uploadedAt ? Date.parse(file.uploadedAt) : NaN
+  return (Number.isFinite(parsed) ? parsed : now) + UPLOAD_TTL_MS
 }
 
 interface UploadCommon {
@@ -68,13 +117,15 @@ export async function uploadFile(
   if (options.uploadPath) form.append('uploadPath', options.uploadPath)
   if (options.fileName) form.append('fileName', options.fileName)
 
-  return kieRequest<UploadedFile>('/api/file-stream-upload', {
-    method: 'POST',
-    base: KIE_UPLOAD_BASE,
-    formData: form,
-    timeoutMs: UPLOAD_TIMEOUT_MS,
-    signal: options.signal,
-  })
+  return normalizeUpload(
+    await kieRequest<UploadResponse>('/api/file-stream-upload', {
+      method: 'POST',
+      base: KIE_UPLOAD_BASE,
+      formData: form,
+      timeoutMs: UPLOAD_TIMEOUT_MS,
+      signal: options.signal,
+    }),
+  )
 }
 
 /**
@@ -87,17 +138,19 @@ export async function uploadBase64(
   base64Data: string,
   options: UploadCommon = {},
 ): Promise<UploadedFile> {
-  return kieRequest<UploadedFile>('/api/file-base64-upload', {
-    method: 'POST',
-    base: KIE_UPLOAD_BASE,
-    body: {
-      base64Data,
-      ...(options.uploadPath ? { uploadPath: options.uploadPath } : {}),
-      ...(options.fileName ? { fileName: options.fileName } : {}),
-    },
-    timeoutMs: UPLOAD_TIMEOUT_MS,
-    signal: options.signal,
-  })
+  return normalizeUpload(
+    await kieRequest<UploadResponse>('/api/file-base64-upload', {
+      method: 'POST',
+      base: KIE_UPLOAD_BASE,
+      body: {
+        base64Data,
+        ...(options.uploadPath ? { uploadPath: options.uploadPath } : {}),
+        ...(options.fileName ? { fileName: options.fileName } : {}),
+      },
+      timeoutMs: UPLOAD_TIMEOUT_MS,
+      signal: options.signal,
+    }),
+  )
 }
 
 /**
@@ -110,15 +163,17 @@ export async function uploadFromUrl(
   fileUrl: string,
   options: UploadCommon = {},
 ): Promise<UploadedFile> {
-  return kieRequest<UploadedFile>('/api/file-url-upload', {
-    method: 'POST',
-    base: KIE_UPLOAD_BASE,
-    body: {
-      fileUrl,
-      ...(options.uploadPath ? { uploadPath: options.uploadPath } : {}),
-      ...(options.fileName ? { fileName: options.fileName } : {}),
-    },
-    timeoutMs: UPLOAD_TIMEOUT_MS,
-    signal: options.signal,
-  })
+  return normalizeUpload(
+    await kieRequest<UploadResponse>('/api/file-url-upload', {
+      method: 'POST',
+      base: KIE_UPLOAD_BASE,
+      body: {
+        fileUrl,
+        ...(options.uploadPath ? { uploadPath: options.uploadPath } : {}),
+        ...(options.fileName ? { fileName: options.fileName } : {}),
+      },
+      timeoutMs: UPLOAD_TIMEOUT_MS,
+      signal: options.signal,
+    }),
+  )
 }

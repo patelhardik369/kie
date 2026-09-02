@@ -135,23 +135,32 @@ Host is **`https://kieai.redpandaai.co`**, not `api.kie.ai`. Same Bearer auth.
 | `POST /api/file-stream-upload` | multipart: `file` (binary, required), `uploadPath?`, `fileName?` | large files, highest throughput |
 | `POST /api/file-url-upload` | `{ fileUrl, uploadPath?, fileName? }` — must be publicly reachable | 100 MB max, 30s fetch timeout |
 
-Response:
+Response — **verified against the live endpoint**, all three variants identical:
 
 ```json
 {
-  "success": true, "code": 200, "msg": "File upload successful",
+  "success": true, "code": 200, "msg": "File uploaded successfully",
   "data": {
-    "fileId": "file_abc123456",
-    "fileUrl": "https://kieai.redpandaai.co/files/images/my-image.jpg",
-    "downloadUrl": "https://kieai.redpandaai.co/download/file_abc123456",
-    "fileName": "...", "originalName": "...", "fileSize": 245760,
-    "mimeType": "image/jpeg", "uploadPath": "images",
-    "uploadTime": "...", "expiresAt": "..."
+    "success": true,
+    "fileName": "1788331086662-khed0yx8az.png",
+    "filePath": "kieai/528618/kie-studio/1788331086662-khed0yx8az.png",
+    "downloadUrl": "https://tempfile.redpandaai.co/kieai/528618/kie-studio/1788331086662-khed0yx8az.png",
+    "fileSize": 679722,
+    "mimeType": "image/png",
+    "uploadedAt": "2026-09-02T06:38:07.240Z"
   }
 }
 ```
 
-Pass `data.fileUrl` as the model's `image_url` / `first_frame_url` / `reference_image_urls[]` value.
+### There is no `fileUrl` — pass `data.downloadUrl`
+
+The field a model wants is **`downloadUrl`**. `fileUrl` does not exist in the response, and neither
+do `fileId`, `originalName`, `uploadPath`, `uploadTime` or `expiresAt`. Reading `data.fileUrl` yields
+`undefined`, `JSON.stringify` then drops the key entirely, and an upload appears to succeed while
+attaching nothing — a silent failure with a `200` on it. This cost real time once; the fixture in
+`lib/library/library.test.ts` had invented the same field, so the tests agreed with the bug.
+
+The only timestamp is `uploadedAt`. Kie states no expiry, so measure the ~24h lifetime from there.
 
 Prefer **stream upload** for local files: it avoids the ~33% base64 size inflation and has no 10 MB
 ceiling. Use base64 only for small pasted or canvas-generated data.

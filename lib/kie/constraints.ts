@@ -1,5 +1,5 @@
 import type { ModelDefinition } from './registry/types.ts'
-import { isPresent } from './validate.ts'
+import { isPresent, whenHolds } from './validate.ts'
 
 /**
  * Turns a model's constraints into per-field UI state.
@@ -21,16 +21,6 @@ export interface DerivedField {
 }
 
 export type DerivedFields = Record<string, DerivedField>
-
-/** The effective value of a field, falling back to its documented default. */
-function effective(
-  model: ModelDefinition,
-  values: Record<string, unknown>,
-  key: string,
-): unknown {
-  if (key in values && values[key] !== undefined) return values[key]
-  return model.params.find((p) => p.key === key)?.default
-}
 
 export function deriveFields(
   model: ModelDefinition,
@@ -80,7 +70,7 @@ export function deriveFields(
       }
 
       case 'requiredWhen': {
-        if (effective(model, values, constraint.when.key) === constraint.when.equals) {
+        if (whenHolds(constraint.when, values, model.params)) {
           for (const key of constraint.keys) {
             const field = fields[key]
             if (field) field.required = true
@@ -90,14 +80,14 @@ export function deriveFields(
       }
 
       case 'forbiddenWhen': {
-        if (effective(model, values, constraint.when.key) === constraint.when.equals) {
+        if (whenHolds(constraint.when, values, model.params)) {
           for (const key of constraint.keys) disable(key, constraint.message)
         }
         break
       }
 
       case 'maxWhen': {
-        if (effective(model, values, constraint.when.key) === constraint.when.equals) {
+        if (whenHolds(constraint.when, values, model.params)) {
           for (const key of constraint.keys) {
             const field = fields[key]
             if (field) field.max = constraint.max
