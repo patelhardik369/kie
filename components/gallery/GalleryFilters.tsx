@@ -60,12 +60,15 @@ export function GalleryFilters({
   models,
   total,
   shown,
+  nsfwCount,
 }: {
   filter: GalleryFilter
   /** Model slugs that actually have generations, with counts. */
   models: { value: string; count: number }[]
   total: number
   shown: number
+  /** How many generations are marked private, for the chip's label. */
+  nsfwCount: number
 }) {
   const router = useRouter()
   const [search, setSearch] = useState(filter.search ?? '')
@@ -92,6 +95,13 @@ export function GalleryFilters({
   }, [filter.search])
 
   const active = isFilterActive(filter)
+
+  /**
+   * The library you are actually browsing, which is never the whole table.
+   * Marked work forms a separate set, so counting it into the denominator of an
+   * unfiltered grid would report a total the grid can never reach.
+   */
+  const browsable = filter.nsfw ? nsfwCount : total - nsfwCount
 
   return (
     <div className="space-y-3">
@@ -180,6 +190,22 @@ export function GalleryFilters({
           ★ Favorites
         </Chip>
 
+        {/*
+          A switch between two disjoint libraries rather than one more narrowing
+          chip: off, the grid never contains marked work; on, it contains nothing
+          else. The count sits on the label so the marked set is findable without
+          being browsable.
+        */}
+        {(nsfwCount > 0 || filter.nsfw) && (
+          <Chip
+            active={Boolean(filter.nsfw)}
+            onClick={() => go({ nsfw: filter.nsfw ? undefined : true })}
+            title="Generations you marked private. Hidden everywhere else."
+          >
+            NSFW {nsfwCount > 0 && <span className="opacity-60">{nsfwCount}</span>}
+          </Chip>
+        )}
+
         <span className="mx-1 h-4 w-px bg-(--color-border)" aria-hidden />
 
         <label className="flex items-center gap-1.5 text-xs text-(--color-ink-muted)">
@@ -214,7 +240,7 @@ export function GalleryFilters({
         </label>
 
         <span className="ml-auto font-mono text-xs text-(--color-ink-muted)">
-          {active ? `${shown} of ${total}` : `${total} generations`}
+          {active ? `${shown} of ${browsable}` : `${browsable} generations`}
         </span>
 
         {active && (
@@ -235,16 +261,19 @@ function Chip({
   active,
   onClick,
   children,
+  title,
 }: {
   active: boolean
   onClick: () => void
   children: React.ReactNode
+  title?: string
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      title={title}
       className={`rounded-full border px-2.5 py-1 text-xs transition ${
         active
           ? 'border-(--color-accent) bg-(--color-accent)/15 text-(--color-ink)'

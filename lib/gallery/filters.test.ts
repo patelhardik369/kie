@@ -158,3 +158,24 @@ describe('toDateInput', () => {
     assert.equal(toDateInput(undefined), '')
   })
 })
+
+describe('the NSFW filter', () => {
+  it('is off unless the URL says otherwise', () => {
+    assert.equal(parse('').nsfw, undefined)
+    assert.equal(parse('family=wan').nsfw, undefined)
+    // Anything but an exact "1" is not a request to show marked work.
+    assert.equal(parse('nsfw=0').nsfw, undefined)
+    assert.equal(parse('nsfw=true').nsfw, undefined)
+    assert.equal(parse('nsfw=yes').nsfw, undefined)
+  })
+
+  it('survives a round trip through the URL', () => {
+    const filter = parse('nsfw=1&family=wan')
+    assert.equal(filter.nsfw, true)
+    assert.match(serializeGalleryFilter(filter), /nsfw=1/)
+  })
+
+  it('leaves a clean URL when it is off', () => {
+    assert.equal(serializeGalleryFilter(parse('')).includes('nsfw'), false)
+  })
+})

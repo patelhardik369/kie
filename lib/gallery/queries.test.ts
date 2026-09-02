@@ -26,9 +26,8 @@ const { assets, generations, getDb, runMigrations } = await import('../db/index.
 const { requireModel } = await import('../kie/registry/index.ts')
 const { submitBatch, newBatchId } = await import('../jobs/submit.ts')
 const { parseGalleryFilter } = await import('./filters.ts')
-const { getGalleryFacets, getGenerationDetail, listGenerations } = await import(
-  './queries.ts'
-)
+const { getGalleryFacets, getGenerationDetail, listGenerations, recentGenerations } =
+  await import('./queries.ts')
 
 const filter = (query: string) => parseGalleryFilter(new URLSearchParams(query))
 
@@ -70,6 +69,7 @@ interface SeedOptions {
   failCode?: string
   failMsg?: string
   withAsset?: boolean
+  nsfw?: boolean
 }
 
 async function seed(options: SeedOptions = {}): Promise<string> {
@@ -84,6 +84,7 @@ async function seed(options: SeedOptions = {}): Promise<string> {
       inputJson: JSON.stringify({ prompt: options.prompt ?? 'a lemon', duration: '5' }),
       state: (options.state ?? 'complete') as never,
       favorite: options.favorite ?? false,
+      nsfw: options.nsfw ?? false,
       createdAt: options.createdAt ?? Date.now() + seq,
       parentId: options.parentId ?? null,
       batchId: options.batchId ?? null,
@@ -354,5 +355,108 @@ describe('facets', () => {
     assert.equal(facets.total, 0)
     assert.equal(facets.favorites, 0)
     assert.deepEqual(facets.families, [])
+  })
+})
+
+describe('generations marked private', () => {
+  it('never appear in Recent on the home page', async () => {
+    await clear()
+    const ordinary = await seed({ prompt: 'a lemon', createdAt: 1_000 })
+    // Newest, so it would head the list if it were included at all.
+    await seed({ prompt: 'private', nsfw: true, createdAt: 2_000 })
+
+    const recent = await recentGenerations(10)
+    assert.deepEqual(recent.map((r) => r.generation.id), [ordinary])
+  })
+
+  it('are absent from an unfiltered gallery', async () => {
+    await clear()
+    const ordinary = await seed()
+    await seed({ nsfw: true })
+
+    const page = await listGenerations(filter(''))
+    assert.deepEqual(page.items.map((i) => i.generation.id), [ordinary])
+    // The total must agree with the rows, or pagination offers a page that
+    // renders empty.
+    assert.equal(page.total, 1)
+  })
+
+  it('stay absent under every other filter', async () => {
+    await clear()
+    await seed({ nsfw: true, family: 'wan', modelSlug: 'wan/2-7-image', favorite: true })
+
+    // Each of these would surface it if the exclusion were merely a default
+    // rather than unconditional.
+    for (const query of ['family=wan', 'model=wan/2-7-image', 'favorite=1', 'q=lemon', 'state=complete']) {
+      const page = await listGenerations(filter(query))
+      assert.equal(page.items.length, 0, `?${query} leaked a marked generation`)
+    }
+  })
+
+  it('are the only thing shown once the NSFW filter is on', async () => {
+    await clear()
+    await seed({ prompt: 'ordinary' })
+    const marked = await seed({ prompt: 'marked', nsfw: true })
+
+    const page = await listGenerations(filter('nsfw=1'))
+    assert.deepEqual(page.items.map((i) => i.generation.id), [marked])
+  })
+
+  it('combine with the other filters rather than overriding them', async () => {
+    await clear()
+    await seed({ nsfw: true, family: 'wan', modelSlug: 'wan/2-7-image' })
+    const marked = await seed({ nsfw: true, family: 'kling' })
+
+    const page = await listGenerations(filter('nsfw=1&family=kling'))
+    assert.deepEqual(page.items.map((i) => i.generation.id), [marked])
+  })
+
+  it('are counted for the chip without being listed', async () => {
+    await clear()
+    await seed()
+    await seed({ nsfw: true })
+    await seed({ nsfw: true })
+
+    const facets = await getGalleryFacets()
+    assert.equal(facets.nsfw, 2)
+    // Facets are library-wide by design, so the total still counts all three.
+    assert.equal(facets.total, 3)
+  })
+
+  it('are marked at submission, before the row can ever be listed', async () => {
+    await clear()
+    const model = requireModel('wan/2-7-image')
+    const [open] = await submitBatch(model, [{ prompt: 'ordinary' }], {})
+    const [marked] = await submitBatch(model, [{ prompt: 'private' }], { nsfw: true })
+
+    // Marking afterwards would be too late: the run would have spent the
+    // minutes between finishing and being marked sitting on the home page.
+    const page = await listGenerations(filter(''))
+    assert.deepEqual(page.items.map((i) => i.generation.id), [open!.id])
+    assert.equal((await getGenerationDetail(marked!.id))?.generation.nsfw, true)
+  })
+
+  it('mark every run of a sweep, not just the first', async () => {
+    await clear()
+    const model = requireModel('wan/2-7-image')
+    const runs = await submitBatch(
+      model,
+      [{ prompt: 'a', seed: 1 }, { prompt: 'a', seed: 2 }, { prompt: 'a', seed: 3 }],
+      { batchId: newBatchId(), nsfw: true },
+    )
+
+    assert.equal(runs.length, 3)
+    assert.equal((await listGenerations(filter(''))).items.length, 0)
+    assert.equal((await listGenerations(filter('nsfw=1'))).items.length, 3)
+  })
+
+  it('open normally on their own detail page', async () => {
+    await clear()
+    const marked = await seed({ nsfw: true })
+
+    // Hiding is about listings. A row asked for by id is a row you went to.
+    const detail = await getGenerationDetail(marked)
+    assert.equal(detail?.generation.id, marked)
+    assert.equal(detail?.generation.nsfw, true)
   })
 })

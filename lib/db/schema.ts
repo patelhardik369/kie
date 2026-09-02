@@ -65,6 +65,19 @@ export const generations = sqliteTable(
     /** Groups one parameter sweep. */
     batchId: text('batch_id'),
     favorite: integer('favorite', { mode: 'boolean' }).notNull().default(false),
+    /**
+     * Marked private by the person who made it.
+     *
+     * Kie reports nothing about the content it returns, and `nsfw_checker`
+     * documents its default as OFF on every model that has it — so "filtering
+     * was disabled" describes almost every generation and classifies nothing.
+     * This flag is therefore a statement of intent, not a detection: set from
+     * the Studio before a run, or toggled afterwards from the gallery.
+     *
+     * It governs visibility only. A marked generation is still a complete,
+     * reproducible record — nothing about it is hidden from its own detail page.
+     */
+    nsfw: integer('nsfw', { mode: 'boolean' }).notNull().default(false),
     notes: text('notes'),
     createdAt: integer('created_at').notNull().default(now),
     submittedAt: integer('submitted_at'),
@@ -77,6 +90,8 @@ export const generations = sqliteTable(
     index('generations_model_slug_idx').on(t.modelSlug),
     index('generations_parent_id_idx').on(t.parentId),
     index('generations_batch_id_idx').on(t.batchId),
+    // Every list view filters on this, so it is on the hot path for the grid.
+    index('generations_nsfw_idx').on(t.nsfw),
   ],
 )
 

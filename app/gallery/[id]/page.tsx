@@ -5,6 +5,7 @@ import { GenerationActions } from '@/components/gallery/GenerationActions.tsx'
 import { Lineage } from '@/components/gallery/Lineage.tsx'
 import { ParamProvenance } from '@/components/gallery/ParamProvenance.tsx'
 import { GenerationStatus } from '@/components/queue/GenerationStatus.tsx'
+import { assetTokenFor } from '@/lib/gallery/asset-token.ts'
 import {
   assetHref,
   formatBytes,
@@ -102,12 +103,12 @@ export default async function GenerationDetailPage({
             >
               <Media
                 kind={asset.kind}
-                src={assetHref(asset.localPath)}
+                src={assetHref(asset.localPath, assetTokenFor(asset.localPath, generation.nsfw))}
                 layerMeta={asset.layerMeta}
               />
               <figcaption className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-(--color-border) px-3 py-2 font-mono text-[11px] text-(--color-ink-muted)">
                 <a
-                  href={assetHref(asset.localPath)}
+                  href={assetHref(asset.localPath, assetTokenFor(asset.localPath, generation.nsfw))}
                   target="_blank"
                   rel="noreferrer"
                   className="underline hover:text-(--color-ink)"
@@ -150,6 +151,7 @@ export default async function GenerationDetailPage({
           modelSlug={generation.modelSlug}
           input={input}
           favorite={generation.favorite}
+          nsfw={generation.nsfw}
           notes={generation.notes}
         />
       </section>

@@ -19,6 +19,12 @@ export interface LineageRow {
   state: string
   createdAt: number
   inputJson: string
+  /**
+   * Marked private. Lineage still lists it — you are inside the one generation
+   * it relates to, having asked for it by id — but it says so, because
+   * following the link leads somewhere you may not want on screen.
+   */
+  nsfw?: boolean
 }
 
 export function Lineage({
@@ -134,6 +140,12 @@ function RowLink({ row, varying }: { row: LineageRow; varying: string[] }) {
         >
           {stateLabel(row.state)}
         </span>
+
+        {row.nsfw && (
+          <span className="shrink-0 rounded-full border border-fuchsia-400/50 bg-fuchsia-400/10 px-1.5 py-0.5 text-[11px] text-fuchsia-300">
+            NSFW
+          </span>
+        )}
 
         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
           {differences.length > 0 ? (

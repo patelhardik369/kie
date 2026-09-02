@@ -21,16 +21,19 @@ export function GenerationActions({
   modelSlug,
   input,
   favorite: initialFavorite,
+  nsfw: initialNsfw,
   notes: initialNotes,
 }: {
   id: string
   modelSlug: string
   input: Record<string, unknown>
   favorite: boolean
+  nsfw: boolean
   notes: string | null
 }) {
   const router = useRouter()
   const [favorite, setFavorite] = useState(initialFavorite)
+  const [nsfw, setNsfw] = useState(initialNsfw)
   const [notes, setNotes] = useState(initialNotes ?? '')
   const [savedNotes, setSavedNotes] = useState(initialNotes ?? '')
   const [rerunning, setRerunning] = useState(false)
@@ -55,6 +58,24 @@ export function GenerationActions({
     }
   }
 
+  /**
+   * Marking is retroactive as well as up-front: you do not always know what a
+   * model will give you until you see it. Unmarking is the same toggle, because
+   * a mark applied by mistake must be as easy to undo as it was to make.
+   */
+  const togglePrivate = async () => {
+    const next = !nsfw
+    setNsfw(next)
+    try {
+      await patch({ nsfw: next })
+      // The grid this page came from now sorts this row differently.
+      router.refresh()
+    } catch {
+      setNsfw(!next)
+      setError('Could not change the private mark.')
+    }
+  }
+
   const saveNotes = async () => {
     if (notes === savedNotes) return
     try {
@@ -73,7 +94,8 @@ export function GenerationActions({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         // Verbatim, and parented — this is what forms the lineage.
-        body: JSON.stringify({ model: modelSlug, input, parentId: id }),
+        // The mark rides along: a re-run of private work is private work.
+        body: JSON.stringify({ model: modelSlug, input, parentId: id, nsfw }),
       })
       const data = await response.json()
       if (!response.ok) {
@@ -121,7 +143,33 @@ export function GenerationActions({
         >
           {favorite ? '★ Favorited' : '☆ Favorite'}
         </button>
+
+        <button
+          type="button"
+          onClick={togglePrivate}
+          aria-pressed={nsfw}
+          title={
+            nsfw
+              ? 'Hidden from Recent and from the unfiltered gallery.'
+              : 'Hide this from Recent and from the gallery grid.'
+          }
+          className={`rounded-md border px-3 py-2 text-sm transition ${
+            nsfw
+              ? 'border-fuchsia-400/60 bg-fuchsia-400/10 text-fuchsia-300'
+              : 'border-(--color-border) text-(--color-ink-muted) hover:border-(--color-ink-muted)'
+          }`}
+        >
+          {nsfw ? 'NSFW — private' : 'Mark private'}
+        </button>
       </div>
+
+      {nsfw && (
+        <p className="rounded border-l-2 border-fuchsia-400 bg-fuchsia-400/10 px-3 py-2 text-xs text-(--color-ink-muted)">
+          Hidden from Recent and from the gallery grid. It appears under the
+          gallery&rsquo;s <span className="text-fuchsia-300">NSFW</span> filter, and
+          here, where you asked for it by id. A re-run or tweak stays private too.
+        </p>
+      )}
 
       {error && (
         <p className="rounded border-l-2 border-red-400 bg-red-400/10 px-3 py-2 text-sm text-red-300">

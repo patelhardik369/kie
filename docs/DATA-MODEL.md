@@ -35,6 +35,7 @@ One row per submission.
 | `parent_id` | text nullable FK → `generations.id` | re-run / variation lineage |
 | `batch_id` | text nullable | groups one parameter sweep |
 | `favorite` | integer (bool) default 0 | |
+| `nsfw` | integer (bool) default 0 | marked private — governs visibility only |
 | `notes` | text nullable | |
 | `created_at` / `submitted_at` / `completed_at` | integer (epoch ms) | |
 
@@ -45,7 +46,15 @@ The five middle values mirror Kie's own states. The rest are local: `downloading
 exist because Kie's `success` is not our completion; `stalled` is a poll timeout that may still be
 running upstream; `orphaned` is a `404` on `recordInfo`.
 
-Indexes: `kie_task_id` (unique), `state` (the runner scans non-terminal rows constantly),
+**`nsfw`** — a statement of intent, not a detection. Kie reports nothing about the content it
+returns, and `nsfw_checker` documents its default as *off* on all 37 models that expose it, so
+"filtering was disabled" describes nearly every generation and classifies none of them. The flag is
+set from the Studio before a run, or toggled afterwards from the gallery, and it is inherited by a
+re-run or a tweak, and it locks the generation's files behind a capability token on `/api/assets`.
+It changes nothing about the record itself — every parameter, asset and cost stays
+exactly as it was, and the detail page shows all of it.
+
+Indexes: `kie_task_id` (unique), `state` (the runner scans non-terminal rows constantly), `nsfw` (every list view filters on it),
 `created_at`, `model_slug`, `parent_id`, `batch_id`.
 
 ### `assets`

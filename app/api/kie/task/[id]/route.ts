@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { asc, eq } from 'drizzle-orm'
 
 import { assets, generations, getDb } from '@/lib/db'
+import { assetTokenFor } from '@/lib/gallery/asset-token.ts'
 import { getRunner } from '@/lib/jobs/runner.ts'
 
 export const dynamic = 'force-dynamic'
@@ -40,6 +41,9 @@ export async function GET(
     modelSlug: generation.modelSlug,
     family: generation.family,
     capability: generation.capability,
+    // Carried so the Tweak flow inherits the mark: a variation on private work
+    // is private work, and having to remember to re-tick it is how it leaks.
+    nsfw: generation.nsfw,
     // The exact object sent to Kie — the whole point of storing it verbatim.
     input: safeParse(generation.inputJson),
     failCode: generation.failCode,
@@ -53,8 +57,10 @@ export async function GET(
     assets: files.map((asset) => ({
       id: asset.id,
       kind: asset.kind,
-      // Served through /api/assets, never as a filesystem path.
-      url: `/api/assets/${encodePath(asset.localPath)}`,
+      // Served through /api/assets, never as a filesystem path. A private
+      // generation's files need the capability token, and this response is only
+      // ever built for a caller that already named the generation by id.
+      url: assetUrl(asset.localPath, generation.nsfw),
       localPath: asset.localPath,
       mime: asset.mime,
       bytes: asset.bytes,
@@ -91,6 +97,12 @@ export async function POST(
 /** Each segment encoded separately so the slashes survive as separators. */
 function encodePath(localPath: string): string {
   return localPath.split('/').map(encodeURIComponent).join('/')
+}
+
+function assetUrl(localPath: string, nsfw: boolean): string {
+  const token = assetTokenFor(localPath, nsfw)
+  const url = `/api/assets/${encodePath(localPath)}`
+  return token ? `${url}?k=${encodeURIComponent(token)}` : url
 }
 
 function safeParse(json: string): unknown {

@@ -27,6 +27,8 @@ interface CreateBody {
   /** Groups the rows of one parameter sweep. */
   batchId?: string
   presetId?: string
+  /** Marks the run private, keeping it out of Recent and out of the grid. */
+  nsfw?: boolean
 }
 
 export async function POST(request: Request) {
@@ -67,6 +69,7 @@ export async function POST(request: Request) {
     parentId: body.parentId,
     batchId: body.batchId,
     presetId: body.presetId,
+    nsfw: body.nsfw === true,
   })
 
   return NextResponse.json(
@@ -76,6 +79,7 @@ export async function POST(request: Request) {
       model: model.slug,
       capability: model.capability,
       capabilities: capabilitiesOf(model),
+      nsfw: body.nsfw === true,
       input,
     },
     { status: 202 },

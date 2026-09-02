@@ -26,6 +26,8 @@ export interface CardAsset {
   localPath: string
   width: number | null
   height: number | null
+  /** Present only for a private generation, minted by the page that rendered it. */
+  token?: string
 }
 
 export interface CardGeneration {
@@ -34,6 +36,8 @@ export interface CardGeneration {
   family: string
   state: string
   favorite: boolean
+  /** Marked private. Only ever reaches a card when the NSFW filter is on. */
+  nsfw?: boolean
   failCode: string | null
   failMsg: string | null
   createdAt: number
@@ -121,6 +125,17 @@ export function GenerationCard({
             )}
             {stateLabel(generation.state)}
           </span>
+          {generation.nsfw && (
+            // Only reachable with the NSFW filter on, so this confirms where you
+            // are rather than warning you — the grid you are looking at is the
+            // marked one.
+            <span
+              className="rounded-full border border-fuchsia-400/50 bg-fuchsia-400/10 px-1.5 py-0.5 text-[11px] text-fuchsia-300"
+              title="Marked private — hidden from Recent and from the unfiltered gallery."
+            >
+              NSFW
+            </span>
+          )}
           <span className="ml-auto font-mono text-[11px] text-(--color-ink-muted)">
             {formatTimestamp(generation.createdAt)}
           </span>
@@ -147,7 +162,7 @@ export function GenerationCard({
 }
 
 function Preview({ asset }: { asset: CardAsset }) {
-  const src = assetHref(asset.localPath)
+  const src = assetHref(asset.localPath, asset.token)
 
   if (asset.kind === 'video') {
     return (

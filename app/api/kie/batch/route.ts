@@ -36,6 +36,8 @@ interface BatchBody {
   plan?: SweepPlan
   /** The generation this sweep varies. Recorded on every run. */
   parentId?: string
+  /** Marks every run of the sweep private. */
+  nsfw?: boolean
 }
 
 export async function POST(request: Request) {
@@ -96,6 +98,7 @@ export async function POST(request: Request) {
   const submitted = await submitBatch(model, inputs, {
     batchId,
     parentId: body.parentId,
+    nsfw: body.nsfw === true,
   })
 
   return NextResponse.json(

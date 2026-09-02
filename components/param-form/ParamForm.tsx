@@ -56,6 +56,15 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
   /** Ids of this session's submissions, newest first. The DB is the real record. */
   const [jobs, setJobs] = useState<string[]>([])
   const [sweep, setSweep] = useState<SweepState>(INITIAL_SWEEP)
+  /**
+   * Marks the run private before it is submitted.
+   *
+   * Set here rather than afterwards because "afterwards" is too late: a run
+   * marked from the gallery has already spent time on the home page. This is
+   * also not a model parameter — it never reaches Kie, and it does not change
+   * what is generated, only where it shows up.
+   */
+  const [keepPrivate, setKeepPrivate] = useState(false)
 
   /**
    * `?from=<id>` is the Tweak flow: prefill from a past generation and record it
@@ -110,6 +119,8 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
           // configuration, and merging with defaults could reintroduce a field
           // it deliberately omitted.
           setValues(task.input ?? {})
+          // Inherited, never reset: a variation on private work is private work.
+          if (task.nsfw) setKeepPrivate(true)
           setPrefill({ state: 'done' })
           return
         }
@@ -262,6 +273,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
           model: model.slug,
           input: payload,
           ...(sweeping ? { plan: resolution.plan } : {}),
+          ...(keepPrivate ? { nsfw: true } : {}),
           // Records the lineage when this form was opened from a past generation.
           ...(parentId ? { parentId } : {}),
         }),
@@ -389,6 +401,33 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
         onChange={setSweep}
         resolution={resolution}
       />
+
+      <label
+        className={`flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 transition ${
+          keepPrivate
+            ? 'border-fuchsia-400/50 bg-fuchsia-400/5'
+            : 'border-(--color-border) bg-(--color-surface-raised)'
+        }`}
+      >
+        <input
+          type="checkbox"
+          checked={keepPrivate}
+          onChange={(e) => setKeepPrivate(e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-fuchsia-400"
+        />
+        <span className="text-sm">
+          Keep private
+          <span className="ml-2 rounded-full border border-fuchsia-400/50 px-1.5 py-0.5 text-[11px] text-fuchsia-300">
+            NSFW
+          </span>
+          <span className="mt-0.5 block text-xs text-(--color-ink-muted)">
+            Kept out of Recent on the home page and out of the gallery grid; it
+            appears only under the gallery&rsquo;s NSFW filter. Nothing about the
+            generation itself changes &mdash; this is not sent to Kie
+            {sweep.mode !== 'single' && ', and it applies to every run of the sweep'}.
+          </span>
+        </span>
+      </label>
 
       <section className="space-y-3">
         {prefill.state === 'loading' && (

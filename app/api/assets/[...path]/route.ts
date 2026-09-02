@@ -3,7 +3,11 @@ import { createReadStream } from 'node:fs'
 import path from 'node:path'
 import { Readable } from 'node:stream'
 
+import { eq } from 'drizzle-orm'
+
+import { assets, generations, getDb } from '@/lib/db'
 import { getEnv } from '@/lib/env'
+import { assetTokenMatches } from '@/lib/gallery/asset-token.ts'
 import { mimeForExtension } from '@/lib/jobs/mime.ts'
 import { resolveWithin } from '@/lib/jobs/paths.ts'
 
@@ -20,6 +24,12 @@ export const dynamic = 'force-dynamic'
  * returns null for anything landing outside it — `..`, an absolute path, or a
  * Windows drive letter alike.
  *
+ * Files belonging to a generation marked private need `?k=` as well. Hiding a
+ * generation from every listing is worth little while its bytes stay one
+ * guessable URL away — the path is a date, a family, a model slug and an id.
+ * The pages allowed to render it mint the token server-side; without a valid one
+ * the answer is 404, not 403, so a probe cannot even confirm the file exists.
+ *
  * Range requests are honoured because `<video>` needs them to seek; without a
  * 206 the browser has to buffer a whole clip before it can scrub.
  */
@@ -30,9 +40,18 @@ export async function GET(
   const { path: segments } = await params
   const outputDir = getEnv().outputDir
 
-  const absolutePath = resolveWithin(outputDir, segments.join('/'))
+  const relativePath = segments.join('/')
+  const absolutePath = resolveWithin(outputDir, relativePath)
   if (!absolutePath) {
     return new Response('Forbidden', { status: 403 })
+  }
+
+  if (await isPrivate(relativePath)) {
+    const token = new URL(request.url).searchParams.get('k')
+    if (!assetTokenMatches(relativePath, token)) {
+      // Indistinguishable from a path that was never generated.
+      return new Response('Not found', { status: 404 })
+    }
   }
 
   let stat
@@ -75,6 +94,25 @@ export async function GET(
   ) as unknown as ReadableStream<Uint8Array>
 
   return new Response(stream, { status: range ? 206 : 200, headers })
+}
+
+/**
+ * Whether this file belongs to a generation marked private.
+ *
+ * Looked up by `local_path`, which is what the row stores and what the URL
+ * carries. A path with no `assets` row — an `_inputs/` upload, or a stray file —
+ * is not private: those are named by the SHA-256 of their own contents, so the
+ * path is already unguessable to anyone who does not have the file.
+ */
+async function isPrivate(relativePath: string): Promise<boolean> {
+  const rows = await getDb()
+    .select({ nsfw: generations.nsfw })
+    .from(assets)
+    .innerJoin(generations, eq(assets.generationId, generations.id))
+    .where(eq(assets.localPath, relativePath))
+    .limit(1)
+
+  return rows[0]?.nsfw === true
 }
 
 /** Single-range `bytes=` only — the form every browser media element sends. */

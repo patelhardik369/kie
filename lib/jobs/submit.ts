@@ -26,6 +26,11 @@ export interface SubmitOptions {
   /** Groups the runs of one sweep. */
   batchId?: string | null
   presetId?: string | null
+  /**
+   * Marks the run private before it exists, so it never surfaces in Recent even
+   * for the moment between finishing and being marked by hand.
+   */
+  nsfw?: boolean
 }
 
 export interface SubmittedGeneration {
@@ -86,6 +91,7 @@ export async function submitBatch(
         parentId: options.parentId ?? null,
         batchId: options.batchId ?? null,
         presetId: options.presetId ?? null,
+        nsfw: options.nsfw === true,
         // Offset so the grid orders a batch the way it was swept, not arbitrarily
         // by whichever row the millisecond clock happened to tie.
         createdAt: now + index,

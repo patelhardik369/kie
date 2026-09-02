@@ -2,6 +2,7 @@ import Link from 'next/link'
 
 import { GalleryFilters } from '@/components/gallery/GalleryFilters.tsx'
 import { GenerationCard } from '@/components/gallery/GenerationCard.tsx'
+import { assetTokenFor } from '@/lib/gallery/asset-token.ts'
 import { galleryHref, parseGalleryFilter } from '@/lib/gallery/filters.ts'
 import { getGalleryFacets, listGenerations } from '@/lib/gallery/queries.ts'
 
@@ -53,6 +54,7 @@ export default async function GalleryPage({
           models={facets.models}
           total={facets.total}
           shown={page.total}
+          nsfwCount={facets.nsfw}
         />
       </div>
 
@@ -70,6 +72,8 @@ export default async function GalleryPage({
                     localPath: thumbnail.localPath,
                     width: thumbnail.width,
                     height: thumbnail.height,
+                    // Only a grid that asked for private work can render it.
+                    token: assetTokenFor(thumbnail.localPath, generation.nsfw),
                   }
                 }
                 generation={{
@@ -78,6 +82,7 @@ export default async function GalleryPage({
                   family: generation.family,
                   state: generation.state,
                   favorite: generation.favorite,
+                  nsfw: generation.nsfw,
                   failCode: generation.failCode,
                   failMsg: generation.failMsg,
                   createdAt: generation.createdAt,

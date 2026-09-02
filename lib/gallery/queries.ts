@@ -41,6 +41,10 @@ function whereFor(filter: GalleryFilter): SQL | undefined {
   if (filter.capability) clauses.push(eq(generations.capability, filter.capability))
   if (filter.model) clauses.push(eq(generations.modelSlug, filter.model))
   if (filter.favorite) clauses.push(eq(generations.favorite, true))
+  // Unconditional, and the one clause with no "any" option: without an explicit
+  // ?nsfw=1 the grid shows unmarked generations only. A filter that could be
+  // widened to "everything" would put marked work back into an ordinary browse.
+  clauses.push(eq(generations.nsfw, filter.nsfw === true))
 
   const states = statesFor(filter)
   if (states) clauses.push(inArray(generations.state, [...states]))
@@ -219,6 +223,8 @@ export interface GalleryFacets {
   states: Facet[]
   total: number
   favorites: number
+  /** How many are marked private. The count is visible; the rows are not. */
+  nsfw: number
 }
 
 /**
@@ -253,6 +259,7 @@ export async function getGalleryFacets(): Promise<GalleryFacets> {
       .select({
         total: count(),
         favorites: sql<number>`sum(case when ${generations.favorite} then 1 else 0 end)`,
+        nsfw: sql<number>`sum(case when ${generations.nsfw} then 1 else 0 end)`,
       })
       .from(generations),
   ])
@@ -264,14 +271,22 @@ export async function getGalleryFacets(): Promise<GalleryFacets> {
     states,
     total: totals[0]?.total ?? 0,
     favorites: Number(totals[0]?.favorites ?? 0),
+    nsfw: Number(totals[0]?.nsfw ?? 0),
   }
 }
 
-/** The most recent generations, for the home screen's queue. */
+/**
+ * The most recent generations, for the home screen's queue.
+ *
+ * Never includes anything marked private. The home page is the one screen you
+ * do not choose to look at — it is what loads when someone else is watching the
+ * screen — so this is the surface where the exclusion matters most.
+ */
 export async function recentGenerations(limit = 8): Promise<GalleryItem[]> {
   const rows = await getDb()
     .select()
     .from(generations)
+    .where(eq(generations.nsfw, false))
     .orderBy(desc(generations.createdAt))
     .limit(limit)
 

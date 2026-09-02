@@ -149,13 +149,44 @@ Each tile: the media, the model slug, and a favorite toggle. Hover reveals re-ru
 actions. Failed generations appear as cards showing `failCode` / `failMsg`, not as gaps — a failure
 you can read is worth more than a clean grid.
 
+### Marked private
+
+A generation can be marked private — **Keep private** in the Studio before it runs, or **Mark
+private** on its detail page afterwards. What that governs:
+
+| Surface | Marked work |
+|---|---|
+| Recent, on the home page | Never appears. This is the screen you did not choose to open |
+| Gallery, unfiltered | Never appears, under any combination of the other filters |
+| Gallery, **NSFW** chip on | Appears, and nothing else does — the two sets are disjoint |
+| Its own detail page, by id | Appears in full. You went there |
+| Lineage on a related generation | Listed, badged `NSFW`, because following the link leads somewhere |
+
+The bytes are locked too, not just the listings. `/api/assets` serves by path, and a path is a date,
+a family, a model slug and an id — guessable enough that hiding the tile would have been theatre. A
+private generation's files need a capability token (`?k=`), minted server-side by the pages allowed
+to render them; without a valid one the route answers **404**, so a probe cannot even confirm the
+file is there. The token is derived from `KIE_API_KEY`, so there is nothing extra to configure, and
+it does not expire — an expiring one would break a video mid-scrub for no gain against the thing this
+defends, which is a pasted path rather than a held token.
+
+The chip is a switch between two libraries rather than one more narrowing filter. "Include them too"
+would put marked work back into an ordinary browse, which is the one thing this exists to prevent.
+The chip carries a count, so the marked set is findable without being browsable, and the grid's
+"N generations" counts the library you are actually in.
+
+Marking up-front rather than after the fact is the point: a run marked from the gallery has already
+spent the minutes between finishing and being noticed sitting on the home page. A re-run, a tweak,
+and every run of a sweep inherit the mark — having to remember to re-tick it is how it leaks.
+
 ## Generation detail
 
 - The media, full size, with a download button and reveal-in-folder.
 - The complete parameter set as a readable table, plus raw `input_json` for copying.
 - Metadata: model slug, state, credits consumed, generation time, `kie_task_id`, timestamps.
 - **Lineage** — parent and children as a small graph. This is how iteration becomes visible.
-- Actions: **Re-run identical**, **Tweak** (opens the Studio prefilled), **Save as preset**.
+- Actions: **Re-run identical**, **Tweak** (opens the Studio prefilled), **Save as preset**,
+  **Mark private** (and unmark — a mark made by mistake undoes as easily as it was made).
 
 ## Models
 

@@ -298,3 +298,9 @@ a tunnel at the app.
 `KIE_API_KEY` is read only in server modules. No `NEXT_PUBLIC_` variant exists, and no route echoes
 it. `app/api/assets/[...path]` resolves and normalizes paths against `KIE_OUTPUT_DIR` and rejects
 anything escaping it, since it serves files by path.
+
+The same route also gates the files of a generation marked `nsfw`: it looks the path up in `assets`,
+and a private one needs `?k=`, an HMAC over the path keyed by a one-way derivation of
+`KIE_API_KEY` (`lib/gallery/asset-token.ts`). Failure is 404 rather than 403, so the response does
+not confirm the file exists. Every page allowed to render private media mints the token server-side;
+the pure `assetHref` helper only appends it, which keeps the client bundle free of the key.

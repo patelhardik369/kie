@@ -92,9 +92,14 @@ export function stateTone(state: string): string {
  * Each segment is encoded separately so the slashes survive as separators —
  * `encodeURIComponent` on the whole path would turn them into `%2F` and the
  * catch-all route would see one segment.
+ *
+ * `token` is required only for a generation marked private, and is minted
+ * server-side by `lib/gallery/asset-token.ts` — this module stays pure and
+ * client-safe, so it appends the value rather than computing it.
  */
-export function assetHref(localPath: string): string {
-  return `/api/assets/${localPath.split('/').map(encodeURIComponent).join('/')}`
+export function assetHref(localPath: string, token?: string): string {
+  const path = localPath.split('/').map(encodeURIComponent).join('/')
+  return token ? `/api/assets/${path}?k=${encodeURIComponent(token)}` : `/api/assets/${path}`
 }
 
 /** The prompt-ish field of a stored input, for a tile caption. */

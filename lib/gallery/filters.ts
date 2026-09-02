@@ -64,6 +64,14 @@ export interface GalleryFilter {
   state?: GenerationState
   stateGroup?: StateGroup
   favorite?: boolean
+  /**
+   * Show the generations marked private, and ONLY those.
+   *
+   * Deliberately not a "include them too" flag. Marked work stays out of every
+   * ordinary browse — it appears when you go looking for it and at no other
+   * time, which is the only version of this that cannot surprise someone.
+   */
+  nsfw?: boolean
   /** Free text, matched against the stored prompt and the model slug. */
   search?: string
   /** Inclusive epoch-ms bounds, from `YYYY-MM-DD` in the URL. */
@@ -135,6 +143,7 @@ export function parseGalleryFilter(params: RawParams): GalleryFilter {
     stateGroup,
     state: stateGroup ? undefined : oneOf(read(params, 'state'), FILTERABLE_STATES),
     favorite: read(params, 'favorite') === '1' ? true : undefined,
+    nsfw: read(params, 'nsfw') === '1' ? true : undefined,
     search: read(params, 'q'),
     createdFrom: startOfDay(read(params, 'from')),
     createdTo: endOfDay(read(params, 'to')),
@@ -158,6 +167,7 @@ export function isFilterActive(filter: GalleryFilter): boolean {
       filter.state ||
       filter.stateGroup ||
       filter.favorite ||
+      filter.nsfw ||
       filter.search ||
       filter.createdFrom !== undefined ||
       filter.createdTo !== undefined,
@@ -185,6 +195,7 @@ export function serializeGalleryFilter(filter: Partial<GalleryFilter>): string {
   if (filter.stateGroup) params.set('state', filter.stateGroup)
   else if (filter.state) params.set('state', filter.state)
   if (filter.favorite) params.set('favorite', '1')
+  if (filter.nsfw) params.set('nsfw', '1')
   if (filter.search) params.set('q', filter.search)
   if (filter.createdFrom !== undefined) params.set('from', toDateInput(filter.createdFrom))
   if (filter.createdTo !== undefined) params.set('to', toDateInput(filter.createdTo))
