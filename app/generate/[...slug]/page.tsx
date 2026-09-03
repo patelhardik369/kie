@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 
 import { ParamForm } from '@/components/param-form/ParamForm.tsx'
 import { BackLink } from '@/components/shell/PageHeader.tsx'
+import { InfoTip } from '@/components/shell/InfoTip.tsx'
 import { ExternalLink } from '@/components/shell/icons.tsx'
 import { ALL_MODELS, capabilitiesOf, getModel } from '@/lib/kie/registry/index.ts'
 
@@ -68,7 +69,9 @@ export default async function GeneratePage({
           </nav>
         </div>
 
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        {/* `relative` positions the InfoTip panel against this row — see its
+            own file for why it anchors here rather than to the icon. */}
+        <div className="relative mt-2.5 flex flex-wrap items-center gap-1.5">
           <code className="chip font-mono">{model.slug}</code>
           {capabilitiesOf(model).map((capability) => (
             <span key={capability} className="chip chip-accent">
@@ -78,9 +81,8 @@ export default async function GeneratePage({
           <span className="chip">
             {paramCount} params{nested > 0 ? ` · ${nested} nested` : ''}
           </span>
+          {model.notes && <InfoTip id="model-notes">{model.notes}</InfoTip>}
         </div>
-
-        {model.notes && <p className="note mt-3">{model.notes}</p>}
       </header>
 
       <div className="mt-6">

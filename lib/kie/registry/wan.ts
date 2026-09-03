@@ -300,7 +300,8 @@ function wan27Image(slug: string, label: string, page: string): ModelDefinition 
         key: 'aspect_ratio',
         type: 'enum',
         label: 'Aspect ratio',
-        describe: 'Applies only when no input image is supplied.',
+        describe:
+          'Applies only when no input image is supplied — in edit mode the output follows the input image.',
         group: 'framing',
         enum: ['1:1', '16:9', '4:3', '21:9', '3:4', '9:16', '8:1', '1:8'],
       },
@@ -329,7 +330,8 @@ function wan27Image(slug: string, label: string, page: string): ModelDefinition 
         key: 'resolution',
         type: 'enum',
         label: 'Resolution',
-        describe: '4K is available only for text-to-image in standard mode.',
+        describe:
+          '4K is available only for text-to-image in standard mode — adding an input image or turning on sequential mode caps it at 2K.',
         group: 'framing',
         enum: ['1K', '2K', '4K'],
         default: '2K',
@@ -394,6 +396,46 @@ function wan27Image(slug: string, label: string, page: string): ModelDefinition 
         message: 'Outside sequential mode this model generates at most 4 images.',
       },
       {
+        /*
+         * "4K is available only for text-to-image in standard mode" — the same
+         * two-part shape as the thinking_mode rule above, and until now it lived
+         * only in the field's `describe`, where nothing could enforce it.
+         *
+         * CONFIRMED AGAINST THE LIVE API: 4K with input_urls set is refused at
+         * createTask with `{"code":500,"msg":"resolution is not within the range
+         * of allowed options"}` — a submit-time failure, so the run never even
+         * reaches the poller.
+         */
+        kind: 'allowedValuesWhen',
+        keys: ['resolution'],
+        when: { key: 'input_urls', present: true },
+        values: ['1K', '2K'],
+        message:
+          'Editing an image caps the output at 2K — 4K is text-to-image only. Remove the input images to reach 4K.',
+      },
+      {
+        kind: 'allowedValuesWhen',
+        keys: ['resolution'],
+        when: { key: 'enable_sequential', equals: true },
+        values: ['1K', '2K'],
+        message: 'Sequential mode caps the output at 2K.',
+      },
+      {
+        /*
+         * The doc is explicit that this field is read only in text-to-image:
+         * "(Optional) Output aspect ratio when no image input is provided."
+         *
+         * Disabled rather than left alone, because being silently ignored is the
+         * worse failure: it does not error, so you get a landscape edit back
+         * having asked for 9:16 and nothing anywhere says why.
+         */
+        kind: 'forbiddenWhen',
+        keys: ['aspect_ratio'],
+        when: { key: 'input_urls', present: true },
+        message:
+          'In edit mode the output takes its shape from the input image, so the aspect ratio is ignored.',
+      },
+      {
         // The outer list is per input image, so regions without images have
         // nothing to attach to and Kie would reject the length mismatch.
         kind: 'requires',
@@ -405,7 +447,13 @@ function wan27Image(slug: string, label: string, page: string): ModelDefinition 
     notes:
       'Widest aspect-ratio set of any in-scope model. color_palette items are ' +
       '{ hex, ratio } objects, not bare hex strings, and bbox_list is one list of ' +
-      'boxes PER input image — both are transcribed wrong easily and fail as a 422.',
+      'boxes PER input image — both are transcribed wrong easily and fail as a 422. ' +
+      'RESOLUTION CEILING: 4K is text-to-image, standard-mode only. The input_urls half ' +
+      'is confirmed against the live API (createTask returns code 500, "resolution is not ' +
+      'within the range of allowed options"); the sequential half comes from this ' +
+      "project's reference table and is not restated in the doc's current revision, which " +
+      'dropped the wording from the resolution field entirely. aspect_ratio is likewise ' +
+      'read only in text-to-image — in edit mode Kie ignores it rather than rejecting it.',
   }
 }
 
@@ -1231,9 +1279,23 @@ export const WAN_MODELS: ModelDefinition[] = [
         keys: ['reference_image', 'reference_video'],
         message: 'Provide at least one reference image or reference video.',
       },
+      {
+        /*
+         * Same shape as wan/2-7-image's edit-mode rule: the doc says the ratio
+         * "is ignored" once a first frame is set, and being silently ignored is
+         * worse than being rejected — you get the frame's shape back having
+         * asked for another, with nothing anywhere saying why.
+         */
+        kind: 'forbiddenWhen',
+        keys: ['aspect_ratio'],
+        when: { key: 'first_frame', present: true },
+        message:
+          'The output takes its shape from the first frame, so the aspect ratio is ignored.',
+      },
     ],
     notes:
-      'reference_image and reference_video are arrays despite their singular names — a frequent source of 422s.',
+      'reference_image and reference_video are arrays despite their singular names — a frequent source of 422s. ' +
+      'aspect_ratio is read only when there is no first_frame; with one, Kie ignores it rather than rejecting it.',
   },
   wan30('wan/3-0-video', 'Wan 3.0 — Video', 'wan/3-0-video', false),
   wan30('wan/3-0-video-prime', 'Wan 3.0 — Video Prime', 'wan/3-0-video-prime', true),

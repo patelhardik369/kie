@@ -180,6 +180,23 @@ machine-readable so the form can disable or narrow the conflicting controls *bef
 
 Encode each as a `Constraint`, with the `message` written for the user, not the developer.
 
+**A restriction written in `describe` is documentation, not enforcement.** `describe` is help text; only
+a `Constraint` can stop the request. `wan/2-7-image` carried "4K is available only for text-to-image in
+standard mode" in its `describe` for the whole life of the entry, with no constraint behind it — so the
+form happily offered 4K in edit mode and Kie refused the job at `createTask`. If you write a
+restriction into help text, ask immediately which `Constraint` enforces it; if none can, say so in
+`notes` and explain why.
+
+The two shapes worth recognising:
+
+| The doc says | Encode as | Why |
+|---|---|---|
+| "X is only available when Y…" / "only supports…" | `allowedValuesWhen` or `forbiddenWhen` | The API rejects it — better caught before the round trip |
+| "X **is ignored** when Y…" | `forbiddenWhen` | Worse than a rejection: Kie returns `200` having quietly done something else. `wan/2-7-image`'s `aspect_ratio` in edit mode returns the input image's shape, so a run asked for as `9:16` comes back landscape with nothing to explain it. |
+
+The second row is the counter-intuitive one. An ignored field feels harmless, so it tends to be left
+enabled — but a silent wrong result costs more than an error does, because nothing points at the cause.
+
 `allowedValuesWhen` narrows an enum control's options rather than disabling the control outright. Use
 it whenever a doc restricts *which values* of B are legal given A — disabling B entirely would hide
 the values that are still fine, and leaving it alone ships a `422`.

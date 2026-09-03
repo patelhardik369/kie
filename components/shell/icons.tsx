@@ -271,6 +271,19 @@ export function Alert({ size, className }: IconProps) {
   )
 }
 
+/**
+ * Information. `Alert` inverted — dot above the stem rather than below, on the
+ * same circle, so the two read as a pair rather than as two unrelated marks.
+ */
+export function Info({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <circle cx="8" cy="8" r="6.25" />
+      <path d="M8 7.5v3.75M8 4.75v.2" />
+    </Svg>
+  )
+}
+
 export function Check({ size, className }: IconProps) {
   return (
     <Svg size={size} className={className}>

@@ -365,15 +365,20 @@ const veoResolution: ParamDef = {
   default: '720p',
 }
 
-const veoDuration: ParamDef = {
-  key: 'duration',
-  type: 'enum',
-  label: 'Duration',
-  describe:
-    'Seconds, as bare numbers. Reference-to-video supports only 8.',
-  group: 'framing',
-  enum: [4, 6, 8],
-  default: 8,
+function veoDuration(supportsReference: boolean): ParamDef {
+  return {
+    key: 'duration',
+    type: 'enum',
+    label: 'Duration',
+    // The reference-mode caveat only belongs on the tiers that HAVE that mode.
+    // On veo3 it named a generationType value its own enum does not offer.
+    describe: supportsReference
+      ? 'Seconds, as bare numbers. Reference-to-video supports only 8.'
+      : 'Seconds, as bare numbers.',
+    group: 'framing',
+    enum: [4, 6, 8],
+    default: 8,
+  }
 }
 
 const veoWatermark: ParamDef = {
@@ -457,7 +462,7 @@ function veo(options: VeoOptions): ModelDefinition {
       generationType,
       veoAspect,
       veoResolution,
-      veoDuration,
+      veoDuration(options.supportsReference),
       veoWatermark,
       veoTranslation,
       veoFallback,

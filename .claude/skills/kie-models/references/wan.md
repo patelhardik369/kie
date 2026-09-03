@@ -309,7 +309,7 @@ through the same endpoint — supplying `input_urls` switches it to edit mode.
 | `aspect_ratio` | string | | `'1:1'` `'16:9'` `'4:3'` `'21:9'` `'3:4'` `'9:16'` `'8:1'` `'1:8'` | — | Applies only with no image input. Widest ratio set of any in-scope model |
 | `enable_sequential` | boolean | | — | `false` | Sequential / group image mode |
 | `n` | integer | | **1–4** normally, **1–12** when sequential | `4` | Number of images |
-| `resolution` | string | | `'1K'` `'2K'` `'4K'` | `'2K'` | 4K only for text-to-image in standard mode |
+| `resolution` | string | | `'1K'` `'2K'` `'4K'` | `'2K'` | **4K only for text-to-image in standard mode.** `input_urls` or `enable_sequential` caps it at 2K |
 | `thinking_mode` | boolean | | — | `false` | **Unavailable** when `enable_sequential` is true or `input_urls` is set |
 | `color_palette` | object[] | | 3–10 items | — | `{ hex, ratio }`, **both required** — `{"hex":"#C2D1E6","ratio":"23.51%"}`. `hex` matches `^#[0-9A-Fa-f]{6}$`, `ratio` matches `^\d{1,3}\.\d{2}%$` (two decimals, `23.5%` is rejected). **Unavailable** when `enable_sequential` is true |
 | `bbox_list` | array[][] | | max 2 boxes **per image** | — | Interactive editing regions. Outer list length must match `input_urls`, one entry per image in the same order; each entry holds up to 2 boxes of `[x1, y1, x2, y2]` integers. `[[]]` leaves an image unboxed |
@@ -320,7 +320,25 @@ through the same endpoint — supplying `input_urls` switches it to edit mode.
 **Constraints:** `thinking_mode` conflicts with both `enable_sequential` and `input_urls`;
 `color_palette` conflicts with `enable_sequential`; `n`'s upper bound depends on `enable_sequential`
 (and so does Kie's own default — 4 outside it, 12 inside); `bbox_list` requires `input_urls` and its
-length must match; `aspect_ratio` is inert once `input_urls` is present.
+length must match; `aspect_ratio` is inert once `input_urls` is present; `resolution` drops to
+`1K`/`2K` once `input_urls` is set or `enable_sequential` is on.
+
+> **The resolution ceiling is enforced at create time, and the doc no longer says so.** A payload with
+> `resolution: '4K'` and a non-empty `input_urls` is refused by `createTask` itself with
+> `{"code":500,"msg":"resolution is not within the range of allowed options"}` — observed live, on
+> `wan/2-7-image`. The current revision of `market/wan/2-7-image.md` describes `resolution` as nothing
+> more than "Output resolution… a wrapper field", having dropped the mode wording this table recorded
+> from an earlier revision. **Do not "correct" this row against the live page** — the restriction is
+> real and the page is the thing that is out of date. The `enable_sequential` half is transcribed from
+> that earlier revision and has not been re-confirmed against the API.
+>
+> Both halves are now encoded as `allowedValuesWhen`, and `aspect_ratio` as `forbiddenWhen`, so the
+> form narrows the controls instead of shipping a request that cannot succeed.
+
+> **`aspect_ratio` being *ignored* is worse than being rejected.** In edit mode Kie takes the shape
+> from the input image and returns a `200`, so a run submitted as `9:16` comes back landscape with
+> nothing anywhere explaining it. `wan/2-7-r2v` behaves the same way once `first_frame` is set. Both
+> now disable the control and say why.
 
 **Two shapes worth re-reading before transcribing.** `color_palette` is objects, not strings, and
 `bbox_list` is doubly nested. Both look like the simpler thing in a summary and fail as a 422.

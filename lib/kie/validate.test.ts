@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
+import { deriveFields } from './constraints.ts'
 import { requireModel } from './registry/index.ts'
 import { isPresent, validateInput } from './validate.ts'
 
@@ -751,5 +752,92 @@ describe('GPT Image 2 treats an omitted aspect ratio as its own case', () => {
       resolution: '4K',
     })
     assert.equal(result.ok, true, messages(result))
+  })
+})
+
+const wan27ImageModel = requireModel('wan/2-7-image')
+const wanR2vModel = requireModel('wan/2-7-r2v')
+
+/*
+ * Regression: this exact payload reached Kie and came back
+ * `{"code":500,"msg":"resolution is not within the range of allowed options"}`
+ * as a submit-time failure. The restriction WAS documented — in the field's
+ * `describe` — but no Constraint enforced it, so nothing stopped the request.
+ */
+describe('wan/2-7-image caps resolution outside text-to-image', () => {
+  const EDIT = {
+    prompt: PROMPT,
+    input_urls: ['https://example.com/a.jpg'],
+    n: 1,
+  }
+
+  it('rejects 4K once an input image is supplied', () => {
+    const result = validateInput(wan27ImageModel, { ...EDIT, resolution: '4K' })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /4K is text-to-image only/)
+  })
+
+  it('accepts 2K and 1K in the same edit mode', () => {
+    for (const resolution of ['1K', '2K']) {
+      const result = validateInput(wan27ImageModel, { ...EDIT, resolution })
+      assert.equal(result.ok, true, `${resolution}: ${messages(result)}`)
+    }
+  })
+
+  it('still allows 4K for plain text-to-image', () => {
+    const result = validateInput(wan27ImageModel, {
+      prompt: PROMPT,
+      n: 1,
+      resolution: '4K',
+    })
+    assert.equal(result.ok, true, messages(result))
+  })
+
+  it('caps sequential mode at 2K as well', () => {
+    const result = validateInput(wan27ImageModel, {
+      prompt: PROMPT,
+      n: 1,
+      enable_sequential: true,
+      resolution: '4K',
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /Sequential mode caps the output at 2K/)
+  })
+
+  it('narrows the control rather than disabling it', () => {
+    // Prevent, do not reject: 1K and 2K stay pickable, and the reason is shown.
+    const field = deriveFields(wan27ImageModel, EDIT).resolution!
+    assert.deepEqual(field.options, ['1K', '2K'])
+    assert.equal(field.disabled, false)
+    assert.match(field.reason!, /text-to-image only/)
+  })
+})
+
+describe('an aspect ratio Kie would silently ignore is disabled, not sent', () => {
+  it('disables it on wan/2-7-image once editing', () => {
+    // The failing payload also carried aspect_ratio 9:16, which this model reads
+    // only in text-to-image — so the run would have come back the wrong shape
+    // with nothing explaining why.
+    const field = deriveFields(wan27ImageModel, {
+      prompt: PROMPT,
+      input_urls: ['https://example.com/a.jpg'],
+    }).aspect_ratio!
+    assert.equal(field.disabled, true)
+    assert.match(field.reason!, /shape from the input image/)
+  })
+
+  it('leaves it enabled for text-to-image', () => {
+    const field = deriveFields(wan27ImageModel, { prompt: PROMPT }).aspect_ratio!
+    assert.equal(field.disabled, false)
+  })
+
+  it('disables it on wan/2-7-r2v once a first frame is set', () => {
+    const field = deriveFields(wanR2vModel, {
+      prompt: PROMPT,
+      reference_image: ['https://example.com/a.png'],
+      first_frame: 'https://example.com/f.png',
+    }).aspect_ratio!
+    assert.equal(field.disabled, true)
+    assert.match(field.reason!, /shape from the first frame/)
   })
 })

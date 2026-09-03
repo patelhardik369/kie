@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 
 import { TrapList } from '@/components/library/TrapList.tsx'
 import { BackLink } from '@/components/shell/PageHeader.tsx'
+import { InfoTip } from '@/components/shell/InfoTip.tsx'
 import { ExternalLink } from '@/components/shell/icons.tsx'
 import {
   ALL_MODELS,
@@ -50,7 +51,9 @@ export default async function ModelPage({
           </Link>
         </div>
 
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        {/* `relative` positions the InfoTip panel against this row — see its
+            own file for why it anchors here rather than to the icon. */}
+        <div className="relative mt-2.5 flex flex-wrap items-center gap-1.5">
           <code className="chip font-mono">{model.slug}</code>
           {capabilitiesOf(model).map((capability) => (
             <span key={capability} className="chip chip-accent">
@@ -73,13 +76,13 @@ export default async function ModelPage({
           >
             past runs
           </Link>
+          {model.notes && <InfoTip id="model-notes">{model.notes}</InfoTip>}
         </div>
 
         {differentiator(model) && (
           <p className="mt-3 text-[13px] text-(--color-ink-muted)">{differentiator(model)}</p>
         )}
 
-        {model.notes && <p className="note mt-3">{model.notes}</p>}
       </header>
 
       {traps.length > 0 && (
