@@ -209,6 +209,18 @@ function namingTraps(models: ModelDefinition[]): Trap[] {
     // One spelling in use is not a trap; it is just the name.
     if (usedBy.size < 2) continue
 
+    /*
+     * A model can declare more than one spelling ITSELF — google/nano-banana
+     * carries both `aspect_ratio` and its superseded `image_size`. That is a
+     * different hazard from the cross-model one, and the sentence below would
+     * be plainly wrong about it: the receiving model has very much heard of
+     * that key, it just has two knobs for one idea and only one of them is
+     * current. Called out separately rather than folded in.
+     */
+    const overlapping = models
+      .filter((m) => group.filter((key) => m.params.some((p) => p.key === key)).length > 1)
+      .map((m) => m.slug)
+
     traps.push({
       kind: 'naming',
       title: `\`${[...usedBy.keys()].join('` vs `')}\` — the same idea, two names`,
@@ -216,12 +228,24 @@ function namingTraps(models: ModelDefinition[]): Trap[] {
         `Copying a payload between these models silently drops the field, ` +
         `because the receiving model has never heard of that key. ` +
         describeGroups(usedBy, 'uses') +
-        '.',
+        '.' +
+        (overlapping.length > 0
+          ? ` ${listSlugs(overlapping)} declare${overlapping.length === 1 ? 's' : ''} ` +
+            `more than one of these spellings, so setting two of them on the same ` +
+            `request sets one idea twice — check which the docs mark current.`
+          : ''),
       models: [...usedBy.values()].flat(),
     })
   }
 
   return traps
+}
+
+/** `a`, `a and b`, or `a, b and c`, truncating past three. */
+function listSlugs(slugs: string[]): string {
+  if (slugs.length === 1) return slugs[0]!
+  if (slugs.length > 3) return `${slugs.slice(0, 3).join(', ')} and ${slugs.length - 3} more`
+  return `${slugs.slice(0, -1).join(', ')} and ${slugs.at(-1)}`
 }
 
 /** Everything the registry's own `notes` record, surfaced verbatim. */
@@ -238,7 +262,19 @@ function noteTraps(models: ModelDefinition[]): Trap[] {
     }))
 }
 
-/** Every trap across a set of models, most widely applicable first. */
+/**
+ * Every trap across a set of models, most widely applicable first.
+ *
+ * `models` is deduplicated HERE rather than in each builder, because every
+ * builder can produce a repeat and the consequences are not local to one of
+ * them. A model legitimately lands in the same trap twice whenever it declares
+ * two members of one synonym group — `google/nano-banana` has both
+ * `aspect_ratio` and the superseded `image_size` — and a repeated slug renders
+ * as a duplicate React key, inflates the "N models" count in the list, and
+ * would make `trapsForModel` no less correct but the UI visibly wrong.
+ *
+ * Doing it once at the boundary means a new builder cannot reintroduce the bug.
+ */
 export function findTraps(models: ModelDefinition[]): Trap[] {
   const byKey = usagesByKey(models)
 
@@ -247,7 +283,12 @@ export function findTraps(models: ModelDefinition[]): Trap[] {
     ...enumTraps(byKey),
     ...namingTraps(models),
     ...noteTraps(models),
-  ].sort((a, b) => b.models.length - a.models.length)
+  ]
+    // First occurrence wins, so the order a builder chose is preserved.
+    .map((trap) => ({ ...trap, models: [...new Set(trap.models)] }))
+    // Sorted after deduping: the count is what ranks a trap, and before the
+    // dedupe a model counted twice would push its trap up the list.
+    .sort((a, b) => b.models.length - a.models.length)
 }
 
 /** The traps that apply to one model. */

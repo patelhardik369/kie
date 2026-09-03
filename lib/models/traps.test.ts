@@ -195,3 +195,52 @@ describe('differentiator', () => {
     }
   })
 })
+
+describe('a trap never lists the same model twice', () => {
+  /*
+   * Regression: `google/nano-banana` declares BOTH `aspect_ratio` and its
+   * superseded `image_size`, so the naming builder — which flattens one slug
+   * list per spelling — emitted the slug twice. React rendered it as a
+   * duplicate key, and the row's "N models" count was inflated.
+   */
+  it('holds unique slugs in every trap over the whole registry', () => {
+    for (const trap of findTraps(ALL_MODELS)) {
+      assert.equal(
+        new Set(trap.models).size,
+        trap.models.length,
+        `${trap.kind} trap "${trap.title}" repeats a model: ${trap.models.join(', ')}`,
+      )
+    }
+  })
+
+  it('lists a model declaring two spellings of one idea exactly once', () => {
+    const trap = findTraps(ALL_MODELS).find(
+      (t) => t.kind === 'naming' && t.title.includes('image_size'),
+    )!
+    const appearances = trap.models.filter((s) => s === 'google/nano-banana')
+    assert.equal(appearances.length, 1)
+  })
+
+  it('says so when a model carries more than one spelling itself', () => {
+    // The generic "the receiving model has never heard of that key" is wrong
+    // for these — they have heard of both.
+    const trap = findTraps(ALL_MODELS).find(
+      (t) => t.kind === 'naming' && t.title.includes('image_size'),
+    )!
+    assert.match(trap.detail, /declare more than one of these spellings/)
+    assert.match(trap.detail, /google\/nano-banana/)
+  })
+
+  it('leaves the note describing a clean cross-model split alone', () => {
+    // Nothing declares both `ratio` and `aspect_ratio`, so that half of the
+    // group must not gain the extra sentence.
+    const ratioOnly = ALL_MODELS.filter(
+      (m) =>
+        m.params.some((p) => p.key === 'ratio') ||
+        (m.params.some((p) => p.key === 'aspect_ratio') &&
+          !m.params.some((p) => p.key === 'image_size')),
+    )
+    const trap = findTraps(ratioOnly).find((t) => t.kind === 'naming')!
+    assert.ok(!/declare/.test(trap.detail), trap.detail)
+  })
+})
