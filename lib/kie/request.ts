@@ -56,7 +56,11 @@ export function buildRequestInput(
  */
 function pruneBlankUrls(model: ModelDefinition, payload: Record<string, unknown>): void {
   for (const param of model.params) {
-    if (param.type !== 'url[]') continue
+    // `string[]` gets the same treatment: an empty `audio_ids` row is a
+    // placeholder from "+ Add", and Kie reads `""` as an id it cannot resolve.
+    // Only `url[]` can carry a `drawsOn` sibling, so the realignment below is a
+    // no-op for the string lists.
+    if (param.type !== 'url[]' && param.type !== 'string[]') continue
     const list = payload[param.key]
     if (!Array.isArray(list)) continue
 

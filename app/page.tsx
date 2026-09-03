@@ -5,7 +5,8 @@ import { PageHeader, Section } from '@/components/shell/PageHeader.tsx'
 import { ChevronRight } from '@/components/shell/icons.tsx'
 import { getGalleryFacets, recentGenerations } from '@/lib/gallery/queries.ts'
 import { getEnv } from '@/lib/env'
-import { ALL_MODELS, modelsByFamily } from '@/lib/kie/registry/index.ts'
+import { ALL_MODELS, FAMILIES, modelsByFamily } from '@/lib/kie/registry/index.ts'
+import { FAMILY_BLURB, FAMILY_LABEL } from '@/lib/models/labels.ts'
 
 export const dynamic = 'force-dynamic'
 
@@ -34,11 +35,11 @@ export default async function Home() {
     .filter((s) => ['failed', 'needs_retry', 'stalled', 'orphaned'].includes(s.value))
     .reduce((sum, s) => sum + s.count, 0)
 
-  const families = [
-    { key: 'kling' as const, label: 'Kling', blurb: 'Video, avatars, motion control' },
-    { key: 'bytedance' as const, label: 'ByteDance', blurb: 'Seedance video, Seedream image' },
-    { key: 'wan' as const, label: 'Wan', blurb: 'Video, image, layer decomposition' },
-  ]
+  const families = FAMILIES.map((key) => ({
+    key,
+    label: FAMILY_LABEL[key],
+    blurb: FAMILY_BLURB[key],
+  }))
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 pt-6 pb-16">

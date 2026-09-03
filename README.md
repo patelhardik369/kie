@@ -1,14 +1,17 @@
 # Kie Studio
 
 A self-hosted, single-user generation studio built on the [Kie AI](https://kie.ai) unified API —
-your own Higgsfield, restricted to three model families and with **every parameter exposed**.
+your own Higgsfield, restricted to six model families and with **every parameter exposed**.
 
-| Family | Video | Image | Total |
-|---|---|---|---|
-| Kling | 19 | — | 19 |
-| ByteDance (Seedance / Seedream) | 10 | 10 | 20 |
-| Wan | 18 | 2 | 20 |
-| | | | **59** |
+| Family | Video | Image | Audio | Total |
+|---|---|---|---|---|
+| Kling | 19 | — | — | 19 |
+| ByteDance (Seedance / Seedream) | 10 | 10 | — | 20 |
+| Wan | 18 | 2 | — | 20 |
+| Google (Veo / Gemini Omni / Imagen 4 / Nano Banana) | 5 | 8 | 1 | 14 |
+| OpenAI (GPT Image) | — | 4 | — | 4 |
+| Enhance (upscale / background removal) | 2 | 3 | — | 5 |
+| | **54** | **27** | **1** | **82** |
 
 > **Status: planning complete, implementation not started.** This repository currently contains the
 > specification and the verified model catalog. See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the build
@@ -18,7 +21,7 @@ your own Higgsfield, restricted to three model families and with **every paramet
 
 Hosted tools expose a curated slice of each model's controls and hold your outputs on their servers.
 Kie already resells the same underlying models through one uniform API at credit cost. What was
-missing is a front end that turns 59 raw JSON endpoints into something worth sitting in front of —
+missing is a front end that turns 82 raw JSON endpoints into something worth sitting in front of —
 without hiding a single parameter.
 
 Two promises: **nothing is hidden**, and **nothing is lost** (Kie deletes generated media after 14
@@ -29,7 +32,7 @@ days, so every output is downloaded to local disk the moment it's ready).
 | Document | What |
 |---|---|
 | [`docs/PRD.md`](docs/PRD.md) | Goals, features, acceptance criteria |
-| [`docs/MODEL-CATALOG.md`](docs/MODEL-CATALOG.md) | All 59 models — what each is for |
+| [`docs/MODEL-CATALOG.md`](docs/MODEL-CATALOG.md) | All 82 models — what each is for |
 | [`docs/API-CONTRACT.md`](docs/API-CONTRACT.md) | Lifecycle, polling, retries, error mapping |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Route map, registry, job runner, storage |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Drizzle schema |
@@ -38,7 +41,7 @@ days, so every output is downloaded to local disk the moment it's ready).
 
 **Authoritative parameter tables** live in
 [`.claude/skills/kie-models/references/`](.claude/skills/kie-models/references/) — every field, enum,
-default, and limit for all 59 models, each transcribed from its `docs.kie.ai` page. The docs above
+default, and limit for all 82 models, each transcribed from its `docs.kie.ai` page. The docs above
 index them; they never duplicate them.
 
 ## Setup

@@ -60,7 +60,7 @@ lib/
     index.ts                     public surface
     registry/
       types.ts                   ModelDefinition, ParamDef, Constraint
-      kling.ts  bytedance.ts  wan.ts
+      kling.ts  bytedance.ts  wan.ts  google.ts  openai.ts  enhance.ts
       index.ts                   byslug / byFamily / byCapability lookups
     validate.ts                  input -> ParamDef[] + Constraint[] check
   jobs/
@@ -159,6 +159,27 @@ because that barrel pulls in `client.ts` and would drag `server-only` — and th
 the browser bundle. Import `@/lib/kie/registry` and `@/lib/kie/validate` by their own paths.
 
 Schema and the transcription rules: [`.claude/skills/kie-models/SKILL.md`](../.claude/skills/kie-models/SKILL.md).
+
+### Transports
+
+81 of the 82 models POST to `/api/v1/jobs/createTask` and poll `/api/v1/jobs/recordInfo`. Veo 3.1
+predates that API and never moved onto it: it POSTs a **flat** body to `/api/v1/veo/generate` and
+polls `/api/v1/veo/record-info`, which reports a numeric `successFlag` instead of a `state` string
+and returns `resultUrls` already parsed.
+
+That difference is registry data, not a code branch. The three Veo models carry `transport: 'veo'`;
+everything else omits the field and gets `'jobs'`. The dispatch happens in exactly one place —
+`lib/kie/tasks.ts`, which routes to `lib/kie/veo.ts` and gets back the same `Task` shape everything
+else produces, including a re-encoded `resultJson` **string** so `generations.result_json_raw` holds
+one shape for all 82 models.
+
+**The job runner, the downloader, the gallery and the parameter form never learn Veo exists.** The
+one visible seam is that polling now passes the generation's `model_slug` through to `getTask` —
+a lookup, not a branch, and the slug is already a column on the row being polled. A `model.transport`
+check anywhere outside `lib/kie/` means the adapter is leaking; fix the adapter.
+
+Adding a transport is a much larger step than adding a model, and `'veo'` should stay the only one.
+Kie's other non-unified APIs — the legacy 4o Image API, Runway, Suno — are out of scope.
 
 ## Job runner
 

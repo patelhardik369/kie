@@ -83,6 +83,7 @@ export default async function PresetsPage() {
                         applicable={Boolean(model)}
                         droppedCount={applied?.dropped.length ?? 0}
                         droppedMessages={applied?.dropped.map((d) => d.message) ?? []}
+                        nsfw={preset.nsfw}
                       />
                     )
                   })}

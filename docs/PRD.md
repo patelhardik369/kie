@@ -7,7 +7,7 @@ each model's controls, bury the rest behind presets, hold your outputs on their 
 through their pricing, and pick which models you get. Meanwhile Kie AI already resells the same
 underlying models — Kling, Seedance, Seedream, Wan — through one uniform API at wholesale credit cost.
 
-What's missing is the front end: something that turns 59 raw JSON endpoints into a studio you'd
+What's missing is the front end: something that turns 82 raw JSON endpoints into a studio you'd
 actually want to sit in front of, **without hiding a single parameter.**
 
 ## 2. Product
@@ -23,10 +23,10 @@ Presets sit *on top of* full manual control. They are never a substitute for it.
 
 | # | Goal | Why |
 |---|---|---|
-| G1 | Expose 100% of documented parameters for all 59 models | The core differentiator. A hidden parameter is a bug |
+| G1 | Expose 100% of documented parameters for all 82 models | The core differentiator. A hidden parameter is a bug |
 | G2 | Never lose an output | Kie deletes generated media after 14 days |
 | G3 | Make every past generation re-runnable and tweakable | Iteration is the actual creative workflow |
-| G4 | Make model choice legible | 59 endpoints with overlapping names is otherwise unusable |
+| G4 | Make model choice legible | 82 endpoints with overlapping names is otherwise unusable |
 | G5 | Keep cost visible per generation | Credits are the real constraint |
 
 ## 4. Non-goals
@@ -135,7 +135,7 @@ Saved, taggable prompts insertable into any prompt field.
 
 ### F9 — Model browser
 
-A searchable view of all 59 models: family, capability, what inputs it takes, what makes it different
+A searchable view of all 82 models: family, capability, what inputs it takes, what makes it different
 from its siblings, and its parameter table.
 
 **Acceptance**
@@ -158,5 +158,5 @@ and by day.
 
 ## 8. Success
 
-The app is working when: all 59 models generate successfully; nothing in the gallery has ever been
+The app is working when: all 82 models generate successfully; nothing in the gallery has ever been
 lost to URL expiry; and there is no reason left to open Kie's own playground — every control is here.

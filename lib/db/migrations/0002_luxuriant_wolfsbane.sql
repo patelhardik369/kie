@@ -1,0 +1,1 @@
+ALTER TABLE `presets` ADD `nsfw` integer DEFAULT false NOT NULL;

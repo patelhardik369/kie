@@ -9,7 +9,7 @@ import type { ParamDef } from '@/lib/kie/registry/types.ts'
  * Leaf controls, one per ParamType.
  *
  * Nothing here knows about a model. Every control is chosen by `param.type` and
- * configured by the ParamDef, which is what lets 59 models share one form.
+ * configured by the ParamDef, which is what lets 82 models share one form.
  */
 
 export interface ControlProps<T = unknown> {
@@ -19,6 +19,13 @@ export interface ControlProps<T = unknown> {
   disabled?: boolean
   /** Overrides param.max when a constraint lowers it. */
   max?: number
+  /**
+   * Overrides param.enum when a constraint narrows it.
+   *
+   * Arrives already intersected and already in the parameter's own enum order,
+   * so the control renders it as-is and the options never reshuffle mid-edit.
+   */
+  options?: Array<string | number>
   /**
    * Required in the CURRENT state. A constraint can make an optional field
    * required (or vice versa), so controls must not read param.required directly.
@@ -208,7 +215,16 @@ export function StringControl(props: ControlProps) {
 export function EnumControl(props: ControlProps) {
   const { param, value, onChange, disabled } = props
   const required = isRequired(props)
-  const options = param.enum ?? []
+  const allowed = props.options ?? param.enum ?? []
+  /*
+   * A value the user picked BEFORE a constraint narrowed the list stays on
+   * screen, selected, even though it is no longer allowed. Dropping it would
+   * leave the control looking empty while the payload still carries the old
+   * value — the validator flags it, and you cannot fix what you cannot see.
+   */
+  const stale =
+    value !== undefined && value !== '' && !allowed.includes(value as string | number)
+  const options = stale ? [...allowed, value as string | number] : allowed
 
   // Segmented control reads faster at small option counts; select scales better.
   if (options.length <= 4) {
@@ -476,6 +492,68 @@ export function UrlControl(props: ControlProps) {
         onChange={(e) => onChange(e.target.value)}
       />
       <UploadButton param={param} disabled={disabled} onUploaded={onChange} />
+    </div>
+  )
+}
+
+/**
+ * An ordered list of opaque strings — Gemini Omni's `audio_ids` and
+ * `character_ids`.
+ *
+ * Deliberately NOT `UrlListControl` with the upload button hidden. These values
+ * are ids minted by a separate endpoint, so there is nothing to upload and no
+ * URL to paste; offering either affordance would promise a path that does not
+ * exist. The monospace input and the counter are all this needs.
+ */
+export function StringListControl({ param, value, onChange, disabled, max }: ControlProps) {
+  const list = Array.isArray(value) ? (value as string[]) : []
+  const ceiling = max ?? param.maxItems
+
+  const update = (next: string[]) => onChange(next)
+
+  return (
+    <div className="space-y-2">
+      {list.map((item, index) => (
+        <div key={index} className="flex gap-2">
+          <input
+            className={`${inputBase} font-mono text-xs`}
+            value={item}
+            disabled={disabled}
+            placeholder={`${param.label} ${index + 1}`}
+            onChange={(e) => {
+              const next = [...list]
+              next[index] = e.target.value
+              update(next)
+            }}
+          />
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => update(list.filter((_, i) => i !== index))}
+            className="btn btn-ghost btn-danger btn-icon shrink-0"
+            aria-label="Remove"
+          >
+            <Close size={12} />
+          </button>
+        </div>
+      ))}
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          disabled={disabled || (ceiling !== undefined && list.length >= ceiling)}
+          onClick={() => update([...list, ''])}
+          className="btn btn-sm border-dashed border-(--color-border) text-(--color-ink-muted) hover:border-(--color-accent-line) hover:text-(--color-accent)"
+        >
+          <Plus size={12} />
+          Add
+        </button>
+        {ceiling !== undefined && (
+          <span className="font-mono text-xs text-(--color-ink-muted)">
+            {list.length} / {ceiling}
+          </span>
+        )}
+      </div>
     </div>
   )
 }

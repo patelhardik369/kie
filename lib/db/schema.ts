@@ -34,7 +34,20 @@ export const GENERATION_STATES = [
 
 export type GenerationState = (typeof GENERATION_STATES)[number]
 
-export const FAMILIES = ['kling', 'bytedance', 'wan'] as const
+/**
+ * Kept in step with `lib/kie/registry/types.ts` by the registry test, not by an
+ * import: the schema module must stay loadable by drizzle-kit without dragging
+ * the whole registry in. The column is plain `text` with no CHECK, so adding a
+ * family needs no migration — only this list and the registry's.
+ */
+export const FAMILIES = [
+  'kling',
+  'bytedance',
+  'wan',
+  'google',
+  'openai',
+  'enhance',
+] as const
 export type Family = (typeof FAMILIES)[number]
 
 export const generations = sqliteTable(
@@ -160,6 +173,18 @@ export const presets = sqliteTable(
     modelSlug: text('model_slug').notNull(),
     /** Partial `input`; missing fields fall back to registry defaults. */
     paramsJson: text('params_json').notNull(),
+    /**
+     * Whether runs from this preset start marked private.
+     *
+     * A COLUMN, deliberately not a key inside `paramsJson`. That blob is the
+     * model-parameter namespace: `applyPreset` reports anything in it that the
+     * registry does not declare as a dropped `unknown_key`, so a flag stored
+     * there would be discarded on load and reported as drift every time. The
+     * collision risk is real too — several models already declare a field
+     * called `nsfw_checker`, which means something entirely different (it asks
+     * Kie to filter, where this only decides what the gallery shows).
+     */
+    nsfw: integer('nsfw', { mode: 'boolean' }).notNull().default(false),
     createdAt: integer('created_at').notNull().default(now),
     updatedAt: integer('updated_at').notNull().default(now),
   },

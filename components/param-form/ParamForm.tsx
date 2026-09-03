@@ -73,7 +73,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
    *
    * Read from `window.location` inside an effect rather than with
    * `useSearchParams()`. That hook forces a client-side-rendering bailout unless
-   * the whole form sits inside a Suspense boundary, which would take these 59
+   * the whole form sits inside a Suspense boundary, which would take these 82
    * pages out of the prerendered HTML entirely — a real cost, to support a query
    * parameter that only matters after hydration anyway.
    */
@@ -86,6 +86,8 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
   const [presetReport, setPresetReport] = useState<{
     name: string
     dropped: { key: string; message: string }[]
+    /** Whether the preset carried the privacy flag, so the banner can say so. */
+    nsfw: boolean
   } | null>(null)
 
   useEffect(() => {
@@ -145,7 +147,16 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
         // than replacing them. The server already dropped anything the registry
         // no longer accepts; what it dropped is reported below, never swallowed.
         setValues((defaults) => ({ ...defaults, ...data.values }))
-        setPresetReport({ name: data.preset.name, dropped: data.dropped })
+        // Restored, and only ever upward — same rule as the Tweak flow above.
+        // A privacy flag must never be turned OFF by something the user did not
+        // aim at it, so applying a public preset over a form you had already
+        // marked private leaves it private.
+        if (data.preset.nsfw) setKeepPrivate(true)
+        setPresetReport({
+          name: data.preset.name,
+          dropped: data.dropped,
+          nsfw: Boolean(data.preset.nsfw),
+        })
         setPrefill({ state: 'done' })
       } catch (cause) {
         if (!cancelled) {
@@ -325,6 +336,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
             reason={derived[param.key]?.reason}
             required={derived[param.key]?.required}
             max={derived[param.key]?.max}
+            options={derived[param.key]?.options}
             errors={errorsFor(param.key)}
             studioDefault={preferences[param.key] as string | number | undefined}
             sourceUrls={sourceUrlsFor(param)}
@@ -386,6 +398,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
                   reason={derived[param.key]?.reason}
                   required={derived[param.key]?.required}
                   max={derived[param.key]?.max}
+                  options={derived[param.key]?.options}
                   errors={errorsFor(param.key)}
                   studioDefault={preferences[param.key] as string | number | undefined}
                   sourceUrls={sourceUrlsFor(param)}
@@ -466,6 +479,9 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
             <p className="text-xs text-(--color-ink-muted)">
               Applied preset <span className="text-(--color-ink)">{presetReport.name}</span>
               . Every field stays editable.
+              {/* Said out loud, because it is the one thing a preset restores
+                  that is not a visible parameter row. */}
+              {presetReport.nsfw && ' It is marked private, so runs stay out of Recent and the gallery grid.'}
             </p>
             {presetReport.dropped.length > 0 && (
               // Reported, never silently swallowed: the registry has moved since
@@ -530,7 +546,11 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
           </span>
 
           <span className="ml-auto">
-            <SavePreset model={model} values={activeValues} />
+            <SavePreset
+              model={model}
+              values={activeValues}
+              keepPrivate={keepPrivate}
+            />
           </span>
         </div>
       </section>

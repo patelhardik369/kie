@@ -9,7 +9,7 @@ import type { ParamType } from './registry/types.ts'
 
 /**
  * Phase 3's exit criterion, checked mechanically:
- * all 59 models render from one generic form with NO model-specific branches.
+ * all 82 models render from one generic form with NO model-specific branches.
  */
 
 const COMPONENT_DIR = path.join(process.cwd(), 'components', 'param-form')
@@ -88,6 +88,7 @@ describe('the schema layer covers every parameter in the registry', () => {
     'boolean',
     'url',
     'url[]',
+    'string[]',
     'seed',
     'object[]',
     'color[]',

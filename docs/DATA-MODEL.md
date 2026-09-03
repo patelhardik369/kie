@@ -21,7 +21,7 @@ One row per submission.
 | `id` | text PK | app-generated (uuid/cuid) |
 | `kie_task_id` | text unique nullable | null until `createTask` returns; **the idempotency key for webhooks** |
 | `model_slug` | text | verbatim, e.g. `kling-3.0-omni/reference-to-video` |
-| `family` | text | `kling` / `bytedance` / `wan` |
+| `family` | text | `kling` / `bytedance` / `wan` / `google` / `openai` / `enhance`. Plain text, no CHECK — adding a family needs no migration |
 | `capability` | text | denormalized from the registry for cheap filtering |
 | `input_json` | text (JSON) | **verbatim request `input`** |
 | `state` | text | see state values below |

@@ -13,13 +13,21 @@ import type { ModelDefinition } from '@/lib/kie/registry/types.ts'
  * so a preset carrying one would apply cleanly and then fail at submit with a
  * dead link. The count shown is what will actually be stored, so there is no
  * surprise later about what a preset does and does not capture.
+ *
+ * "Keep private" travels with the preset even though it is not a model
+ * parameter. It is sent as its own `nsfw` field rather than smuggled into
+ * `params`, because `params` is the model-parameter namespace and anything the
+ * registry does not declare is dropped on load.
  */
 export function SavePreset({
   model,
   values,
+  keepPrivate,
 }: {
   model: ModelDefinition
   values: Record<string, unknown>
+  /** The form's current privacy toggle, stored with the preset. */
+  keepPrivate: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
@@ -39,7 +47,12 @@ export function SavePreset({
       const response = await fetch('/api/presets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, model: model.slug, params: storable }),
+        body: JSON.stringify({
+          name,
+          model: model.slug,
+          params: storable,
+          nsfw: keepPrivate,
+        }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data?.error ?? 'Could not save the preset.')
@@ -78,8 +91,10 @@ export function SavePreset({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        disabled={count === 0}
-        title={count === 0 ? 'Nothing to save yet.' : undefined}
+        // A preset carrying only the privacy flag is still worth saving, so the
+        // toggle counts as something to save even with no parameters set.
+        disabled={count === 0 && !keepPrivate}
+        title={count === 0 && !keepPrivate ? 'Nothing to save yet.' : undefined}
         className="text-xs text-(--color-ink-muted) underline transition hover:text-(--color-ink) disabled:cursor-not-allowed disabled:opacity-40"
       >
         Save as preset
@@ -128,6 +143,11 @@ export function SavePreset({
           </>
         )}
         .
+        {/* Stated up front, because it is the one saved setting that is not a
+            parameter and so is not in the count above. */}
+        {keepPrivate && (
+          <> Runs from this preset will start marked <b>private</b>.</>
+        )}
       </p>
       {error && <p className="text-xs text-(--color-bad)">{error}</p>}
     </div>

@@ -55,7 +55,9 @@ describe('parseGalleryFilter', () => {
   it('drops values the registry does not know', () => {
     // A hand-edited URL should show everything, not an empty grid that reads
     // as data loss.
-    const filter = parse('family=openai&capability=telepathy&state=exploded')
+    // `runway` rather than a real-looking family: `openai` used to serve as the
+    // out-of-scope example here until it became an in-scope one.
+    const filter = parse('family=runway&capability=telepathy&state=exploded')
     assert.equal(filter.family, undefined)
     assert.equal(filter.capability, undefined)
     assert.equal(filter.state, undefined)

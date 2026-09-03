@@ -25,6 +25,13 @@ interface CreateBody {
   name?: string
   model?: string
   params?: Record<string, unknown>
+  /**
+   * Whether runs from this preset start marked private.
+   *
+   * Sent alongside `params` rather than inside it: it is a studio setting, not
+   * a model parameter, and it never reaches Kie.
+   */
+  nsfw?: boolean
 }
 
 export async function POST(request: Request) {
@@ -51,7 +58,12 @@ export async function POST(request: Request) {
   // Asset URLs are stripped here: a Kie upload dies after about 24 hours, so a
   // preset carrying one would apply cleanly and then fail at submit.
   const params = presetableValues(model, body.params ?? {})
-  const preset = await createPreset({ name, modelSlug: model.slug, params })
+  const preset = await createPreset({
+    name,
+    modelSlug: model.slug,
+    params,
+    nsfw: body.nsfw === true,
+  })
 
   return NextResponse.json({ preset, savedKeys: Object.keys(params) }, { status: 201 })
 }

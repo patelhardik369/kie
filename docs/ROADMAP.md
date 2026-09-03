@@ -1,7 +1,7 @@
 # Roadmap
 
 Eight phases. Each has an exit criterion that can be checked, not just claimed. Order is chosen so
-the riskiest assumption — that one generated form can serve 59 heterogeneous models — is tested in
+the riskiest assumption — that one generated form can serve 82 heterogeneous models — is tested in
 Phase 3, before any UI is worth polishing.
 
 ---
@@ -24,12 +24,12 @@ cheap model returns a `taskId`, and polling it reaches `success` with parsed `re
 
 ## Phase 2 — Registry
 
-`ModelDefinition` types, then all 59 definitions transcribed from
+`ModelDefinition` types, then all 82 definitions transcribed from
 [`.claude/skills/kie-models/references/`](../.claude/skills/kie-models/references/) — which already
 hold the verified parameter tables, so this is transcription, not research. Plus `validate.ts`
 covering required fields, enums, ranges, lengths, item counts, and every `Constraint`.
 
-**Exit:** 19 + 20 + 20 = 59 definitions compile. A test asserts every slug is unique and every
+**Exit:** 19 + 20 + 20 + 14 + 4 + 5 = 82 definitions compile. A test asserts every slug is unique and every
 `docUrl` is populated. Validation rejects a Seedance 2.0 payload carrying both `first_frame_url` and
 `reference_image_urls`, and accepts either alone.
 
@@ -38,7 +38,7 @@ covering required fields, enums, ranges, lengths, item counts, and every `Constr
 `ParamForm` rendering a `ModelDefinition`, with one control per `ParamType`, constraint enforcement,
 and the request preview.
 
-**Exit:** all 59 models render a complete, usable form with **zero model-specific branches in
+**Exit:** all 82 models render a complete, usable form with **zero model-specific branches in
 component code**. Verified against the four hardest cases — `kling-3.0/video` (`kling_elements` +
 `multi_prompt`), `kling-3.0-omni/reference-to-video` (three input scenarios), `wan/3-0-video` (seven
 input arrays with cross-exclusions), `wan/2-7-image` (`thinking_mode` conflicts, `n` bound depending
@@ -91,7 +91,7 @@ that has been triaged.
 | Download retry | Done — three backoff attempts per URL, `.part` file renamed only after the length check |
 | `stalled` recovery | Done — per-generation "Check again", plus `POST api/kie/recover` / "Resume all" in Settings |
 | Disk usage in Settings | Done |
-| `/verify-catalog` | Zero drift. All 59 registry `docUrl`s match `llms.txt` exactly; 19 Kling / 20 ByteDance / 20 Wan |
+| `/verify-catalog` | Zero drift. All 82 registry `docUrl`s match `llms.txt` exactly; 19 Kling / 20 ByteDance / 20 Wan / 14 Google / 4 OpenAI / 5 Enhance |
 
 **Smoke tests.** Two of ten capabilities are proven against the live API, submitted through the app's
 own route rather than a script:

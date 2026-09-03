@@ -58,20 +58,23 @@ export async function PATCH(
 ) {
   const { id } = await params
 
-  let body: { name?: string; params?: Record<string, unknown> }
+  let body: { name?: string; params?: Record<string, unknown>; nsfw?: boolean }
   try {
     body = await request.json()
   } catch {
     return NextResponse.json({ error: 'Request body must be JSON.' }, { status: 400 })
   }
 
-  const patch: { name?: string; params?: Record<string, unknown> } = {}
+  const patch: { name?: string; params?: Record<string, unknown>; nsfw?: boolean } = {}
   if (typeof body.name === 'string' && body.name.trim()) patch.name = body.name.trim()
   if (body.params && typeof body.params === 'object') patch.params = body.params
+  // Explicitly `boolean`, so omitting the key leaves the flag alone while
+  // sending `false` can genuinely clear it.
+  if (typeof body.nsfw === 'boolean') patch.nsfw = body.nsfw
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json(
-      { error: 'Nothing to update. Send `name` or `params`.' },
+      { error: 'Nothing to update. Send `name`, `params` or `nsfw`.' },
       { status: 400 },
     )
   }

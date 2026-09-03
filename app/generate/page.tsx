@@ -7,27 +7,8 @@ import {
   FAMILIES,
   capabilitiesOf,
   type Capability,
-  type Family,
 } from '@/lib/kie/registry/index.ts'
-
-const FAMILY_LABEL: Record<Family, string> = {
-  kling: 'Kling',
-  bytedance: 'ByteDance',
-  wan: 'Wan',
-}
-
-const CAPABILITY_LABEL: Record<Capability, string> = {
-  'text-to-video': 'Text to video',
-  'image-to-video': 'Image to video',
-  'reference-to-video': 'Reference to video',
-  'video-to-video': 'Video to video',
-  'speech-to-video': 'Speech to video',
-  'motion-control': 'Motion control',
-  avatar: 'Avatar',
-  'text-to-image': 'Text to image',
-  'image-to-image': 'Image to image',
-  'layer-decomposition': 'Layer decomposition',
-}
+import { CAPABILITY_LABEL, FAMILY_LABEL } from '@/lib/models/labels.ts'
 
 export const metadata = { title: 'Choose a model' }
 
@@ -43,7 +24,7 @@ export default function GenerateIndex() {
           </Link>
         }
         meta={
-          /* 59 models is a long scroll, and the family is usually decided
+          /* 82 models is a long scroll, and the family is usually decided
              before the page loads. */
           FAMILIES.map((family) => (
             <a

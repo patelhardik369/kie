@@ -4,16 +4,11 @@ import { TrapList } from '@/components/library/TrapList.tsx'
 import { PageHeader } from '@/components/shell/PageHeader.tsx'
 import { ALL_MODELS, FAMILIES, capabilitiesOf } from '@/lib/kie/registry/index.ts'
 import type { Capability, Family } from '@/lib/kie/registry/types.ts'
+import { FAMILY_LABEL } from '@/lib/models/labels.ts'
 import { assetInputs, searchModels } from '@/lib/models/search.ts'
 import { differentiator, findTraps } from '@/lib/models/traps.ts'
 
 export const metadata = { title: 'Models' }
-
-const FAMILY_LABEL: Record<Family, string> = {
-  kling: 'Kling',
-  bytedance: 'ByteDance',
-  wan: 'Wan',
-}
 
 /**
  * The catalog, browsable.

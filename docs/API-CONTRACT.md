@@ -143,6 +143,34 @@ Two invariants:
 - **Never authoritative** — the poller keeps running. A webhook that arrives first saves a poll; one
   that never arrives changes nothing.
 
+## 7b. Two transports
+
+81 models speak the unified contract above. Veo 3.1 (`veo3`, `veo3_fast`, `veo3_lite`) speaks its
+own, and the registry declares which with `transport` on the `ModelDefinition`.
+
+| | `jobs` (81 models) | `veo` (3 models) |
+|---|---|---|
+| Create | `POST /jobs/createTask` | `POST /veo/generate` |
+| Poll | `GET /jobs/recordInfo` | `GET /veo/record-info` |
+| Body | `{ model, callBackUrl?, input: {…} }` | **flat**, no `input` wrapper |
+| Progress | `state` string | `successFlag`: `0` generating, `1` success, `2` and `3` failed |
+| Result | `resultJson`, a JSON **string** | `data.response.resultUrls`, already an array |
+| Echoed params | `param` | `paramJson` |
+| Failure | `failCode` / `failMsg` | `errorCode` / `errorMessage` |
+
+`lib/kie/veo.ts` normalizes the Veo shape into the same `Task` the rest of the app consumes, and
+re-encodes `resultUrls` into a `resultJson` string so one column holds one shape for all 82 models.
+Auth, the envelope, rate limits, webhook signing, uploads and the expiry rules are unchanged.
+
+Two consequences worth knowing before debugging a Veo job:
+
+- **Polling needs the model slug**, because it selects the endpoint. The runner passes
+  `generation.model_slug` to `getTask`; a Veo task polled without it would hit `/jobs/recordInfo` and
+  come back as `not_found`.
+- **Veo reports no `creditsConsumed`.** The row stores `null` rather than a guess, so a Veo
+  generation shows an unknown cost and contributes nothing to the sampled spend. `costTime` is
+  derived from its `createTime` / `completeTime` pair.
+
 ## 8. Response-shape gotchas
 
 Cost the most time when forgotten:
@@ -158,3 +186,10 @@ Cost the most time when forgotten:
   reading only `resultUrls` silently discards layer names, ordering, and bounding boxes.
 - `GET /chat/credit` returns the balance as a bare integer in `data`, not an object.
 - `POST /common/download-url` likewise returns a bare string in `data`.
+- Veo's `successFlag` schema lists `enum: [0, 1, 2]` while its own description documents **`3` as
+  "Generation Failed"**. Treat anything that is not `0` or `1` as terminal failure — polling a `3`
+  burns the whole timeout budget and then parks a dead job as `stalled`, which means "retrying may
+  still work".
+- Veo's `data.response` also carries `originUrls` (pre-processing renders) and `fullResultUrls`
+  (populated only after `/veo/extend`). Only `resultUrls` is the generation output; downloading
+  either of the others puts the wrong bytes on disk.

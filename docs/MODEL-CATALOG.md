@@ -1,14 +1,17 @@
-# Model catalog — 59 endpoints
+# Model catalog — 82 endpoints
 
 Index only. **Parameter detail lives in `.claude/skills/kie-models/references/`** so there is exactly
 one source of truth; each family section links there.
 
-| Family | Video | Image | Total |
-|---|---|---|---|
-| Kling | 19 | — | 19 |
-| ByteDance (Seedance / Seedream) | 10 | 10 | 20 |
-| Wan | 18 | 2 | 20 |
-| | | | **59** |
+| Family | Video | Image | Audio | Total |
+|---|---|---|---|---|
+| Kling | 19 | — | — | 19 |
+| ByteDance (Seedance / Seedream) | 10 | 10 | — | 20 |
+| Wan | 18 | 2 | — | 20 |
+| Google (Veo / Gemini Omni / Imagen 4 / Nano Banana) | 5 | 8 | 1 | 14 |
+| OpenAI (GPT Image) | — | 4 | — | 4 |
+| Enhance (upscale / background removal) | 2 | 3 | — | 5 |
+| | **54** | **27** | **1** | **82** |
 
 Verify against upstream with `/verify-catalog`. Add one with `/add-model <slug>`.
 
@@ -124,3 +127,98 @@ Lite `high` = 3K, Lite `ultra` = 4K). Slug prefix changes from `bytedance/` to `
 everything else uses `aspect_ratio`; Wan 3.0 uses **uppercase** `720P`; 2.6 has no aspect control at
 all; `wan/2-7-r2v`'s `reference_image` and `reference_video` are arrays despite singular names; the
 Animate models cap source video at **10 MB**.
+
+---
+
+## Google — 14 models
+→ [`references/google.md`](../.claude/skills/kie-models/references/google.md)
+
+### Image — 8
+
+| Model slug | Capability | Pick it for |
+|---|---|---|
+| `google/imagen4` | text-to-image | Imagen 4 baseline, 5000-char prompts, negative prompt |
+| `google/imagen4-fast` | text-to-image | Cheapest Imagen; the only tier with an integer seed |
+| `google/imagen4-ultra` | text-to-image | Imagen top quality |
+| `google/nano-banana` | text-to-image | Nano Banana 1, with a content-filter switch |
+| `google/nano-banana-edit` | image-to-image | Nano Banana 1 editing, up to 10 inputs |
+| `nano-banana-2` | text/image-to-image | 20k prompts, 14 reference images, 15 aspect ratios, 4K |
+| `nano-banana-2-lite` | text/image-to-image | Cheapest NB2; no resolution or format control |
+| `nano-banana-pro` | image-to-image / text-to-image | NB2 quality tier; 8 inputs, 10k prompts |
+
+### Video — 5
+
+| Model slug | Capability | Pick it for |
+|---|---|---|
+| `gemini-omni-video` | text/image/reference/video-to-video | Multimodal video with reusable voices and characters |
+| `google/gemini-omni-flash-1-1` | same | Same, plus first/last frame and a 360p tier |
+| `veo3` | text/image-to-video | Veo 3.1 Quality |
+| `veo3_fast` | text/image/reference-to-video | Veo 3.1 Fast; the only tiers with reference-to-video |
+| `veo3_lite` | same | Cheapest Veo — use it for smoke tests |
+
+### Audio — 1
+
+| Model slug | Capability | Pick it for |
+|---|---|---|
+| `google/gemini-3-1-flash-tts` | text-to-speech | Multi-speaker dialogue, 30 voices, 8 accents |
+
+**Traps:** Prefixes are inconsistent *within the family* — `google/nano-banana` is prefixed,
+`nano-banana-2` is not, and Veo uses underscores. `seed` is a **string** on `google/imagen4` and
+`-ultra` but an **integer** on `-fast`. `output_format` is `jpeg` on Nano Banana 1 and `jpg` on
+Nano Banana 2. Input images are `image_urls` on NB1 and NB2 Lite but `image_input` on NB2 and Pro.
+Gemini Omni `duration` is a quoted string; Veo `duration` is an integer, and Veo writes `Auto`
+capitalized where everything else writes `auto`.
+
+> **Veo is the one model on a different transport.** It POSTs a flat body to `/api/v1/veo/generate`
+> and polls `/api/v1/veo/record-info`. The registry declares this as `transport: 'veo'` and
+> `lib/kie/veo.ts` absorbs it — the job runner, downloader and gallery never learn Veo exists.
+
+**Not models:** `POST /api/v1/omni/audio/create` and `/api/v1/omni/character/create` mint the ids that
+Gemini Omni's `audio_ids` and `character_ids` consume. They are synchronous and return an id, not a
+task, so they belong in the asset library rather than the registry.
+
+---
+
+## OpenAI — 4 image models
+→ [`references/openai.md`](../.claude/skills/kie-models/references/openai.md)
+
+| Model slug | Capability | Pick it for |
+|---|---|---|
+| `gpt-image/1.5-text-to-image` | text-to-image | Small, strict schema; three aspect ratios |
+| `gpt-image/1.5-image-to-image` | image-to-image | 1.5 editing, up to 16 inputs |
+| `gpt-image-2-text-to-image` | text-to-image | 16 aspect ratios, 4K, transparent backgrounds |
+| `gpt-image-2-image-to-image` | image-to-image | GPT Image 2 editing, up to 16 inputs |
+
+**Traps:** GPT Image 1.5 keeps a `gpt-image/` prefix **and** a dot (`1.5`); GPT Image 2 has neither,
+despite living under `market/gpt/`. 1.5 marks three fields required with documented defaults; 2
+documents no default at all. GPT Image 2's resolution tiers are gated on the aspect ratio — `auto` is
+1K-only, `1:1` cannot reach 4K, and transparency needs 1K — which the form enforces by narrowing the
+resolution control rather than rejecting the job afterwards.
+
+Sora is not offered by Kie. The legacy 4o Image API (`/api/v1/gpt4o-image/*`) is a separate
+non-unified endpoint and is deliberately out of scope.
+
+---
+
+## Enhance — 5 models
+→ [`references/enhance.md`](../.claude/skills/kie-models/references/enhance.md)
+
+A **capability family, not a vendor**: every upscaler and background remover lives here whoever built
+it. That is why `grok-imagine/upscale` is in scope while the rest of Grok Imagine is not.
+
+| Model slug | Capability | Pick it for |
+|---|---|---|
+| `topaz/image-upscale` | upscale | 1x/2x/4x on an image, up to 10 MB |
+| `recraft/crisp-upscale` | upscale | One-parameter image upscale; Recraft picks the factor |
+| `recraft/remove-background` | background-removal | Cut-out. Max 5 MB, 256–4096 px per side |
+| `topaz/video-upscale` | upscale | 1x/2x/4x on a video, up to 50 MB |
+| `grok-imagine/upscale` | upscale | Re-render an existing Kie video at 720p/1080p |
+
+**Traps:** the input field is named differently on **every single model** — `image_url` (Topaz image),
+`image` (both Recraft), `video_url` (Topaz video), `task_id` (Grok). `upscale_factor` takes quoted
+strings and is **required** on `topaz/image-upscale` but optional on `topaz/video-upscale`.
+
+`grok-imagine/upscale` takes no asset at all: it re-renders a video Kie still holds, addressed by the
+`taskId` that produced it, so its source cannot come from the asset library and is bounded by Kie's
+14-day retention. The docs do not say which source models are accepted — read a `422` there as "that
+source model is not supported", not as a bad parameter.

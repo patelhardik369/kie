@@ -11,6 +11,16 @@ Smoke-test `$1` end to end. This spends real credits — one generation only, ch
    filled, and every optional quality/duration field set to its cheapest documented value — lowest
    `resolution`, shortest `duration`, audio generation off. If the model requires an input asset, ask
    the user for one rather than inventing a URL.
+
+   Three families need special handling here:
+   - **`enhance`** models take an existing asset, not a prompt. `grok-imagine/upscale` takes a Kie
+     `task_id` rather than a URL — ask the user for a recent successful video generation's task id,
+     and note that Kie only retains it for 14 days.
+   - **`google/gemini-3-1-flash-tts`** has no `prompt` at all; build a one-speaker `speakers` array
+     and a single `dialogue_turns` entry.
+   - **Veo** (`veo3`, `veo3_fast`, `veo3_lite`) uses `transport: 'veo'`. Its request body is flat and
+     it polls `/api/v1/veo/record-info` with a `successFlag`, so this is also the smoke test that
+     proves the adapter in `lib/kie/veo.ts` works. Use `veo3_lite` — it is the cheapest tier.
 3. Submit through the app's own `POST /api/kie/create` route so the proxy, validation, and persistence
    are exercised — not by calling `api.kie.ai` directly. If the app doesn't exist yet, use the
    `kie-ai` MCP server and say that the app path was not covered.

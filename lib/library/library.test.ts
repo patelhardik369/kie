@@ -29,6 +29,8 @@ const { storeUpload, refreshUpload } = await import('../jobs/uploads.ts')
 const {
   createPreset,
   createPrompt,
+  getPreset,
+  updatePreset,
   deletePrompt,
   getSpendSummary,
   listInputAssets,
@@ -322,6 +324,97 @@ describe('a preset saved before a registry change', () => {
     const applied = applyPreset(model, JSON.parse(preset.paramsJson))
     assert.deepEqual(applied.values, {})
     assert.equal(applied.dropped.length, 2)
+  })
+})
+
+/*
+ * "Keep private" is studio metadata, not a model parameter: it never reaches
+ * Kie and only decides where a run shows up. It used to be lost on save — the
+ * form held it in its own state, and `presetableValues` filters everything that
+ * is not in `model.params` — so a preset saved with the box ticked came back
+ * with it clear. It is now its own column.
+ */
+describe('a preset remembers whether its runs start private', () => {
+  it('round-trips the flag through save and load', async () => {
+    const saved = await createPreset({
+      name: 'Private look',
+      modelSlug: model.slug,
+      params: { resolution: '2K' },
+      nsfw: true,
+    })
+    assert.equal(saved.nsfw, true)
+
+    // Read back from the database, not from the object createPreset returned.
+    const loaded = await getPreset(saved.id)
+    assert.equal(loaded?.nsfw, true)
+  })
+
+  it('defaults to public when the flag is not given', async () => {
+    const saved = await createPreset({
+      name: 'Ordinary',
+      modelSlug: model.slug,
+      params: { resolution: '2K' },
+    })
+    assert.equal(saved.nsfw, false)
+    assert.equal((await getPreset(saved.id))?.nsfw, false)
+  })
+
+  it('keeps the flag out of the parameter blob entirely', async () => {
+    const saved = await createPreset({
+      name: 'Private look',
+      modelSlug: model.slug,
+      params: { resolution: '2K' },
+      nsfw: true,
+    })
+
+    // Stored in paramsJson it would be reported as dropped on every load, and
+    // could collide with a real model field — several models declare
+    // `nsfw_checker`, which asks Kie to filter and means something else.
+    const stored = JSON.parse(saved.paramsJson)
+    assert.equal('nsfw' in stored, false)
+    assert.deepEqual(applyPreset(model, stored).dropped, [])
+  })
+
+  it('never confuses the flag with a model`s own nsfw_checker field', async () => {
+    // wan/3-0-video-prime really does declare nsfw_checker. The two must be
+    // independently settable.
+    const prime = requireModel('wan/3-0-video-prime')
+    const saved = await createPreset({
+      name: 'Filtered but public',
+      modelSlug: prime.slug,
+      params: { nsfw_checker: true },
+      nsfw: false,
+    })
+
+    assert.equal(saved.nsfw, false)
+    const applied = applyPreset(prime, JSON.parse(saved.paramsJson))
+    assert.equal(applied.values.nsfw_checker, true)
+    assert.deepEqual(applied.dropped, [])
+  })
+
+  it('can be changed later without touching the parameters', async () => {
+    const saved = await createPreset({
+      name: 'Was public',
+      modelSlug: model.slug,
+      params: { resolution: '2K' },
+    })
+
+    const updated = await updatePreset(saved.id, { nsfw: true })
+    assert.equal(updated?.nsfw, true)
+    assert.equal(updated?.paramsJson, saved.paramsJson)
+  })
+
+  it('leaves the flag alone when a patch does not mention it', async () => {
+    const saved = await createPreset({
+      name: 'Private look',
+      modelSlug: model.slug,
+      params: { resolution: '2K' },
+      nsfw: true,
+    })
+
+    const renamed = await updatePreset(saved.id, { name: 'Renamed' })
+    assert.equal(renamed?.name, 'Renamed')
+    assert.equal(renamed?.nsfw, true)
   })
 })
 

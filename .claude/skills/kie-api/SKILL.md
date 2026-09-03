@@ -1,12 +1,13 @@
 ---
 name: kie-api
-description: The Kie AI unified API contract — base URLs, auth, the single createTask endpoint, the recordInfo polling state machine, the resultJson-is-a-string gotcha, file uploads and their expiry, webhook HMAC verification, credits, rate limits, and error handling. Load this BEFORE writing or editing anything under lib/kie/, app/api/kie/, the job runner, or the output downloader — and whenever debugging a failed generation, a 401/429, a stuck task, or a missing result URL.
+description: The Kie AI API contract — base URLs, auth, the unified createTask endpoint, the recordInfo polling state machine, the resultJson-is-a-string gotcha, the separate Veo transport and its successFlag vocabulary, file uploads and their expiry, webhook HMAC verification, credits, rate limits, and error handling. Load this BEFORE writing or editing anything under lib/kie/, app/api/kie/, the job runner, or the output downloader — and whenever debugging a failed generation, a 401/429, a stuck task, or a missing result URL.
 ---
 
-# Kie AI — Unified API Contract
+# Kie AI — API Contract
 
-Every generation model on Kie — all 59 in this project's scope — goes through **one** endpoint.
-Only the `model` string and the shape of `input` change. There is no per-model route.
+**81 of this project's 82 models go through one endpoint.** Only the `model` string and the shape of
+`input` change; there is no per-model route. Veo is the single exception — it speaks a different
+contract, described in §2b, and `lib/kie/veo.ts` adapts it so nothing above `lib/kie/` can tell.
 
 ## Base URLs
 
@@ -113,6 +114,98 @@ one URL (multi-image models, layer decomposition).
 
 Exponential backoff, not a tight loop. Suggested: 3s, 5s, 8s, 12s, then steady 15s, capped by a
 per-model timeout (images ~5 min, video ~20 min). Video models routinely take minutes.
+
+---
+
+## 2b. The Veo transport — the one model that is not `/jobs/createTask`
+
+Veo 3.1 (`veo3`, `veo3_fast`, `veo3_lite`) predates Kie's unified market API and still speaks its own
+contract. The registry declares this with `transport: 'veo'` on the `ModelDefinition`; every other
+model omits `transport` and gets `'jobs'`.
+
+| Concern | `jobs` (81 models) | `veo` (3 models) |
+|---|---|---|
+| Create | `POST /api/v1/jobs/createTask` | `POST /api/v1/veo/generate` |
+| Poll | `GET /api/v1/jobs/recordInfo?taskId=` | `GET /api/v1/veo/record-info?taskId=` |
+| Request body | `{ model, callBackUrl?, input: { ... } }` | **flat** — `{ model, callBackUrl?, prompt, imageUrls, ... }`, no `input` wrapper |
+| Progress | `state` string | `successFlag` integer |
+| Result | `resultJson`, a JSON-encoded **string** | `data.response.resultUrls`, already an array |
+| Echoed params | `data.param` | `data.paramJson` |
+| Failure detail | `failCode` / `failMsg` | `errorCode` / `errorMessage` |
+
+### Request
+
+The flat body is the part that bites. There is no `input` object, and `imageUrls` is **camelCase** —
+the only camelCase input field anywhere in the catalog.
+
+```json
+POST /api/v1/veo/generate
+{
+  "model": "veo3_fast",
+  "prompt": "A dog playing in a park",
+  "imageUrls": ["https://..."],
+  "generationType": "REFERENCE_2_VIDEO",
+  "aspect_ratio": "16:9",
+  "resolution": "720p",
+  "duration": 8
+}
+```
+
+Note the mixed casing *within one body*: `imageUrls` and `enableTranslation` are camelCase while
+`aspect_ratio` is snake_case. Both spellings are correct. Copy them exactly.
+
+### `successFlag`, not `state`
+
+```
+successFlag: 0  ──▶ still generating   (non-terminal)
+             1  ──▶ success            (terminal — data.response.resultUrls populated)
+             2  ──▶ failed             (terminal)
+             3  ──▶ generation failed   (terminal)
+```
+
+**Both `2` and `3` are terminal failures.** The schema's `enum` lists only `0, 1, 2` while the
+description documents `3` as "Generation Failed" — treat anything that is not `0` or `1` as failed
+rather than polling a finished job forever.
+
+`lib/kie/veo.ts` maps this onto the same `TaskState` union the rest of the app uses: `0` becomes
+`generating`, `1` becomes `success`, everything else becomes `fail`. Veo has no equivalent of
+`waiting` or `queuing`, so those states simply never appear for a Veo job — which is fine, because
+`isTerminal()` is the only thing that reads them.
+
+### Result
+
+`resultUrls` arrives already parsed, so there is no `JSON.parse` step and no `resultJson`-is-a-string
+trap. The adapter re-encodes it into a `resultJson` string anyway, because `generations.result_json_raw`
+stores the raw upstream payload for forensics and a Veo row that stored a different shape would break
+every query that reads it.
+
+`data.response` also carries `originUrls` (pre-processing renders), `fullResultUrls` (populated after
+an extend), and a `resolution` string. Only `resultUrls` feeds the downloader.
+
+### What must NOT learn about Veo
+
+The job runner, the downloader, the gallery, the parameter form, and the webhook route all stay
+ignorant. They call `createTask(model, input)` and `getTask(taskId)`; the dispatch on
+`model.transport` happens inside `lib/kie/tasks.ts` and nowhere else. A `model.transport` check
+outside `lib/kie/` means the adapter is leaking — fix the adapter, not the caller.
+
+Polling a Veo `taskId` needs the model slug to route the request, so the runner passes the
+generation's `model_slug` through to `getTask`. That is the only visible seam, and it is a lookup, not
+a branch.
+
+### Companion endpoints
+
+`GET /api/v1/veo/get-1080p-video`, `GET /api/v1/veo/get-4k-video`, and `POST /api/v1/veo/extend` act
+on a finished Veo task. They are **not** models and are not in the registry — if they get built they
+belong beside the gallery's other per-generation actions.
+
+### Everything else stays the same
+
+Auth, the `Bearer` header, the envelope (`{ code, msg, data }`), HTTP-200-with-an-error-code, the
+rate limit, webhook signing, upload hosts, and the 14-day / 24-hour expiry rules are all identical.
+Only the two endpoints above differ.
+
+---
 
 ## 3. Credits
 

@@ -73,6 +73,7 @@ function typeOk(param: ParamDef, value: unknown): boolean {
     case 'boolean':
       return typeof value === 'boolean'
     case 'url[]':
+    case 'string[]':
       return Array.isArray(value) && value.every((v) => typeof v === 'string')
     // `{ hex, ratio }`, both required — a bare hex string is what Kie rejects.
     case 'color[]':
@@ -204,13 +205,14 @@ function checkParam(
      * reaching here means a re-run, a preset, or a hand-written payload — and
      * `""` reaches Kie as an unfetchable image rather than as an omission.
      */
-    if (param.type === 'url[]') {
+    if (param.type === 'url[]' || param.type === 'string[]') {
+      const what = param.type === 'url[]' ? 'a URL' : 'a value'
       value.forEach((entry, index) => {
         if (typeof entry === 'string' && entry.trim().length === 0) {
           issues.push({
             key: `${key}[${index}]`,
             code: 'required',
-            message: `${param.label} item ${index + 1} is empty — give it a URL or remove it.`,
+            message: `${param.label} item ${index + 1} is empty — give it ${what} or remove it.`,
           })
         }
       })
@@ -281,6 +283,7 @@ function describeType(param: ParamDef): string {
     case 'boolean':
       return 'true or false'
     case 'url[]':
+    case 'string[]':
       return 'an array of strings'
     case 'color[]':
       return 'an array of { hex: "#RRGGBB", ratio: "12.34%" } objects'
@@ -370,6 +373,21 @@ function checkConstraint(
         for (const key of constraint.keys) {
           const value = input[key]
           if (typeof value === 'number' && value > constraint.max) {
+            issues.push({ key, code: 'constraint', message: constraint.message })
+          }
+        }
+      }
+      break
+    }
+    case 'allowedValuesWhen': {
+      if (whenHolds(constraint.when, input, params)) {
+        for (const key of constraint.keys) {
+          // Resolved, not raw: GPT Image 2 restricts `resolution` while
+          // `aspect_ratio` is `auto`, and a documented default the user never
+          // touched is still the value the API will act on.
+          const value = resolved(input, key, params)
+          if (!isPresent(value)) continue
+          if (!constraint.values.includes(value as string | number)) {
             issues.push({ key, code: 'constraint', message: constraint.message })
           }
         }

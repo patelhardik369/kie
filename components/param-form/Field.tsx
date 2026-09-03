@@ -10,6 +10,7 @@ import {
   NumberControl,
   SeedControl,
   StringControl,
+  StringListControl,
   TextControl,
   UrlControl,
   UrlListControl,
@@ -25,7 +26,7 @@ import {
  */
 
 export interface FieldProps extends ControlProps {
-  /** Explanation shown when a constraint disabled this control. */
+  /** Why a constraint is currently disabling or narrowing this control. */
   reason?: string
   /** Required in the current state, which can differ from param.required. */
   required?: boolean
@@ -57,6 +58,8 @@ function Control(props: ControlProps) {
       return <UrlControl {...props} />
     case 'url[]':
       return <UrlListControl {...props} />
+    case 'string[]':
+      return <StringListControl {...props} />
     case 'color[]':
       return <ColorListControl {...props} />
     case 'bbox[][]':
@@ -83,6 +86,17 @@ export function Field({ reason, required, errors, studioDefault, ...rest }: Fiel
               *
             </span>
           )}
+          {/* Superseded fields stay reachable — the promise is every parameter —
+              but they are labelled, so nobody sets one expecting it to win over
+              its replacement. */}
+          {param.deprecated && (
+            <span
+              className="ml-1.5 rounded border border-(--color-border) px-1 py-px align-middle text-[10px] font-normal tracking-wide text-(--color-ink-faint) uppercase"
+              title="The model's docs mark this parameter as superseded."
+            >
+              deprecated
+            </span>
+          )}
         </label>
         <code className="mono shrink-0 text-(--color-ink-faint)">{param.key}</code>
       </div>
@@ -103,9 +117,10 @@ export function Field({ reason, required, errors, studioDefault, ...rest }: Fiel
         )}
       </p>
 
-      {disabled && reason && (
-        <p className="note mt-2 py-1 text-[11px]">{reason}</p>
-      )}
+      {/* Not gated on `disabled`: a constraint that narrows an enum leaves the
+          control usable but silently removes choices, which is exactly when the
+          reason is most worth showing. */}
+      {reason && <p className="note mt-2 py-1 text-[11px]">{reason}</p>}
 
       {errors?.map((error) => (
         <p key={error} className="mt-1.5 text-[11px] text-(--color-bad-ink)">

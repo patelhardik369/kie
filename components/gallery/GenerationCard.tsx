@@ -13,6 +13,7 @@ import {
   stateLabel,
   stateTone,
 } from '@/lib/gallery/display.ts'
+import { getModel } from '@/lib/kie/registry/index.ts'
 
 /**
  * One tile in the gallery grid.
@@ -289,6 +290,23 @@ function Preview({ asset }: { asset: CardAsset }) {
   )
 }
 
+/**
+ * The icon standing in for a generation whose bytes are not on disk yet.
+ *
+ * Falls back to the film reel for a slug the registry no longer knows: an old
+ * row from a retired model still deserves a tile, and video is the majority.
+ */
+function OutputIcon({ slug }: { slug: string }) {
+  switch (getModel(slug)?.outputKind) {
+    case 'image':
+      return <ImageIcon size={20} />
+    case 'audio':
+      return <Wave size={20} />
+    default:
+      return <Film size={20} />
+  }
+}
+
 /** What a tile shows before there are bytes — or when there never will be. */
 function Placeholder({ generation }: { generation: CardGeneration }) {
   const running = isInFlight(generation.state)
@@ -305,13 +323,13 @@ function Placeholder({ generation }: { generation: CardGeneration }) {
               : 'text-(--color-ink-faint)'
         }
       >
-        {failed ? (
-          <Alert size={20} />
-        ) : generation.family === 'bytedance' ? (
-          <ImageIcon size={20} />
-        ) : (
-          <Film size={20} />
-        )}
+        {/*
+          Keyed off the model's declared outputKind, not its family. Family was a
+          usable proxy while ByteDance was the only one shipping image models;
+          Google, OpenAI and Enhance all mix output kinds, so the proxy would now
+          show a film reel over a still image.
+        */}
+        {failed ? <Alert size={20} /> : <OutputIcon slug={generation.modelSlug} />}
       </span>
       <span className="text-[11px] text-(--color-ink-faint)">
         {stateLabel(generation.state)}

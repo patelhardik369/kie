@@ -9,7 +9,19 @@
  * special-casing the UI. See .claude/skills/kie-models/SKILL.md.
  */
 
-export const FAMILIES = ['kling', 'bytedance', 'wan'] as const
+/**
+ * `enhance` is a CAPABILITY family, not a vendor: every upscaler and background
+ * remover lives there whoever built it. That is why `grok-imagine/upscale` is in
+ * scope while the rest of Grok Imagine is not.
+ */
+export const FAMILIES = [
+  'kling',
+  'bytedance',
+  'wan',
+  'google',
+  'openai',
+  'enhance',
+] as const
 export type Family = (typeof FAMILIES)[number]
 
 export const CAPABILITIES = [
@@ -23,8 +35,26 @@ export const CAPABILITIES = [
   'text-to-image',
   'image-to-image',
   'layer-decomposition',
+  'text-to-speech',
+  /** Resolution increase on an asset you already have. */
+  'upscale',
+  'background-removal',
 ] as const
 export type Capability = (typeof CAPABILITIES)[number]
+
+/**
+ * Which HTTP contract a model speaks.
+ *
+ * `jobs` is the unified `POST /jobs/createTask` + `GET /jobs/recordInfo` pair
+ * that 81 of the 82 models use. `veo` is Veo 3.1, which predates it: a FLAT
+ * request body to `/veo/generate` and a numeric `successFlag` from
+ * `/veo/record-info` instead of a `state` string.
+ *
+ * `lib/kie/veo.ts` adapts both directions so callers still see one `Task`.
+ * Nothing above `lib/kie/` may branch on this — see .claude/CLAUDE.md §7.
+ */
+export const TRANSPORTS = ['jobs', 'veo'] as const
+export type Transport = (typeof TRANSPORTS)[number]
 
 export type ParamType =
   /** Multiline free text — prompt, negative_prompt. */
@@ -40,6 +70,16 @@ export type ParamType =
   | 'url'
   /** Ordered list of asset URLs. */
   | 'url[]'
+  /**
+   * Ordered list of opaque strings — Gemini Omni's `audio_ids` and
+   * `character_ids`.
+   *
+   * Deliberately NOT `url[]`. These are ids minted by
+   * `POST /api/v1/omni/{audio,character}/create`, two synchronous endpoints that
+   * are not models and are not in the registry. Typing them as URLs would offer
+   * an upload button that cannot produce a valid value.
+   */
+  | 'string[]'
   /** Integer with a randomize affordance. */
   | 'seed'
   /** Repeating group — multi_prompt, kling_elements, elements. */
@@ -91,6 +131,16 @@ export interface ParamDef {
   accept?: AssetKind[]
   /** For `object[]`. */
   fields?: ParamDef[]
+  /**
+   * The doc marks this field superseded.
+   *
+   * It stays in the registry and stays reachable — the product promise is every
+   * parameter, and a model's own docs are the only authority on which ones
+   * exist. The control renders it with the label the doc gives it so the user
+   * can tell it apart from its replacement, rather than discovering by 422 that
+   * `image_size` and `aspect_ratio` are the same knob.
+   */
+  deprecated?: boolean
   /**
    * For `bbox[][]`: the key of the `url[]` parameter whose images this
    * annotates.
@@ -169,6 +219,22 @@ export type Constraint =
       max: number
       message: string
     }
+  | {
+      /**
+       * `keys` are narrowed to `values` while `when` holds — GPT Image 2's
+       * `resolution`, which drops to 1K-only once `aspect_ratio` is `auto`.
+       *
+       * Narrowing rather than disabling is the point. Disabling `resolution`
+       * outright would hide the tier that is still legal, and leaving it alone
+       * ships a request the API refuses to even create. `values` must be a
+       * subset of the parameter's own `enum`.
+       */
+      kind: 'allowedValuesWhen'
+      keys: string[]
+      when: ConstraintWhen
+      values: Array<string | number>
+      message: string
+    }
 
 export interface ModelDefinition {
   /** Exact API value for `model`. Copied character-for-character. */
@@ -182,6 +248,8 @@ export interface ModelDefinition {
   /** The docs.kie.ai page this was transcribed from. */
   docUrl: string
   outputKind: 'video' | 'image' | 'audio' | 'object'
+  /** Omit for `'jobs'`, the unified endpoint 81 of the 82 models use. */
+  transport?: Transport
   params: ParamDef[]
   constraints?: Constraint[]
   /** Cost hints, quirks, and anything the doc left ambiguous. */
@@ -193,6 +261,22 @@ const DOC_BASE = 'https://docs.kie.ai/market'
 /** Builds a doc URL from its page path, e.g. `kling/v2-1-standard`. */
 export function docUrl(page: string): string {
   return `${DOC_BASE}/${page}.md`
+}
+
+/**
+ * A doc URL outside `/market`, for a model on a legacy API.
+ *
+ * Only Veo needs this: it predates the market catalog and is documented under
+ * `veo3-api/`. Kept separate from `docUrl` so "not under /market" stays a
+ * conscious choice at the call site rather than a string anyone can pass in.
+ */
+export function legacyDocUrl(page: string): string {
+  return `https://docs.kie.ai/${page}.md`
+}
+
+/** The transport a model speaks, defaulting to the unified endpoint. */
+export function transportOf(model: ModelDefinition): Transport {
+  return model.transport ?? 'jobs'
 }
 
 /** Every capability a model can serve. */

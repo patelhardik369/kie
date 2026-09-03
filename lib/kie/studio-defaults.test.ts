@@ -11,7 +11,7 @@ import { validateInput } from './validate.ts'
  * Two things are worth pinning. The obvious one is that the preferences apply.
  * The one that would actually cost money is the second: a preference must never
  * put a value into a form that the model would reject, so the sweep at the
- * bottom checks every opening value of all 59 models against the registry's own
+ * bottom checks every opening value of all 82 models against the registry's own
  * validator.
  */
 

@@ -118,14 +118,43 @@ describe('enum traps', () => {
 describe('naming traps', () => {
   it('says nothing when only one spelling is in use', () => {
     // One spelling is not a trap; it is just the name.
-    const onlyAspectRatio = ALL_MODELS.filter((m) =>
-      m.params.some((p) => p.key === 'aspect_ratio'),
+    //
+    // "declares aspect_ratio" is NOT the same set as "declares only
+    // aspect_ratio": google/nano-banana declares its deprecated `image_size`
+    // alongside it, which is a genuine trap and would be reported here.
+    const siblings = ['ratio', 'image_size']
+    const onlyAspectRatio = ALL_MODELS.filter(
+      (m) =>
+        m.params.some((p) => p.key === 'aspect_ratio') &&
+        !m.params.some((p) => siblings.includes(p.key)),
     )
     const found = findTraps(onlyAspectRatio).filter((t) => t.kind === 'naming')
     assert.equal(
       found.some((t) => t.title.includes('ratio`')),
       false,
     )
+  })
+
+  it('reports a model that declares two spellings of the same idea itself', () => {
+    // The deprecated field stays in the registry, so the browser has to say
+    // that setting it and aspect_ratio means setting the same knob twice.
+    const found = findTraps(ALL_MODELS).filter(
+      (t) => t.kind === 'naming' && t.title.includes('image_size'),
+    )
+    assert.equal(found.length, 1)
+    assert.ok(found[0]!.models.includes('google/nano-banana'))
+  })
+
+  it('reports the six spellings of "the image to work from"', () => {
+    const found = findTraps(ALL_MODELS).filter(
+      (t) => t.kind === 'naming' && t.title.includes('image_input'),
+    )
+    assert.equal(found.length, 1)
+    // Recraft vs Topaz, and Nano Banana 2 vs 2 Lite, are each one character
+    // away from a 422.
+    for (const key of ['image', 'image_url', 'image_urls', 'input_urls', 'imageUrls']) {
+      assert.ok(found[0]!.title.includes(key), key)
+    }
   })
 })
 

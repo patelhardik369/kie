@@ -107,7 +107,7 @@ export function assetHref(localPath: string, token?: string): string {
 export function promptOf(input: unknown): string | undefined {
   if (!input || typeof input !== 'object') return undefined
   const record = input as Record<string, unknown>
-  // `prompt` covers all 59 models in scope; the fallbacks are cheap insurance
+  // `prompt` covers all 82 models in scope; the fallbacks are cheap insurance
   // against a future one that names it differently.
   for (const key of ['prompt', 'text', 'description']) {
     const value = record[key]

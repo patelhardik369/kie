@@ -168,6 +168,8 @@ async function main() {
 
   const startedAt = Date.now()
   const task = await waitForTask(taskId, {
+    // Selects the polling transport — Veo answers on /veo/record-info.
+    model: model.slug,
     timeoutMs: model.outputKind === 'video' ? 20 * 60_000 : 5 * 60_000,
     onPoll: (t, attempt) => {
       const elapsed = ((Date.now() - startedAt) / 1000).toFixed(0)

@@ -317,7 +317,10 @@ export class JobRunner {
 
     for (;;) {
       try {
-        const task = await getTask(taskId)
+        // The slug rides along because it selects the polling transport — Veo
+        // answers on a different endpoint. This is a lookup, not a branch: the
+        // runner still has no idea which transport it got.
+        const task = await getTask(taskId, undefined, generation.modelSlug)
         consecutiveErrors = 0
         attempt += 1
 

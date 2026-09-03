@@ -5,15 +5,16 @@ import type { ModelDefinition, ParamDef } from '../kie/registry/types.ts'
  *
  * Pure module — reads the registry, computes, returns. No env, no DB.
  *
- * WHY THIS EXISTS: 59 models across three families share parameter names but
- * not parameter meanings. `duration` is a string on most Kling models and an
- * integer on Kling Omni. Wan 2.7 text-to-video calls its framing parameter
- * `ratio` while everything else calls it `aspect_ratio`. Each of these costs an
+ * WHY THIS EXISTS: 82 models across six families share parameter names but not
+ * parameter meanings. `duration` is a string on most Kling models and an integer
+ * on Kling Omni. Wan 2.7 text-to-video calls its framing parameter `ratio` while
+ * everything else calls it `aspect_ratio`. `google/imagen4` types `seed` as a
+ * string and `google/imagen4-fast` types it as a number. Each of these costs an
  * hour and a `422` the first time, and the reference tables record them — but
  * only if you already know to look.
  *
  * Almost everything here is **derived from the registry**, not curated, which
- * means it cannot go stale: adding the 60th model surfaces its inconsistencies
+ * means it cannot go stale: adding the 83rd model surfaces its inconsistencies
  * automatically. The one curated part is `SYNONYM_GROUPS`, and even that only
  * reports keys that genuinely exist in the registry.
  */
@@ -38,8 +39,16 @@ export interface Trap {
  * actually present in the registry are ever reported.
  */
 const SYNONYM_GROUPS: string[][] = [
-  ['aspect_ratio', 'ratio'],
-  ['image_url', 'image_urls'],
+  /** `image_size` is Nano Banana 1's superseded spelling of `aspect_ratio`. */
+  ['aspect_ratio', 'ratio', 'image_size'],
+  /*
+   * "The image(s) to work from" is spelled six ways across the catalog:
+   * `image` (Recraft), `image_url` (Topaz), `image_urls` (Nano Banana 1 and 2
+   * Lite), `image_input` (Nano Banana 2 and Pro), `input_urls` (GPT Image, Wan)
+   * and `imageUrls` (Veo, the only camelCase field anywhere). Recraft vs Topaz
+   * and Nano Banana 2 vs 2 Lite are both one-character mistakes away from a 422.
+   */
+  ['image', 'image_url', 'image_urls', 'image_input', 'input_urls', 'imageUrls'],
   ['negative_prompt', 'negativePrompt'],
   ['duration', 'duration_seconds'],
 ]
@@ -67,7 +76,10 @@ function wireType(param: ParamDef): string {
     case 'string':
     case 'url':
       return 'string'
+    // Both are a flat array of strings on the wire; the difference between them
+    // is only whether the value is uploadable, which is a UI concern.
     case 'url[]':
+    case 'string[]':
       return 'string[]'
     case 'color[]':
       return '{ hex, ratio }[]'

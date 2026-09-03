@@ -45,6 +45,8 @@ export async function createPreset(input: {
   name: string
   modelSlug: string
   params: Record<string, unknown>
+  /** Whether runs from this preset start marked private. */
+  nsfw?: boolean
 }): Promise<Preset> {
   const now = Date.now()
   const row = {
@@ -54,6 +56,7 @@ export async function createPreset(input: {
     // parameters mean different things, when they exist at all.
     modelSlug: input.modelSlug,
     paramsJson: JSON.stringify(input.params),
+    nsfw: input.nsfw === true,
     createdAt: now,
     updatedAt: now,
   }
@@ -63,11 +66,12 @@ export async function createPreset(input: {
 
 export async function updatePreset(
   id: string,
-  patch: { name?: string; params?: Record<string, unknown> },
+  patch: { name?: string; params?: Record<string, unknown>; nsfw?: boolean },
 ): Promise<Preset | undefined> {
   const values: Record<string, unknown> = { updatedAt: Date.now() }
   if (patch.name !== undefined) values.name = patch.name
   if (patch.params !== undefined) values.paramsJson = JSON.stringify(patch.params)
+  if (patch.nsfw !== undefined) values.nsfw = patch.nsfw
 
   const rows = await getDb()
     .update(presets)

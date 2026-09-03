@@ -1,5 +1,8 @@
 import { BYTEDANCE_MODELS } from './bytedance.ts'
+import { ENHANCE_MODELS } from './enhance.ts'
+import { GOOGLE_MODELS } from './google.ts'
 import { KLING_MODELS } from './kling.ts'
+import { OPENAI_MODELS } from './openai.ts'
 import {
   capabilitiesOf,
   type Capability,
@@ -10,14 +13,31 @@ import { WAN_MODELS } from './wan.ts'
 
 export * from './types.ts'
 
-/** All 59 in-scope models: 19 Kling + 20 ByteDance + 20 Wan. */
+/**
+ * All 82 in-scope models: 19 Kling + 20 ByteDance + 20 Wan + 14 Google +
+ * 4 OpenAI + 5 Enhance.
+ *
+ * Order is browse order, not alphabetical: the three original video families
+ * first, then the newer generative families, then Enhance — which is the only
+ * family you reach with an asset already in hand rather than a prompt.
+ */
 export const ALL_MODELS: ModelDefinition[] = [
   ...KLING_MODELS,
   ...BYTEDANCE_MODELS,
   ...WAN_MODELS,
+  ...GOOGLE_MODELS,
+  ...OPENAI_MODELS,
+  ...ENHANCE_MODELS,
 ]
 
-export { BYTEDANCE_MODELS, KLING_MODELS, WAN_MODELS }
+export {
+  BYTEDANCE_MODELS,
+  ENHANCE_MODELS,
+  GOOGLE_MODELS,
+  KLING_MODELS,
+  OPENAI_MODELS,
+  WAN_MODELS,
+}
 
 const BY_SLUG = new Map(ALL_MODELS.map((m) => [m.slug, m]))
 

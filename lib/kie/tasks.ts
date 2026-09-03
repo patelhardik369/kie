@@ -8,7 +8,9 @@ import {
   pollDelayMs,
   type TaskState,
 } from './polling.ts'
+import { getModel } from './registry/index.ts'
 import { parseResultJson, type ParsedResult } from './result.ts'
+import { createVeoTask, getVeoRecord } from './veo.ts'
 
 // Poll policy lives in polling.ts (pure, testable, reusable by the job runner).
 export {
@@ -68,6 +70,13 @@ export interface CreateTaskParams {
 export async function createTask(params: CreateTaskParams): Promise<string> {
   const { model, input, callBackUrl, signal } = params
 
+  // The ONE place the two transports diverge on submission. Everything above
+  // this line — the runner, the routes, the smoke script — passes a slug and an
+  // input and never learns which contract answered.
+  if (transportFor(model) === 'veo') {
+    return createVeoTask({ model, input, callBackUrl, signal })
+  }
+
   const data = await kieRequest<{ taskId?: string }>('/jobs/createTask', {
     method: 'POST',
     body: { model, input, ...(callBackUrl ? { callBackUrl } : {}) },
@@ -97,11 +106,35 @@ export async function createTask(params: CreateTaskParams): Promise<string> {
  */
 const NO_SUCH_TASK = /recordinfo is null/i
 
-/** Fetches a task and parses its `resultJson`. */
+/**
+ * The transport a slug speaks, defaulting to the unified endpoint.
+ *
+ * An unknown slug falls back to `jobs` rather than throwing: a generation row
+ * whose model was renamed upstream must still be pollable, and `/jobs/recordInfo`
+ * is the right guess for 81 of 82 models.
+ */
+function transportFor(modelSlug: string): 'jobs' | 'veo' {
+  return getModel(modelSlug)?.transport ?? 'jobs'
+}
+
+/**
+ * Fetches a task and parses its `resultJson`.
+ *
+ * `modelSlug` is optional only because a caller that already knows the task is a
+ * `jobs` one should not be forced to look it up. Pass it whenever you have it —
+ * without it a Veo task would be polled against the wrong endpoint. The job
+ * runner always has it: it is a column on the row it is polling.
+ */
 export async function getTask(
   taskId: string,
   signal?: AbortSignal,
+  modelSlug?: string,
 ): Promise<Task> {
+  if (modelSlug && transportFor(modelSlug) === 'veo') {
+    const record = await getVeoRecord(taskId, modelSlug, signal)
+    return { ...record, result: parseResultJson(record.resultJson) }
+  }
+
   let record: TaskRecord
   try {
     record = await kieRequest<TaskRecord>('/jobs/recordInfo', {
@@ -151,6 +184,8 @@ export interface WaitOptions {
   signal?: AbortSignal
   /** Called after each poll, for progress display. */
   onPoll?: (task: Task, attempt: number) => void
+  /** Required for a Veo task — it selects the polling endpoint. */
+  model?: string
 }
 
 /**
@@ -167,11 +202,11 @@ export async function waitForTask(
   taskId: string,
   options: WaitOptions = {},
 ): Promise<Task> {
-  const { timeoutMs = POLL_TIMEOUT_MS.video, signal, onPoll } = options
+  const { timeoutMs = POLL_TIMEOUT_MS.video, signal, onPoll, model } = options
   const startedAt = Date.now()
 
   for (let attempt = 0; ; attempt++) {
-    const task = await getTask(taskId, signal)
+    const task = await getTask(taskId, signal, model)
     onPoll?.(task, attempt)
 
     if (isTerminal(task.state)) return task

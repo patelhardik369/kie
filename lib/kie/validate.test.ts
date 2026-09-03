@@ -551,3 +551,205 @@ describe('every model accepts a minimal valid payload', () => {
     assert.equal(validateInput(model, { prompt: PROMPT }).ok, true)
   })
 })
+
+const gptImage2 = requireModel('gpt-image-2-text-to-image')
+const omniVideo = requireModel('gemini-omni-video')
+const topazImage = requireModel('topaz/image-upscale')
+const imagen4 = requireModel('google/imagen4')
+const imagen4Fast = requireModel('google/imagen4-fast')
+const tts = requireModel('google/gemini-3-1-flash-tts')
+
+describe('string[] parameters', () => {
+  it('accepts a list of opaque ids', () => {
+    const result = validateInput(omniVideo, {
+      prompt: PROMPT,
+      duration: '8',
+      audio_ids: ['audio_01hx8p0demo', 'audio_02'],
+    })
+    assert.equal(result.ok, true, messages(result))
+  })
+
+  it('rejects a bare string where a list is expected', () => {
+    const result = validateInput(omniVideo, {
+      prompt: PROMPT,
+      duration: '8',
+      audio_ids: 'audio_01hx8p0demo',
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /array of strings/)
+  })
+
+  it('rejects a blank row rather than sending an unresolvable id', () => {
+    const result = validateInput(omniVideo, {
+      prompt: PROMPT,
+      duration: '8',
+      character_ids: ['character_1', '  '],
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /item 2 is empty/)
+  })
+
+  it('enforces the documented item ceiling', () => {
+    const result = validateInput(omniVideo, {
+      prompt: PROMPT,
+      duration: '8',
+      audio_ids: ['a', 'b', 'c', 'd'],
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /at most 3/)
+  })
+})
+
+describe('allowedValuesWhen at submit time', () => {
+  it('rejects 4K on a square GPT Image 2 render', () => {
+    const result = validateInput(gptImage2, {
+      prompt: PROMPT,
+      aspect_ratio: '1:1',
+      resolution: '4K',
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /cannot be rendered at 4K/)
+  })
+
+  it('accepts 2K on the same square render', () => {
+    const result = validateInput(gptImage2, {
+      prompt: PROMPT,
+      aspect_ratio: '1:1',
+      resolution: '2K',
+    })
+    assert.equal(result.ok, true, messages(result))
+  })
+
+  it('rejects anything but 1K when the ratio is auto', () => {
+    const result = validateInput(gptImage2, {
+      prompt: PROMPT,
+      aspect_ratio: 'auto',
+      resolution: '2K',
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /1K only/)
+  })
+
+  it('says nothing when the gated field was never set', () => {
+    // No resolution means Kie picks — there is nothing to complain about.
+    const result = validateInput(gptImage2, { prompt: PROMPT, aspect_ratio: 'auto' })
+    assert.equal(result.ok, true, messages(result))
+  })
+
+  it('rejects transparency above 1K', () => {
+    const result = validateInput(gptImage2, {
+      prompt: PROMPT,
+      resolution: '4K',
+      aspect_ratio: '16:9',
+      background: 'transparent',
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /1K only/)
+  })
+})
+
+describe('sibling models that disagree about a field`s type', () => {
+  it('accepts a string seed on Imagen 4 and rejects a number', () => {
+    assert.equal(validateInput(imagen4, { prompt: PROMPT, seed: '12345' }).ok, true)
+    const wrong = validateInput(imagen4, { prompt: PROMPT, seed: 12345 })
+    assert.equal(wrong.ok, false)
+    assert.match(messages(wrong), /must be a string/)
+  })
+
+  it('accepts a number seed on Imagen 4 Fast and rejects a string', () => {
+    assert.equal(validateInput(imagen4Fast, { prompt: PROMPT, seed: 12345 }).ok, true)
+    assert.equal(validateInput(imagen4Fast, { prompt: PROMPT, seed: '12345' }).ok, false)
+  })
+})
+
+describe('enhance models', () => {
+  it('requires the Topaz upscale factor, unlike its video sibling', () => {
+    const image = validateInput(topazImage, { image_url: 'https://x/a.png' })
+    // A documented default satisfies a required field — the request builder
+    // fills it in at the boundary.
+    assert.equal(image.ok, true, messages(image))
+
+    const bad = validateInput(topazImage, {
+      image_url: 'https://x/a.png',
+      upscale_factor: 2,
+    })
+    assert.equal(bad.ok, false)
+    // Quoted strings, not numbers.
+    assert.match(messages(bad), /must be one of "1", "2", "4"/)
+  })
+
+  it('rejects the wrong input field name between Topaz and Recraft', () => {
+    const result = validateInput(topazImage, { image: 'https://x/a.png' })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /has no parameter "image"/)
+  })
+
+  it('takes a task id, not a URL, on the Grok upscaler', () => {
+    const grok = requireModel('grok-imagine/upscale')
+    const result = validateInput(grok, { task_id: 'task_grok_12345678' })
+    assert.equal(result.ok, true, messages(result))
+  })
+})
+
+describe('Gemini TTS nested groups', () => {
+  it('accepts a minimal one-speaker script', () => {
+    const result = validateInput(tts, {
+      speakers: [{ speaker_id: 'Speaker 1', voice_name: 'Kore', accent: 'Neutral' }],
+      dialogue_turns: [{ speaker_id: 'Speaker 1', text: 'Hello there.' }],
+    })
+    assert.equal(result.ok, true, messages(result))
+  })
+
+  it('reports a missing required field inside a row, by row number', () => {
+    const result = validateInput(tts, {
+      speakers: [{ speaker_id: 'Speaker 1', voice_name: 'Kore' }],
+      dialogue_turns: [{ speaker_id: 'Speaker 1', text: 'Hello there.' }],
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /item 1: Accent is required/)
+  })
+
+  it('rejects a lowercase voice name', () => {
+    // The omni-audio endpoint spells the same names lowercase; TTS does not.
+    const result = validateInput(tts, {
+      speakers: [{ speaker_id: 'Speaker 1', voice_name: 'kore', accent: 'Neutral' }],
+      dialogue_turns: [{ speaker_id: 'Speaker 1', text: 'Hello there.' }],
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /Voice must be one of/)
+  })
+
+  it('validates the Gemini Omni video_list row shape', () => {
+    const result = validateInput(omniVideo, {
+      prompt: PROMPT,
+      duration: '8',
+      video_list: [{ url: 'https://x/a.mp4', start: 0 }],
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /item 1: End is required/)
+  })
+})
+
+describe('GPT Image 2 treats an omitted aspect ratio as its own case', () => {
+  it('rejects 2K when no aspect ratio was chosen at all', () => {
+    // The doc restricts "auto OR without a specified aspect ratio parameter",
+    // and this model documents no default — so an unset ratio is not `auto`.
+    const result = validateInput(gptImage2, { prompt: PROMPT, resolution: '2K' })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /no aspect ratio chosen/)
+  })
+
+  it('accepts 1K with no aspect ratio', () => {
+    const result = validateInput(gptImage2, { prompt: PROMPT, resolution: '1K' })
+    assert.equal(result.ok, true, messages(result))
+  })
+
+  it('stops restricting once a real ratio is chosen', () => {
+    const result = validateInput(gptImage2, {
+      prompt: PROMPT,
+      aspect_ratio: '16:9',
+      resolution: '4K',
+    })
+    assert.equal(result.ok, true, messages(result))
+  })
+})

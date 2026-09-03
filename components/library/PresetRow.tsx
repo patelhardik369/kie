@@ -23,6 +23,7 @@ export function PresetRow({
   applicable,
   droppedCount,
   droppedMessages,
+  nsfw,
 }: {
   id: string
   name: string
@@ -32,6 +33,8 @@ export function PresetRow({
   applicable: boolean
   droppedCount: number
   droppedMessages: string[]
+  /** Runs from this preset start marked private. */
+  nsfw: boolean
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -49,7 +52,19 @@ export function PresetRow({
   return (
     <li className="px-4 py-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <span className="text-sm font-medium">{name}</span>
+        <span className="text-sm font-medium">
+          {name}
+          {/* The one saved setting that is not a parameter, so it would not
+              otherwise appear in the summary line below. */}
+          {nsfw && (
+            <span
+              className="chip chip-private ml-2"
+              title="Runs from this preset start marked private — kept out of Recent and the gallery grid."
+            >
+              private
+            </span>
+          )}
+        </span>
         <span className="font-mono text-[11px] text-(--color-ink-muted)">
           {formatTimestamp(updatedAt)}
         </span>

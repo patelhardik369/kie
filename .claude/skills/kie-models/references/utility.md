@@ -6,14 +6,22 @@ Everything that isn't a generation model. Same `Authorization: Bearer $KIE_API_K
 |---|---|---|
 | Create a task | `POST /api/v1/jobs/createTask` | `api.kie.ai` |
 | Poll a task | `GET /api/v1/jobs/recordInfo?taskId=` | `api.kie.ai` |
+| Create a **Veo** task | `POST /api/v1/veo/generate` | `api.kie.ai` |
+| Poll a **Veo** task | `GET /api/v1/veo/record-info?taskId=` | `api.kie.ai` |
 | Remaining credits | `GET /api/v1/chat/credit` | `api.kie.ai` |
 | Fresh download link | `POST /api/v1/common/download-url` | `api.kie.ai` |
 | Upload (base64) | `POST /api/file-base64-upload` | `kieai.redpandaai.co` |
 | Upload (stream) | `POST /api/file-stream-upload` | `kieai.redpandaai.co` |
 | Upload (from URL) | `POST /api/file-url-upload` | `kieai.redpandaai.co` |
 
-Full lifecycle semantics — task states, `resultJson` parsing, retry policy — live in the `kie-api`
-skill. This file is the parameter reference.
+Full lifecycle semantics — task states, `resultJson` parsing, retry policy, and the two transports —
+live in the `kie-api` skill. This file is the parameter reference.
+
+**The Veo pair above is a second transport, not a utility.** Its request body is flat (no `input`
+wrapper) and it reports a numeric `successFlag` instead of a `state` string. Models declare it with
+`transport: 'veo'`; `lib/kie/veo.ts` adapts both directions. Three more Veo endpoints —
+`GET /api/v1/veo/get-1080p-video`, `GET /api/v1/veo/get-4k-video`, `POST /api/v1/veo/extend` — act on
+a finished task and are not wired up.
 
 ---
 

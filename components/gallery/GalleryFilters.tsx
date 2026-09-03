@@ -15,6 +15,7 @@ import {
 } from '@/lib/gallery/filters.ts'
 import { CAPABILITIES, FAMILIES } from '@/lib/kie/registry/types.ts'
 import type { Capability, Family } from '@/lib/kie/registry/types.ts'
+import { CAPABILITY_LABEL, FAMILY_LABEL } from '@/lib/models/labels.ts'
 
 /**
  * The gallery filter bar.
@@ -24,25 +25,6 @@ import type { Capability, Family } from '@/lib/kie/registry/types.ts'
  * it is why this component holds no filter state of its own beyond the search
  * box, which is debounced so typing does not push one history entry per letter.
  */
-
-const FAMILY_LABEL: Record<Family, string> = {
-  kling: 'Kling',
-  bytedance: 'ByteDance',
-  wan: 'Wan',
-}
-
-const CAPABILITY_LABEL: Record<Capability, string> = {
-  'text-to-video': 'Text to video',
-  'image-to-video': 'Image to video',
-  'reference-to-video': 'Reference to video',
-  'video-to-video': 'Video to video',
-  'speech-to-video': 'Speech to video',
-  'motion-control': 'Motion control',
-  avatar: 'Avatar',
-  'text-to-image': 'Text to image',
-  'image-to-image': 'Image to image',
-  'layer-decomposition': 'Layer decomposition',
-}
 
 const STATE_GROUP_LABEL: Record<StateGroup, string> = {
   complete: 'Complete',

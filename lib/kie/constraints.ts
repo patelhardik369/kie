@@ -12,15 +12,35 @@ import { isPresent, whenHolds } from './validate.ts'
 export interface DerivedField {
   /** The control is unusable right now because another choice excludes it. */
   disabled: boolean
-  /** User-facing explanation. Always set when `disabled` is true. */
+  /**
+   * User-facing explanation of the constraint currently acting on this field.
+   * Always set when `disabled`; also set when `options` has been narrowed, so a
+   * control that quietly lost half its choices says why.
+   */
   reason?: string
   /** Required in the CURRENT state — may differ from the static ParamDef. */
   required: boolean
   /** Ceiling in the current state, when a constraint lowers it. */
   max?: number
+  /**
+   * The enum members still legal in the current state, when a constraint
+   * narrows them. Absent means "all of `param.enum`".
+   *
+   * Narrowing beats disabling for a value restriction: GPT Image 2 allows only
+   * 1K once `aspect_ratio` is `auto`, and greying out `resolution` entirely
+   * would hide the tier that still works.
+   */
+  options?: Array<string | number>
 }
 
 export type DerivedFields = Record<string, DerivedField>
+
+function paramEnum(
+  model: ModelDefinition,
+  key: string,
+): Array<string | number> | undefined {
+  return model.params.find((p) => p.key === key)?.enum
+}
 
 export function deriveFields(
   model: ModelDefinition,
@@ -91,6 +111,25 @@ export function deriveFields(
           for (const key of constraint.keys) {
             const field = fields[key]
             if (field) field.max = constraint.max
+          }
+        }
+        break
+      }
+
+      case 'allowedValuesWhen': {
+        if (whenHolds(constraint.when, values, model.params)) {
+          for (const key of constraint.keys) {
+            const field = fields[key]
+            if (!field) continue
+            // Intersected, never replaced: two restrictions can hold at once
+            // (a 5:4 ratio AND an `auto` fallback), and the legal set is what
+            // survives both. Order follows the parameter's own enum so the
+            // control does not reshuffle as the user picks.
+            const current = field.options ?? paramEnum(model, key)
+            field.options = current
+              ? current.filter((value) => constraint.values.includes(value))
+              : [...constraint.values]
+            if (!field.reason) field.reason = constraint.message
           }
         }
         break
