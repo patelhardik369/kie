@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 import { assetTokenFor } from '@/lib/gallery/asset-token.ts'
 import { assetHref } from '@/lib/gallery/display.ts'
-import { listReusableOutputs, type OutputKind } from '@/lib/library/outputs.ts'
+import { clampLimit, listReusableOutputs, type OutputKind } from '@/lib/library/outputs.ts'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,8 +33,9 @@ export async function GET(request: Request) {
     .map((k) => k.trim())
     .filter((k): k is OutputKind => (KINDS as readonly string[]).includes(k))
 
-  const limitRaw = Number(params.get('limit'))
-  const limit = Number.isFinite(limitRaw) ? Math.min(200, Math.max(1, limitRaw)) : 60
+  // See clampLimit: a missing ?limit= must not read as zero, which is what
+  // made this route answer with exactly one row.
+  const limit = clampLimit(params.get('limit'))
 
   const outputs = await listReusableOutputs({
     kinds: requested.length > 0 ? requested : undefined,
@@ -44,6 +45,9 @@ export async function GET(request: Request) {
   })
 
   return NextResponse.json({
+    // Echoed so the picker can say "these are the 60 most recent" rather than
+    // leaving a truncated list looking like the whole library.
+    limit,
     outputs: outputs.map((output) => ({
       ...output,
       href: assetHref(output.localPath, assetTokenFor(output.localPath, output.nsfw)),

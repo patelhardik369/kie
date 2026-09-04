@@ -87,6 +87,8 @@ export function AssetPicker({
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<'outputs' | 'uploads'>('outputs')
   const [outputs, setOutputs] = useState<OutputItem[] | null>(null)
+  /** The page size the server actually applied, so a capped list can say so. */
+  const [limit, setLimit] = useState<number | null>(null)
   const [uploads, setUploads] = useState<UploadItem[] | null>(null)
   const [query, setQuery] = useState('')
   const [includePrivate, setIncludePrivate] = useState(false)
@@ -133,7 +135,9 @@ export function AssetPicker({
 
           const response = await fetch(`/api/outputs?${params}`, { cache: 'no-store' })
           const data = await response.json()
-          if (!cancelled) setOutputs(data.outputs ?? [])
+          if (cancelled) return
+          setOutputs(data.outputs ?? [])
+          setLimit(typeof data.limit === 'number' ? data.limit : null)
         } catch {
           if (!cancelled) setOutputs([])
         }
@@ -261,7 +265,7 @@ export function AssetPicker({
               />
               <label
                 className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-(--color-ink-muted)"
-                title="Generations marked private are hidden by default, here as everywhere."
+                title="Generations marked private are hidden by default, here as everywhere. Ticking this ADDS them to the list — it does not filter down to them."
               >
                 <input
                   type="checkbox"
@@ -269,7 +273,7 @@ export function AssetPicker({
                   onChange={(e) => setIncludePrivate(e.target.checked)}
                   className="check-private"
                 />
-                Private
+                Include private
               </label>
             </div>
           )}
@@ -387,6 +391,25 @@ export function AssetPicker({
               </ul>
             )}
           </div>
+
+          {/*
+            A count, always. The list is capped, and a capped list that says
+            nothing is indistinguishable from a library that only holds that
+            much — which is exactly how a page size of one read as a filtering
+            bug rather than as a page size.
+          */}
+          {tab === 'outputs' && outputs !== null && (
+            <p className="mono border-t border-(--color-border) px-2.5 py-1.5 text-(--color-ink-faint)">
+              {outputs.length} shown
+              {limit !== null && outputs.length >= limit && (
+                <span className="text-(--color-warn-ink)">
+                  {' '}
+                  · the {limit} most recent — search to narrow
+                </span>
+              )}
+              {!includePrivate && ' · private hidden'}
+            </p>
+          )}
         </div>
       )}
     </div>

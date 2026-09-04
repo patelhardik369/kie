@@ -159,8 +159,17 @@ made twenty minutes ago, and the old answer to that was to go and find it in the
 picker has two tabs — *Outputs* (thumbnails, the model slug and the prompt that made each one) and
 *Uploads* (the input library, with `live` / `expired` on each row) — filtered to the kinds the
 ParamDef accepts, so a video field never offers a PNG. An output already uploaded and still live is
-badged `ready`: picking it costs nothing at all. Generations marked private are excluded until asked
-for, here as everywhere.
+badged `ready`: picking it costs nothing at all.
+
+Generations marked private are excluded until asked for, here as everywhere. **Include private**
+*adds* them to the list rather than filtering down to them, which is the opposite of the gallery's
+`?nsfw=1` — a picker wants everything at once, a browse surface wants the thing you went looking for.
+The label says which, because a checkbox reading only "Private" does not.
+
+The list carries a count and its own limit: *"5 shown"*, *"the 60 most recent — search to narrow"*,
+*"private hidden"*. A truncated list that says nothing is indistinguishable from a library that only
+holds that much, and that is not a hypothetical — a page size that silently resolved to 1 read as a
+broken private filter rather than as a page size.
 
 Every `<select>` carries `.select-field`. A native dropdown draws its arrow hard against the right
 border and the position is not stylable, so the arrow is turned off and redrawn inset from the edge

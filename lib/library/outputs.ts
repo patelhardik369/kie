@@ -34,6 +34,30 @@ import { URL_UPLOAD_MAX_BYTES } from '../kie/upload.ts'
 /** Kie deletes generated media about fourteen days after the task completes. */
 const RESULT_URL_TTL_MS = 14 * 24 * 60 * 60 * 1000
 
+/** How many outputs a picker asks for when it does not say. */
+export const DEFAULT_OUTPUT_LIMIT = 60
+/** The ceiling a caller can raise it to. */
+export const MAX_OUTPUT_LIMIT = 200
+
+/**
+ * A `?limit=` string as a row count.
+ *
+ * Pure, exported and tested, because the naive version of this is a trap that
+ * has already been fallen into once: `Number(searchParams.get('limit'))` on a
+ * MISSING parameter is `Number(null)`, which is `0` — finite, so it survives an
+ * `isFinite` guard, and `Math.max(1, 0)` then clamps the page to a single row.
+ * The picker showed exactly one output and looked like a filtering bug.
+ *
+ * Anything that is not a usable count — absent, blank, non-numeric, zero,
+ * negative — means "you did not choose", and the default applies.
+ */
+export function clampLimit(raw: string | null | undefined): number {
+  if (raw === null || raw === undefined || raw.trim() === '') return DEFAULT_OUTPUT_LIMIT
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_OUTPUT_LIMIT
+  return Math.min(Math.floor(parsed), MAX_OUTPUT_LIMIT)
+}
+
 /** Re-upload slightly before expiry, so a URL cannot die between here and submit. */
 const EXPIRY_MARGIN_MS = 5 * 60_000
 
@@ -85,7 +109,7 @@ export interface ListOutputsOptions {
 export async function listReusableOutputs(
   options: ListOutputsOptions = {},
 ): Promise<ReusableOutput[]> {
-  const { kinds, limit = 60, includePrivate = false, search } = options
+  const { kinds, limit = DEFAULT_OUTPUT_LIMIT, includePrivate = false, search } = options
   const now = Date.now()
 
   const clauses: SQL[] = []
