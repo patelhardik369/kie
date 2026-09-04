@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 
 import { Close, Dice, Plus, Upload } from '@/components/shell/icons.tsx'
 import type { ParamDef } from '@/lib/kie/registry/types.ts'
+import { AssetPicker } from './AssetPicker.tsx'
 
 /**
  * Leaf controls, one per ParamType.
@@ -491,6 +492,10 @@ export function UrlControl(props: ControlProps) {
         placeholder={`https://… (${acceptHint(param)})`}
         onChange={(e) => onChange(e.target.value)}
       />
+      {/* Before Upload, deliberately. Most of the time the file you want is
+          something this studio already made, and the old answer to that was to
+          go and find it on disk. */}
+      <AssetPicker param={param} disabled={disabled} onPick={onChange} />
       <UploadButton param={param} disabled={disabled} onUploaded={onChange} />
     </div>
   )
@@ -579,6 +584,15 @@ export function UrlListControl({ param, value, onChange, disabled, max }: Contro
               update(next)
             }}
           />
+          <AssetPicker
+            param={param}
+            disabled={disabled}
+            onPick={(fileUrl) => {
+              const next = [...list]
+              next[index] = fileUrl
+              update(next)
+            }}
+          />
           <UploadButton
             param={param}
             disabled={disabled}
@@ -612,8 +626,16 @@ export function UrlListControl({ param, value, onChange, disabled, max }: Contro
         </button>
         {/*
           An upload that appends. Without it an empty list has no upload path at
-          all — you would have to add a blank row before you could fill it.
+          all — you would have to add a blank row before you could fill it. The
+          picker appends the same way, for the same reason.
         */}
+        <AssetPicker
+          param={param}
+          // This one sits at the LEFT end of its row, so it opens rightward.
+          align="left"
+          disabled={disabled || (ceiling !== undefined && list.length >= ceiling)}
+          onPick={(fileUrl) => update([...list, fileUrl])}
+        />
         <UploadButton
           param={param}
           disabled={disabled || (ceiling !== undefined && list.length >= ceiling)}

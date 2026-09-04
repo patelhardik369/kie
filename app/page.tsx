@@ -1,9 +1,11 @@
 import Link from 'next/link'
 
 import { GenerationCard } from '@/components/gallery/GenerationCard.tsx'
+import { PinnedModels, PinsHydrator } from '@/components/models/PinnedModels.tsx'
 import { PageHeader, Section } from '@/components/shell/PageHeader.tsx'
 import { ChevronRight } from '@/components/shell/icons.tsx'
 import { getGalleryFacets, recentGenerations } from '@/lib/gallery/queries.ts'
+import { listPins } from '@/lib/library/pins.ts'
 import { getEnv } from '@/lib/env'
 import { ALL_MODELS, FAMILIES, modelsByFamily } from '@/lib/kie/registry/index.ts'
 import { FAMILY_BLURB, FAMILY_LABEL } from '@/lib/models/labels.ts'
@@ -22,9 +24,10 @@ export const dynamic = 'force-dynamic'
  */
 export default async function Home() {
   const env = getEnv()
-  const [recent, facets] = await Promise.all([
+  const [recent, facets, pins] = await Promise.all([
     recentGenerations(12),
     getGalleryFacets(),
+    listPins(),
   ])
 
   const running = facets.states
@@ -43,6 +46,8 @@ export default async function Home() {
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 pt-6 pb-16">
+      <PinsHydrator pins={pins} />
+
       <PageHeader
         title="Studio"
         description={`${ALL_MODELS.length} models across Kling, ByteDance and Wan. Every parameter of every one is editable.`}
@@ -118,6 +123,11 @@ export default async function Home() {
         </Section>
 
         <div className="space-y-8">
+          {/* Above Families: the shortlist answers "start the thing I always
+              start", the family list answers "find something new". It owns its
+              own heading so both vanish together when the last pin goes. */}
+          <PinnedModels variant="compact" heading="Pinned" />
+
           <Section title="Families">
             <ul className="panel-flush divide-y divide-(--color-border)">
               {families.map((family) => (

@@ -164,6 +164,30 @@ export const inputAssets = sqliteTable(
   ],
 )
 
+/**
+ * Models pinned to the top of the picker.
+ *
+ * A slug, not a foreign key to anything — the registry is compiled data, not a
+ * table, so this holds the only kind of reference there is. A pinned slug that
+ * later leaves the registry is therefore possible, and is reported as missing
+ * rather than deleted: the pin is a statement about how you work, and quietly
+ * dropping it would lose that without saying so.
+ *
+ * `position` is explicit rather than derived from `created_at` because the order
+ * is editable — the model you reach for most is not the one you pinned first.
+ */
+export const favoriteModels = sqliteTable(
+  'favorite_models',
+  {
+    /** Verbatim registry slug, e.g. `gpt-image-2-image-to-image`. */
+    slug: text('slug').primaryKey(),
+    /** Ascending. Gaps are legal; only the order matters. */
+    position: integer('position').notNull().default(0),
+    createdAt: integer('created_at').notNull().default(now),
+  },
+  (t) => [index('favorite_models_position_idx').on(t.position)],
+)
+
 export const presets = sqliteTable(
   'presets',
   {
@@ -226,3 +250,4 @@ export type NewAsset = typeof assets.$inferInsert
 export type InputAsset = typeof inputAssets.$inferSelect
 export type Preset = typeof presets.$inferSelect
 export type Prompt = typeof prompts.$inferSelect
+export type FavoriteModel = typeof favoriteModels.$inferSelect

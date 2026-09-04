@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { GenerationActions } from '@/components/gallery/GenerationActions.tsx'
 import { Lineage } from '@/components/gallery/Lineage.tsx'
 import { ParamProvenance } from '@/components/gallery/ParamProvenance.tsx'
+import { UseAsInput } from '@/components/gallery/UseAsInput.tsx'
 import { GenerationStatus } from '@/components/queue/GenerationStatus.tsx'
 import { BackLink } from '@/components/shell/PageHeader.tsx'
 import { ChevronRight, ExternalLink } from '@/components/shell/icons.tsx'
@@ -119,6 +120,9 @@ export default async function GenerationDetailPage({
                 {asset.durationMs && <span>{formatDuration(asset.durationMs)}</span>}
                 <span>{formatBytes(asset.bytes)}</span>
                 <span>{asset.mime}</span>
+                {/* The local link above opens the file HERE; this one produces a
+                    URL Kie can fetch, which is what a model's *_url field wants. */}
+                <UseAsInput assetId={asset.id} />
                 {/* The local path is the durable truth; the Kie URL is long gone. */}
                 <span className="ml-auto truncate" title={asset.localPath}>
                   {asset.localPath}

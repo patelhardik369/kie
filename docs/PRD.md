@@ -129,6 +129,32 @@ their Kie upload URL cached until it expires.
 - An expired upload is re-uploaded transparently on next use.
 - Assets can be picked from the library in any asset-typed field.
 
+### F7b — An output is an input
+
+Anything the studio has generated can be fed straight back in as the next generation's input, without
+finding the file on disk and uploading it again. The loop that makes the studio worth having is
+image → video → upscale, and every hop of it needs a URL Kie can fetch.
+
+**Acceptance**
+- Every `url` / `url[]` field offers a picker of past outputs, filtered to the kinds it accepts, with
+  thumbnails and the prompt that made each one.
+- Picking one yields a fetchable `fileUrl` with no manual download or upload.
+- The same output picked again inside 24h costs no round trip, and no second copy on disk is ever
+  written — the output IS the local copy.
+- A gallery asset offers the same thing as a copyable URL.
+- Kie's own result URL is used only for a file past the 100 MB upload ceiling, and says so.
+
+### F7c — Pinned models
+
+The models actually in use sit above the 82 that merely exist.
+
+**Acceptance**
+- A star on any model row, in the catalog, and on the generate screen itself pins or unpins it.
+- Pins appear at the top of the picker, in the home sidebar, and in a nav popover reachable from
+  every screen.
+- The order is editable and survives a restart.
+- A pinned model that leaves the registry is shown as missing, not silently dropped.
+
 ### F8 — Prompt library
 
 Saved, taggable prompts insertable into any prompt field.

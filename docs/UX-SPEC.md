@@ -112,6 +112,17 @@ Wan             Reference to video      Kling v3 Turbo       fast · 720p/1080p
 Every model row carries a one-line differentiator — the capability alone doesn't distinguish nine
 Kling text-to-video models. A compare view shows two models' parameter tables side by side.
 
+**Pinned sits above all of it.** Most visits want one of four models, and progressive narrowing is
+still four decisions to reach a model you used yesterday. A star on every model row — in the picker,
+in the catalog, and in the generate screen's own header — puts it in a shortlist that renders at the
+top of the picker, in the home sidebar, and in a nav popover reachable from any screen. The order is
+editable by arrows rather than drag: it is five rows on a local single-user tool, and two buttons owe
+nothing to touch, keyboard or pointer-capture.
+
+A star never navigates, and never sits *inside* the row link — a `<button>` in an `<a>` is invalid
+and behaves like it. A pin whose model has left the registry is shown, unlinkable, saying so; it is
+not silently dropped, because the pin is a statement about how you work.
+
 ### The parameter form
 
 Generated from the model's `ModelDefinition`. Two zones:
@@ -133,8 +144,8 @@ You always know what you're sending.
 | `enum` | Segmented control at ≤4 options, select above that (`.select-field`) |
 | `number` | Slider **plus** a numeric input — the slider for feel, the box for exactness. Honors `step` |
 | `boolean` | Switch, with cost implications labelled ("increases generation cost") |
-| `url` | Dropzone: drag-drop, file picker, paste a URL, or pick from the asset library. Shows a thumbnail once set |
-| `url[]` | Same, multiple, reorderable, with an `n / maxItems` counter |
+| `url` | Paste a URL, **Reuse** (a past output or an earlier upload), or **Upload** a local file |
+| `url[]` | Same, per row and appending, with an `n / maxItems` counter |
 | `seed` | Number input with a dice button, and a "lock" that carries the seed to the next run |
 | `object[]` | Repeating card list with add / remove / drag-reorder |
 | `color[]` | Swatch plus a share-of-image percentage per stop, with a running total and an even-shares button. The `xx.xx%` string Kie demands is produced from the number, never typed |
@@ -142,6 +153,14 @@ You always know what you're sending.
 
 Every control shows its `describe` text on hover, and its documented default is visibly marked as
 default so a deliberate change reads as deliberate.
+
+**Reuse** is listed before **Upload** on purpose. The file you want is usually something this studio
+made twenty minutes ago, and the old answer to that was to go and find it in the output folder. The
+picker has two tabs — *Outputs* (thumbnails, the model slug and the prompt that made each one) and
+*Uploads* (the input library, with `live` / `expired` on each row) — filtered to the kinds the
+ParamDef accepts, so a video field never offers a PNG. An output already uploaded and still live is
+badged `ready`: picking it costs nothing at all. Generations marked private are excluded until asked
+for, here as everywhere.
 
 Every `<select>` carries `.select-field`. A native dropdown draws its arrow hard against the right
 border and the position is not stylable, so the arrow is turned off and redrawn inset from the edge
@@ -278,6 +297,9 @@ and every run of a sweep inherit the mark — having to remember to re-tick it i
 - **Lineage** — parent and children as a small graph. This is how iteration becomes visible.
 - Actions: **Re-run identical**, **Tweak** (opens the Studio prefilled), **Save as preset**,
   **Mark private** (and unmark — a mark made by mistake undoes as easily as it was made).
+- **Use as input** on each asset copies a URL a model can fetch. Deliberately distinct from the
+  `open` link beside it: that one serves the file to *this* browser, and pasting it into a model
+  field produces a generation that fails minutes later with a download error.
 
 ## Models
 

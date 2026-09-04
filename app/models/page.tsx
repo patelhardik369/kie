@@ -1,10 +1,13 @@
 import Link from 'next/link'
 
+import { PinStar } from '@/components/models/PinStar.tsx'
+import { PinsHydrator } from '@/components/models/PinnedModels.tsx'
 import { TrapList } from '@/components/library/TrapList.tsx'
 import { PageHeader } from '@/components/shell/PageHeader.tsx'
 import { ALL_MODELS, FAMILIES, capabilitiesOf } from '@/lib/kie/registry/index.ts'
 import type { Capability, Family } from '@/lib/kie/registry/types.ts'
 import { FAMILY_LABEL } from '@/lib/models/labels.ts'
+import { listPins } from '@/lib/library/pins.ts'
 import { assetInputs, searchModels } from '@/lib/models/search.ts'
 import { differentiator, findTraps } from '@/lib/models/traps.ts'
 
@@ -44,11 +47,14 @@ export default async function ModelsPage({
     : undefined
 
   const matches = searchModels(ALL_MODELS, { q, family })
+  const pins = await listPins()
   const traps = findTraps(ALL_MODELS)
   const derived = traps.filter((t) => t.kind !== 'note')
 
   return (
     <main className="mx-auto max-w-5xl px-4 pt-6 pb-16">
+      <PinsHydrator pins={pins} />
+
       <PageHeader
         title="Models"
         description={`${ALL_MODELS.length} models across Kling, ByteDance and Wan. Every parameter of every one is editable.`}
@@ -114,10 +120,12 @@ export default async function ModelsPage({
           {matches.map((model) => {
             const inputs = assetInputs(model)
             return (
-              <li key={model.slug}>
+              /* The star is a sibling of the row link, never a child of it:
+                 a <button> inside an <a> is invalid, and clicking it navigates. */
+              <li key={model.slug} className="flex items-center gap-1 pr-2">
                 <Link
                   href={`/models/${model.slug}`}
-                  className="row group px-3.5 py-3"
+                  className="row group min-w-0 flex-1 px-3.5 py-3"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <span className="text-[13px] font-medium">{model.label}</span>
@@ -133,6 +141,12 @@ export default async function ModelsPage({
                     {inputs.length > 0 && <span className="mono">takes {inputs.join(', ')}</span>}
                   </div>
                 </Link>
+                <PinStar
+                  slug={model.slug}
+                  label={model.label}
+                  family={model.family}
+                  capability={model.capability}
+                />
               </li>
             )
           })}

@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
+import { PinStar } from '@/components/models/PinStar.tsx'
 import { ParamForm } from '@/components/param-form/ParamForm.tsx'
 import { BackLink } from '@/components/shell/PageHeader.tsx'
 import { InfoTip } from '@/components/shell/InfoTip.tsx'
@@ -45,6 +46,16 @@ export default async function GeneratePage({
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
           <h1 className="h-page">{model.label}</h1>
           <nav className="flex shrink-0 items-center gap-3 pt-1">
+            {/* The star lives with the model, not with the pin bar — the moment
+                you know a model is worth keeping is the moment you have just
+                used it. */}
+            <PinStar
+              slug={model.slug}
+              label={model.label}
+              family={model.family}
+              capability={model.capability}
+              showLabel
+            />
             <Link
               href={`/models/${model.slug}`}
               className="text-xs text-(--color-ink-muted) transition-colors duration-(--dur-fast) hover:text-(--color-ink)"

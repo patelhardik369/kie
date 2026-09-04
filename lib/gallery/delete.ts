@@ -4,7 +4,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { eq, inArray } from 'drizzle-orm'
 
-import { assets, generations, getDb } from '../db/index.ts'
+import { assets, generations, getDb, inputAssets } from '../db/index.ts'
 import { getEnv } from '../env.ts'
 import { resolveWithin } from '../jobs/paths.ts'
 import { isInFlight } from './display.ts'
@@ -46,6 +46,8 @@ export interface DeletedGeneration {
   bytesFreed: number
   /** Children re-pointed at the deleted generation's own parent. */
   childrenRelinked: number
+  /** Input-library rows that pointed at these files, removed with them. */
+  inputsForgotten: number
 }
 
 export type DeleteOutcome =
@@ -81,6 +83,23 @@ export async function deleteGeneration(id: string): Promise<DeleteOutcome> {
     owned.map((asset) => ({ localPath: asset.localPath, bytes: asset.bytes })),
   )
 
+  /*
+   * An output reused as an INPUT is registered against the output's own path —
+   * no second copy is made (see lib/jobs/uploads.ts). The file has just gone, so
+   * the row that points at it would be a library entry that can never be renewed
+   * and never explain why. It goes with the file.
+   *
+   * Rows under `_inputs/` are untouched: those are uploads with their own copy,
+   * and they were never this generation's to delete.
+   */
+  const reusedPaths = owned.map((asset) => asset.localPath)
+  const inputsForgotten = reusedPaths.length
+    ? await db
+        .delete(inputAssets)
+        .where(inArray(inputAssets.localPath, reusedPaths))
+        .returning({ id: inputAssets.id })
+    : []
+
   // Re-point before the delete: a child left pointing at a missing row would
   // read as "no lineage", which is a different and wrong claim.
   const relinked = await db
@@ -103,6 +122,7 @@ export async function deleteGeneration(id: string): Promise<DeleteOutcome> {
       filesMissing,
       bytesFreed,
       childrenRelinked: relinked.length,
+      inputsForgotten: inputsForgotten.length,
     },
   }
 }

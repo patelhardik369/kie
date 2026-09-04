@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
+import { PinnedMenu } from '@/components/models/PinnedMenu.tsx'
 import { Aperture, Bookmark, Gear, Grid, Layers, Plus, TextLines } from './icons.tsx'
 
 /**
@@ -76,6 +77,10 @@ export function TopNav() {
             )
           })}
         </nav>
+
+        {/* The shortlist, reachable from every screen — see PinnedMenu for why
+            it renders nothing until something is pinned. */}
+        <PinnedMenu />
 
         <Link
           href="/settings"

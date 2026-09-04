@@ -43,6 +43,9 @@ app/
     prompts/  prompts/[id]/      the prompt library
     input-assets/                the asset library
     input-assets/[id]/           POST = give me a live fileUrl (re-uploads if stale)
+    outputs/route.ts             past outputs as candidate INPUTS, filtered by kind
+    outputs/reuse/route.ts       POST assetId -> a fileUrl a model can fetch
+    favorite-models/route.ts     pinned models: list / pin / unpin / reorder
     upload/route.ts              local file -> Kie file API -> cached fileUrl
     assets/[...path]/route.ts    serves files out of KIE_OUTPUT_DIR
 
@@ -82,8 +85,11 @@ lib/
   models/
     traps.ts                     cross-model inconsistencies, derived (pure)
     search.ts                    catalog search                       (pure)
+    favorites.ts                 pin resolution + reorder reconciling (pure)
   library/
     queries.ts                   presets / prompts / assets / credits
+    pins.ts                      pinned models, always returns the whole list
+    outputs.ts                   an output -> an input: list + resolve
     disk.ts                      KIE_OUTPUT_DIR usage
   theme/
     accent.ts                    accent -> interactive ramp, OKLCH       (pure)
@@ -97,12 +103,17 @@ components/
     ParamForm.tsx                renders a ModelDefinition
     controls.tsx                 one control per ParamType
     Field.tsx                    label, describe, errors, constraint reason
+    AssetPicker.tsx              reuse a past output or upload as this field's input
     SweepControls.tsx            Generate xN and Sweep
   queue/
     GenerationStatus.tsx         live view of one submitted generation
   gallery/
     GenerationCard.tsx  GalleryFilters.tsx
     ParamProvenance.tsx  Lineage.tsx  GenerationActions.tsx
+    UseAsInput.tsx               copies a fetchable URL for one output
+  models/
+    pins-store.ts                one shared pin list across every star   (client)
+    PinStar.tsx  PinnedModels.tsx  PinnedMenu.tsx
   library/
     TrapList.tsx  PresetRow.tsx  PromptLibrary.tsx  AssetLibrary.tsx
   shell/
@@ -301,6 +312,24 @@ Pro's `high` is 2K while 5 Lite's is 4K is written down precisely because it is 
 Kie upload URL and expiry. Reuse inside the window costs no round trip; past it, the **local copy**
 is re-uploaded and the row updated in place. That local copy is the whole design: without it an
 expired asset is unrecoverable, because the browser that supplied it is long gone.
+
+**An output is an input.** The studio's natural loop is make an image, animate it, upscale that, and
+each hop needs a URL Kie can fetch. `lib/library/outputs.ts` hands the output's own local path to
+`storeUpload` — no second copy on disk, content-hashed so the same output feeding ten generations is
+uploaded once. It is reachable two ways: the **Reuse** picker on every asset field, and **Use as
+input** on a gallery asset, which copies the URL.
+
+Kie's own `assets.remote_url` is deliberately not that URL. It dies after about fourteen days, and
+an `input_json` holding a dead URL is not reproducible — which is the one thing `input_json` exists
+for. It is used only as the fallback for a file past Kie's 100 MB upload ceiling, and that case
+returns a `warning` saying so rather than taking it silently.
+
+**Pins are the shortlist above the catalog.** 82 models is a long scroll and most days you want one
+of four. `favorite_models` holds the slugs, `lib/models/favorites.ts` resolves them against the
+registry, and one client store (`components/models/pins-store.ts`) backs every star, the picker's pin
+bar, the home sidebar and the nav popover at once. The API answers every verb with the whole list, so
+a write is a replace rather than a patch four surfaces each have to apply correctly. Labels are
+resolved server-side, which keeps the 82-model registry out of the browser bundle.
 
 ## Why polling leads
 

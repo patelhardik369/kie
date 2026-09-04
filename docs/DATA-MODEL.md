@@ -96,6 +96,32 @@ holds outputs.
 Index on `sha256` and on `expires_at`. A lookup that finds a row whose `expires_at` has passed
 re-uploads and updates in place rather than inserting a duplicate.
 
+`local_path` points at one of two places, and which one matters:
+
+| source | `local_path` | on generation delete |
+|---|---|---|
+| a file uploaded into a field | `_inputs/<sha256>.<ext>` — its own copy | untouched |
+| a generation output reused as an input | the output's own path under `<date>/<family>/…` | row deleted with the file |
+
+An output is already the durable local copy, so reusing one writes **no second copy** —
+`storeUpload({ existingPath })`. The cost of that is bounded and deliberate: deleting the generation
+takes the file, so `lib/gallery/delete.ts` removes any `input_assets` row pointing at it rather than
+leaving one that can never be renewed.
+
+### `favorite_models`
+
+Models pinned above the 82 in the picker, the home sidebar and the nav.
+
+| column | type | notes |
+|---|---|---|
+| `slug` | text PK | verbatim registry slug — the registry is code, so there is nothing to FK to |
+| `position` | integer | ascending; rewritten contiguously on every mutation |
+| `created_at` | integer | |
+
+A pinned slug that later leaves the registry is **kept and flagged**, never dropped: the pin says
+something about how you work that a renamed model should not silently erase. `resolvePins` marks it
+`missing`, the UI renders it unlinkable, and unpinning is one click.
+
 ### `presets`
 
 | column | type | notes |

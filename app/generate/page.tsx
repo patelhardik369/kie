@@ -1,7 +1,10 @@
 import Link from 'next/link'
 
-import { PageHeader } from '@/components/shell/PageHeader.tsx'
+import { PinStar } from '@/components/models/PinStar.tsx'
+import { PinnedModels, PinsHydrator } from '@/components/models/PinnedModels.tsx'
+import { PageHeader, Section } from '@/components/shell/PageHeader.tsx'
 import { ChevronRight } from '@/components/shell/icons.tsx'
+import { listPins } from '@/lib/library/pins.ts'
 import {
   ALL_MODELS,
   FAMILIES,
@@ -12,9 +15,21 @@ import { CAPABILITY_LABEL, FAMILY_LABEL } from '@/lib/models/labels.ts'
 
 export const metadata = { title: 'Choose a model' }
 
-export default function GenerateIndex() {
+/**
+ * Dynamic since the pins landed: the shortlist at the top is read from the
+ * database, and it is the first thing on the screen. Rendering it on the server
+ * is what lets it paint with the page instead of dropping in afterwards and
+ * pushing 82 rows down by three lines.
+ */
+export const dynamic = 'force-dynamic'
+
+export default async function GenerateIndex() {
+  const pins = await listPins()
+
   return (
     <main className="mx-auto max-w-4xl px-4 pt-6 pb-16">
+      <PinsHydrator pins={pins} />
+
       <PageHeader
         title="Choose a model"
         description={`${ALL_MODELS.length} models. Every parameter of every one is editable — presets sit on top of that, never in place of it.`}
@@ -40,6 +55,15 @@ export default function GenerateIndex() {
           ))
         }
       />
+
+      {/* Above the families, always. The shortlist is the answer on most visits;
+          the catalog below it is the answer on the rest. */}
+      <Section title="Pinned">
+        {/* No count in the heading: this list changes under your hands as you
+            star rows below it, and a server-rendered number beside it would be
+            wrong from the first click. */}
+        <PinnedModels />
+      </Section>
 
       {FAMILIES.map((family) => {
         const models = ALL_MODELS.filter((m) => m.family === family)
@@ -67,10 +91,15 @@ export default function GenerateIndex() {
                   <h3 className="eyebrow">{CAPABILITY_LABEL[capability]}</h3>
                   <ul className="panel-flush mt-2 divide-y divide-(--color-border)">
                     {inCapability.map((model) => (
-                      <li key={model.slug}>
+                      /*
+                        The star sits BESIDE the row link, not inside it. A
+                        button nested in an anchor is invalid HTML and behaves
+                        like it: the click lands on both, and the pin navigates.
+                      */
+                      <li key={model.slug} className="flex items-center gap-1 pr-2">
                         <Link
                           href={`/generate/${model.slug}`}
-                          className="row group flex items-center justify-between gap-4 px-3.5 py-2.5"
+                          className="row group flex min-w-0 flex-1 items-center justify-between gap-4 px-3.5 py-2.5"
                         >
                           <span className="min-w-0">
                             <span className="block truncate text-[13px] font-medium">
@@ -90,6 +119,12 @@ export default function GenerateIndex() {
                             />
                           </span>
                         </Link>
+                        <PinStar
+                          slug={model.slug}
+                          label={model.label}
+                          family={model.family}
+                          capability={model.capability}
+                        />
                       </li>
                     ))}
                   </ul>

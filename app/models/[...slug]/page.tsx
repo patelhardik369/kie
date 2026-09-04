@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { TrapList } from '@/components/library/TrapList.tsx'
+import { PinStar } from '@/components/models/PinStar.tsx'
 import { BackLink } from '@/components/shell/PageHeader.tsx'
 import { InfoTip } from '@/components/shell/InfoTip.tsx'
 import { ExternalLink } from '@/components/shell/icons.tsx'
@@ -46,9 +47,18 @@ export default async function ModelPage({
       <header className="mt-4 border-b border-(--color-border) pb-4">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <h1 className="h-page">{model.label}</h1>
-          <Link href={`/generate/${model.slug}`} className="btn btn-primary">
-            Generate with this
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            <PinStar
+              slug={model.slug}
+              label={model.label}
+              family={model.family}
+              capability={model.capability}
+              showLabel
+            />
+            <Link href={`/generate/${model.slug}`} className="btn btn-primary">
+              Generate with this
+            </Link>
+          </div>
         </div>
 
         {/* `relative` positions the InfoTip panel against this row — see its

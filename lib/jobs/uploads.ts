@@ -52,6 +52,19 @@ export interface StoreUploadParams {
   filename?: string
   mime?: string
   label?: string
+  /**
+   * The bytes ALREADY live here, relative to KIE_OUTPUT_DIR.
+   *
+   * Set when a generation's own output is reused as an input. The output tree is
+   * already the durable local copy — rule 2 in .claude/CLAUDE.md exists to make
+   * sure of it — so writing a second copy under `_inputs/` would double the disk
+   * cost of every reused video to buy nothing.
+   *
+   * The consequence is deliberate and bounded: deleting that generation from the
+   * gallery takes the file, and the input row with it (see lib/gallery/delete.ts).
+   * A destructive action the user asked for is allowed to be destructive.
+   */
+  existingPath?: string
 }
 
 /**
@@ -67,12 +80,18 @@ export async function storeUpload(params: StoreUploadParams): Promise<CachedUplo
 
   const ext =
     extensionFromName(filename) ?? extensionForMime(mime) ?? undefined
-  const relativePath = existing?.localPath ?? inputRelativePath(sha256, ext)
+  // An existing row's path wins over the caller's: the same bytes are one asset,
+  // and re-homing it on reuse would leave the older row pointing at nothing.
+  const relativePath =
+    existing?.localPath ?? params.existingPath ?? inputRelativePath(sha256, ext)
   const absolutePath = path.join(getEnv().outputDir, relativePath)
 
   // Written before the expiry check: a row can outlive its file if the output
-  // folder was cleaned out, and the re-upload path needs the bytes back.
-  await writeIfAbsent(absolutePath, content)
+  // folder was cleaned out, and the re-upload path needs the bytes back. Skipped
+  // when the caller pointed us at bytes that are already on disk.
+  if (relativePath !== params.existingPath) {
+    await writeIfAbsent(absolutePath, content)
+  }
 
   if (existing?.kieFileUrl && isLive(existing.expiresAt)) {
     return {
