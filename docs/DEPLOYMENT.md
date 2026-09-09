@@ -121,21 +121,36 @@ Neither is raisable on that plan.
 
 ## 4. Scheduling the tick
 
-**This is the step that makes generations finish when nobody is watching.**
-
-Three things drive a job forward, layered so each covers what the one above
+Four things drive a job forward, layered so each covers what the one above
 cannot:
 
 | Driver | Runs when | Covers |
 |---|---|---|
 | Inline burst | On the submitting request, via `waitUntil` | Fast image models, usually start to finish |
-| Tab poll | While a tab watches a generation | Anything you are looking at |
-| **Scheduled tick** | Whenever you schedule it | **Everything else** |
+| Tab poll | While a tab watches a generation | Whatever you are looking at |
+| **On-visit sweep** | Every time the app is opened | **Anything of yours that stalled while you were away** |
+| Scheduled tick | Whenever you schedule it | Everything, with nobody present |
 
-Without the third, a twenty-minute video started and then abandoned never gets
-stored, and the credits are simply gone.
+### You are not required to set up a scheduler
 
-### Option A — Supabase `pg_cron` (recommended on Hobby)
+**Vercel's Hobby plan only runs a cron job once per day.** A `* * * * *`
+schedule is rejected at deploy time with:
+
+> Hobby accounts are limited to daily cron jobs.
+
+Once a day is useless for a twenty-minute video, so `vercel.json` declares no
+cron at all and the app does not depend on one. `POST /api/jobs/sweep` fires on
+every page load and advances your own due generations, which means the worst case
+with no scheduler is that a job finishes **the next time you open the studio**
+rather than the moment Kie is done.
+
+That is a latency difference, not a data-loss one — which is the distinction
+that matters, because a generation is billed by Kie whether or not we collect it.
+
+A scheduler still earns its place if you want results stored while the app is
+closed. Option A is free and takes two minutes.
+
+### Option A — Supabase `pg_cron` (recommended, and free)
 
 Free, runs every minute, and the database is already there. In the Supabase SQL
 editor:
@@ -162,13 +177,19 @@ Check it is firing:
 select * from cron.job_run_details order by start_time desc limit 10;
 ```
 
-### Option B — Vercel Cron
+### Option B — Vercel Cron (Pro plan only)
 
-`vercel.json` already declares `/api/jobs/tick` at `* * * * *`. Vercel injects
-the `x-vercel-cron` header, which the route accepts, so no secret is needed for
-this path. **Cron frequency limits differ by plan** — check what yours actually
-permits before relying on it as the only driver. If your plan will not run it
-every minute, use Option A.
+`vercel.json` ships with **no** `crons` entry, because declaring a sub-daily one
+fails the build on Hobby. On Pro, add it back:
+
+```json
+{
+  "crons": [{ "path": "/api/jobs/tick", "schedule": "* * * * *" }]
+}
+```
+
+Vercel injects an `x-vercel-cron` header, which the route accepts, so no secret
+is needed on this path.
 
 ### Option C — any external cron
 
@@ -345,7 +366,9 @@ real generations in it**, as the tests truncate every table.
 |---|---|---|
 | `prepared statement "s1" already exists` | Prepared statements on the transaction pooler | Use the port-`6543` URL; the app then disables them itself |
 | `too many clients already` | Pointed at the direct connection | Switch to the pooler URL |
-| Generations stick in `waiting` forever | No scheduled tick | [Section 4](#4-scheduling-the-tick) |
+| Deploy fails: "Hobby accounts are limited to daily cron jobs" | A sub-daily `crons` entry in `vercel.json` | Remove it — the app does not need one. [Section 4](#4-scheduling-the-tick) |
+| Generations only finish when you open the app | No scheduler; the on-visit sweep is doing the work | Working as designed. Add Option A if you want them stored while closed |
+| Generations stick in `waiting` even after reloading | Sweep failing — check the function logs | [Section 4](#4-scheduling-the-tick) |
 | `401` on every generation | No key in this browser | Settings → paste a key → Test & save |
 | `507` on submit | Storage full | Delete generations from the gallery, or raise `STORAGE_QUOTA_BYTES` |
 | Images 404 in the gallery | Bucket is public, or the wrong bucket | `npm run storage:setup` reports both |

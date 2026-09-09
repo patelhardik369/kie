@@ -95,12 +95,51 @@ function installFetchInterceptor(): void {
  */
 if (typeof window !== 'undefined') installFetchInterceptor()
 
+/**
+ * How long to leave between sweeps.
+ *
+ * A guard against a burst — several tabs restored at once, or a quick reload —
+ * not against normal use. Kept in `sessionStorage` so a genuinely new session
+ * always sweeps, which is the case that matters: you closed the laptop, and the
+ * jobs that stalled while it was shut need to start moving again.
+ */
+const SWEEP_INTERVAL_MS = 60_000
+const SWEEP_STORAGE = 'kie.lastSweep'
+
+function shouldSweep(): boolean {
+  try {
+    const last = Number(window.sessionStorage.getItem(SWEEP_STORAGE) ?? 0)
+    if (Number.isFinite(last) && Date.now() - last < SWEEP_INTERVAL_MS) return false
+    window.sessionStorage.setItem(SWEEP_STORAGE, String(Date.now()))
+    return true
+  } catch {
+    // Storage blocked. Sweeping is idempotent and lease-guarded, so the safe
+    // failure is to sweep rather than to skip.
+    return true
+  }
+}
+
 export function StudioBoot() {
-  // The id itself is minted lazily by the interceptor, so this only exists to
-  // get the cookie written on a first visit — early enough that the NEXT
-  // navigation renders server-side with this workspace's rows already in it.
   useEffect(() => {
+    // The id is minted lazily by the interceptor, so this only exists to get the
+    // cookie written on a first visit — early enough that the NEXT navigation
+    // renders server-side with this workspace's rows already in it.
     getWorkspaceId()
+
+    /*
+     * Nudge anything of ours that is due.
+     *
+     * This is what lets the studio work with no scheduler at all, which matters
+     * because Vercel's Hobby plan only runs a cron once a day. Opening the app
+     * is enough to resume a generation that stalled while it was closed.
+     *
+     * Fire-and-forget by design: the response says nothing the page needs, and a
+     * failure here must never surface as an error on an otherwise fine load.
+     */
+    if (!shouldSweep()) return
+    void fetch('/api/jobs/sweep', { method: 'POST', keepalive: true }).catch(
+      () => undefined,
+    )
   }, [])
 
   return null

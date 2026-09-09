@@ -63,27 +63,50 @@ export function workerId(): string {
  * Due means: in a resumable state, past its backoff, and not currently leased.
  * Ordered oldest-deadline-first so a job that has been waiting longest is not
  * starved by a steady arrival of newer ones.
+ *
+ * `workspaceId` narrows the claim to one browser's work. The scheduled tick
+ * omits it and sweeps everything; the on-visit sweep passes it, so opening the
+ * app advances your own jobs without spending the invocation on a stranger's.
  */
-export async function claimDue(limit: number, owner: string): Promise<Generation[]> {
+export async function claimDue(
+  limit: number,
+  owner: string,
+  workspaceId?: string,
+): Promise<Generation[]> {
   const now = Date.now()
   const expires = now + LEASE_MS
 
   const sql = getSql()
 
-  // Raw SQL, because Drizzle cannot express `FOR UPDATE SKIP LOCKED` inside the
-  // subquery of an UPDATE, and that clause is the whole point of the statement.
-  //
-  // `sql.array` rather than a bare JS array: it carries the array type OID, so
-  // Postgres sees a genuine text[] for `= any(...)` instead of guessing.
+  /*
+   * Raw SQL, because Drizzle cannot express `FOR UPDATE SKIP LOCKED` inside the
+   * subquery of an UPDATE, and that clause is the whole point of the statement.
+   *
+   * `state in ${sql([...])}` rather than `= any(${sql.array([...])})`. The array
+   * form needs postgres-js to know the text[] OID, which it learns from a
+   * type-introspection query issued when the connection opens — so the FIRST
+   * statement on a cold connection can race it and go out untyped, failing with
+   * "op ANY/ALL (array) requires array on right side" while the second identical
+   * call succeeds. The `in` helper expands to ($1, $2, …) and needs no OID, so
+   * it cannot lose that race.
+   *
+   * The workspace filter is a nullable parameter rather than a conditionally
+   * interpolated fragment, so both callers run byte-identical SQL. One
+   * statement is easier to reason about than two that differ by a branch, and
+   * Postgres plans `($1 is null or col = $1)` fine against the index.
+   */
+  const scope = workspaceId ?? null
+
   const claimed = await sql<{ id: string }[]>`
     update generations
        set lease_owner = ${owner},
            lease_expires_at = ${expires}
      where id in (
        select id from generations
-        where state = any(${sql.array([...RESUMABLE_STATES])})
+        where state in ${sql([...RESUMABLE_STATES])}
           and (next_poll_at is null or next_poll_at <= ${now})
           and (lease_expires_at is null or lease_expires_at <= ${now})
+          and (${scope}::text is null or workspace_id = ${scope}::text)
         order by coalesce(next_poll_at, created_at) asc
         limit ${limit}
         for update skip locked
@@ -127,7 +150,7 @@ export async function claimOne(id: string, owner: string): Promise<Generation | 
        set lease_owner = ${owner},
            lease_expires_at = ${now + LEASE_MS}
      where id = ${id}
-       and state = any(${sql.array([...RESUMABLE_STATES])})
+       and state in ${sql([...RESUMABLE_STATES])}
        and (lease_expires_at is null or lease_expires_at <= ${now})
     returning id
   `

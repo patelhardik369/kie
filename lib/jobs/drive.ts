@@ -21,11 +21,21 @@ import { claimDue, RESUMABLE_STATES, workerId } from './lease.ts'
  *      stored before the browser's first status poll.
  *   2. **`driveOne`** — one step, called by an open tab's status poll. Free
  *      progress for anything the user is actually looking at.
- *   3. **`tick`** — a batch of due jobs, called by cron. The safety net. It is
- *      the only one that works when nobody is watching, so a twenty-minute
- *      video finishes whether or not the tab that started it still exists.
+ *   3. **`sweepWorkspace`** — every due job of one browser, run when that
+ *      browser opens the app. This is what makes the studio self-healing
+ *      without any infrastructure at all: come back tomorrow and whatever
+ *      stalled while you were away starts moving as the page loads.
+ *   4. **`tick`** — a batch of due jobs across every workspace, called by a
+ *      scheduler. The backstop, and the only one that runs with nobody present.
  *
- * All three are the same step under a lease, which is why none of them needs to
+ * The fourth is deliberately not a hard dependency. Vercel's Hobby plan will
+ * only run a cron once a day, which is useless for a twenty-minute video, so a
+ * design that *required* a scheduler would be a design that quietly failed for
+ * anyone on the free tier. With the on-visit sweep, the worst case without any
+ * scheduler is that a generation finishes the next time you open the app rather
+ * than the moment Kie is done. With one, it finishes on its own.
+ *
+ * All four are the same step under a lease, which is why none of them needs to
  * know the others exist.
  */
 
@@ -107,7 +117,10 @@ export interface TickReport {
  * concurrently because each is dominated by waiting on Kie or on a download, and
  * doing eight of those in series would not fit in one invocation.
  */
-export async function tick(batch = TICK_BATCH): Promise<TickReport> {
+export async function tick(
+  batch = TICK_BATCH,
+  workspaceId?: string,
+): Promise<TickReport> {
   const startedAt = Date.now()
   const owner = workerId()
   const report: TickReport = {
@@ -119,7 +132,7 @@ export async function tick(batch = TICK_BATCH): Promise<TickReport> {
     ms: 0,
   }
 
-  const claimed = await claimDue(batch, owner)
+  const claimed = await claimDue(batch, owner, workspaceId)
   report.claimed = claimed.length
 
   const results = await Promise.allSettled(
@@ -139,6 +152,33 @@ export async function tick(batch = TICK_BATCH): Promise<TickReport> {
   report.truncated = Date.now() - startedAt >= TICK_BUDGET_MS
   report.ms = Date.now() - startedAt
   return report
+}
+
+/**
+ * Advances every due job belonging to one browser.
+ *
+ * Called when the app is opened. It is what turns a scheduled tick from a
+ * requirement into an optimisation: without any cron at all, a generation left
+ * running overnight resumes the moment you next load the studio, rather than
+ * sitting in `waiting` forever with its credits already spent.
+ *
+ * It claims under the same lease as everything else, so a page load racing the
+ * cron — or three tabs opening at once — still produces one poll per job. And
+ * it needs no API key from the caller: each job carries its own sealed key, so
+ * the sweep works even before the browser has finished restoring its own.
+ *
+ * Never throws. It runs detached from a response nobody is waiting on.
+ */
+export async function sweepWorkspace(
+  workspaceId: string,
+  batch = TICK_BATCH,
+): Promise<TickReport> {
+  try {
+    return await tick(batch, workspaceId)
+  } catch (error) {
+    console.error(`[kie-studio] sweep for ${workspaceId} failed:`, error)
+    return { claimed: 0, settled: 0, progressed: 0, failed: 1, truncated: false, ms: 0 }
+  }
 }
 
 /**
