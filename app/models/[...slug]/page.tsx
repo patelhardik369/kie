@@ -151,7 +151,7 @@ export default async function ModelPage({
           Parameters
           <span className="mono ml-2 text-(--color-ink-faint)">{model.params.length}</span>
         </h2>
-        <div className="panel-flush mt-3 overflow-x-auto">
+        <div className="panel-flush table-scroll mt-3 overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-(--color-border) bg-(--color-surface) text-xs text-(--color-ink-muted)">

@@ -39,7 +39,7 @@ export function ParamProvenance({
 
   return (
     <div className="space-y-4">
-      <div className="panel-flush">
+      <div className="panel-flush table-scroll">
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-(--color-border) bg-(--color-surface) text-xs text-(--color-ink-muted)">

@@ -297,7 +297,9 @@ export function NumberControl(props: ControlProps) {
       )}
       <input
         type="number"
-        className={`${inputBase} ${showSlider ? 'w-28' : ''} font-mono`}
+        // Narrower beside a slider on a phone: 112px of number input plus a
+        // range track does not fit inside 360px minus the page gutters.
+        className={`${inputBase} ${showSlider ? 'w-20 sm:w-28' : ''} font-mono`}
         min={param.min}
         max={upper}
         step={param.step ?? 1}
@@ -699,7 +701,7 @@ export function ColorListControl({ param, value, onChange, disabled }: ControlPr
     <div className="space-y-2">
       <div className="space-y-1.5">
         {list.map((stop, index) => (
-          <div key={index} className="flex items-center gap-2">
+          <div key={index} className="flex flex-wrap items-center gap-2">
             <input
               type="color"
               className="h-8 w-8 shrink-0 cursor-pointer rounded-md border border-(--color-border) bg-transparent transition-colors duration-(--dur-fast) hover:border-(--color-border-strong) disabled:opacity-40"

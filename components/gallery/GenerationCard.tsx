@@ -148,9 +148,12 @@ export function GenerationCard({
         )}
 
         {/* A scrim under the overlay controls only. Dimming the whole thumbnail
-            to make one 13px star legible would be a bad trade. */}
+            to make one 13px star legible would be a bad trade.
+
+            `scrim-on-hover` is permanently on for touch, where the controls it
+            backs are permanently visible. */}
         <span
-          className="pointer-events-none absolute inset-x-0 top-0 h-14 bg-linear-to-b from-black/50 to-transparent opacity-0 transition-opacity duration-(--dur) group-hover:opacity-100"
+          className="scrim-on-hover pointer-events-none absolute inset-x-0 top-0 h-14 bg-linear-to-b from-black/50 to-transparent opacity-0 transition-opacity duration-(--dur) group-hover:opacity-100"
           aria-hidden
         />
 
@@ -160,10 +163,12 @@ export function GenerationCard({
           disabled={saving}
           aria-label={favorite ? 'Remove from favorites' : 'Add to favorites'}
           aria-pressed={favorite}
-          className={`absolute top-1.5 right-1.5 grid h-6 w-6 place-items-center rounded-md backdrop-blur-md transition duration-(--dur-fast) ${
+          // `size-8` not `h-6 w-6`: 24px is a coin-toss for a thumb. The icon
+          // stays 13px; only the hit area grows.
+          className={`absolute top-1.5 right-1.5 grid size-8 place-items-center rounded-md backdrop-blur-md transition duration-(--dur-fast) sm:size-6 ${
             favorite
               ? 'bg-black/50 text-(--color-warn-ink)'
-              : 'bg-black/45 text-white/75 opacity-0 group-hover:opacity-100 hover:text-white focus-visible:opacity-100'
+              : 'reveal bg-black/45 text-white/75 hover:text-white'
           }`}
         >
           <Star size={13} filled={favorite} />
@@ -183,10 +188,10 @@ export function GenerationCard({
                 ? 'Click again to delete this generation and its files. No undo.'
                 : 'Delete this generation'
             }
-            className={`absolute top-1.5 left-1.5 flex h-6 items-center justify-center gap-1 rounded-md backdrop-blur-md transition duration-(--dur-fast) ${
+            className={`absolute top-1.5 left-1.5 flex h-8 items-center justify-center gap-1 rounded-md backdrop-blur-md transition duration-(--dur-fast) sm:h-6 ${
               armed
                 ? 'bg-(--color-bad) px-2 text-[10px] font-medium text-white'
-                : 'w-6 bg-black/45 text-white/75 opacity-0 group-hover:opacity-100 hover:text-white focus-visible:opacity-100'
+                : 'reveal w-8 bg-black/45 text-white/75 hover:text-white sm:w-6'
             }`}
           >
             <Trash size={13} />

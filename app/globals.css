@@ -797,3 +797,133 @@ summary::-webkit-details-marker {
     transform: none;
   }
 }
+
+/* ==========================================================================
+   Touch and small screens
+
+   Three problems, and only the first is about layout. A page can reflow
+   perfectly and still be unusable with a thumb.
+
+   1. HOVER-ONLY AFFORDANCES DO NOT EXIST ON TOUCH. The gallery's favourite and
+      delete controls were `opacity-0 group-hover:opacity-100`, which on a phone
+      means permanently invisible and unreachable — the feature is simply gone,
+      with nothing on screen to suggest it was ever there.
+
+   2. TAP TARGETS. `.btn-sm` is 26px tall, which is comfortable with a mouse and
+      a coin-toss with a finger. The WCAG 2.2 minimum is 24px and the practical
+      floor is around 40px.
+
+   3. iOS ZOOMS ANY INPUT UNDER 16px ON FOCUS. Our controls are 13px, so tapping
+      a prompt field would jerk the whole page to 130% and leave it there. This
+      is the single most common "the form feels broken on my phone" cause, and
+      it is invisible on every desktop browser.
+
+   Keyed on `pointer`/`hover` rather than width, deliberately: a 1024px tablet is
+   a touch device and a 360px desktop window is not. Width tells you about the
+   viewport; these tell you about the hand.
+   ========================================================================== */
+
+@layer components {
+  /**
+   * A control that fades in on hover — and is simply present on touch.
+   *
+   * Replaces inline `opacity-0 group-hover:opacity-100`. Focus is included so
+   * the same controls are reachable by keyboard, which the inline version only
+   * got right in one of the three places it was used.
+   */
+  .reveal {
+    opacity: 0;
+    transition: opacity var(--dur) var(--ease);
+  }
+
+  .group:hover .reveal,
+  .group:focus-within .reveal,
+  .reveal:focus-visible {
+    opacity: 1;
+  }
+}
+
+@media (hover: none) {
+  /* No hover to reveal with, so nothing may depend on it. */
+  .reveal {
+    opacity: 1;
+  }
+
+  /* The scrim exists to keep those controls legible; if they are always
+     visible, it is always needed. */
+  .scrim-on-hover {
+    opacity: 1;
+  }
+}
+
+@media (pointer: coarse) {
+  /* Comfortable targets. `min-height` rather than `height` so nothing that
+     already wraps to two lines gets clipped. */
+  .btn {
+    min-height: 2.5rem;
+  }
+
+  .btn-sm {
+    min-height: 2.25rem;
+    padding: 0 0.75rem;
+  }
+
+  .btn-icon {
+    min-width: 2.25rem;
+    padding: 0;
+  }
+
+  /*
+   * 16px, or iOS zooms the page on focus and does not zoom back out.
+   *
+   * `max()` keeps any larger size a control already had — this raises a floor,
+   * it does not flatten the type scale.
+   */
+  .input,
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Narrow viewports
+
+   Width-based, because these are about how much room there is rather than what
+   is pointing at it.
+   -------------------------------------------------------------------------- */
+@media (width < 40rem) {
+  /* The masthead's 22px title is a third of a 360px screen. */
+  .h-page {
+    font-size: 1.125rem;
+  }
+
+  /*
+   * Any table gets to scroll rather than squash.
+   *
+   * A `w-full` table in a narrow container does not overflow — it compresses,
+   * wrapping every cell to three lines until the row is unreadable. Giving it a
+   * floor turns that back into a horizontal scroll, which is legible.
+   */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-scroll > table {
+    min-width: 34rem;
+  }
+}
+
+/*
+ * Nothing may push the page sideways.
+ *
+ * The backstop for the case this file cannot anticipate: one long unbroken
+ * string — a model slug, a storage key, a connection error — silently widening
+ * the document and leaving every screen scrollable by a few pixels.
+ */
+html,
+body {
+  overflow-x: clip;
+}

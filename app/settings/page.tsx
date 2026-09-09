@@ -176,7 +176,7 @@ export default async function SettingsPage() {
         </div>
 
         {spend.byModel.length > 0 && (
-          <div className="panel-flush mt-4">
+          <div className="panel-flush table-scroll mt-4">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-(--color-border) bg-(--color-surface)">
