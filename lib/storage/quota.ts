@@ -46,33 +46,47 @@ export interface StorageUsage {
 
 export async function readUsage(workspaceId: string): Promise<StorageUsage> {
   const env = getEnv()
-  const db = getDb()
 
-  const [[outputs], [inputs], [mine], [myInputs], [oversize]] = await Promise.all([
-    db
-      .select({ total: sql<string>`coalesce(sum(${assets.bytes}), 0)` })
-      .from(assets)
-      .where(eq(assets.storageState, 'stored')),
-    db.select({ total: sql<string>`coalesce(sum(${inputAssets.bytes}), 0)` }).from(inputAssets),
-    db
-      .select({ total: sql<string>`coalesce(sum(${assets.bytes}), 0)` })
-      .from(assets)
-      .where(and(eq(assets.workspaceId, workspaceId), eq(assets.storageState, 'stored'))),
-    db
-      .select({ total: sql<string>`coalesce(sum(${inputAssets.bytes}), 0)` })
-      .from(inputAssets)
-      .where(eq(inputAssets.workspaceId, workspaceId)),
-    db
-      .select({ n: sql<string>`count(*)` })
-      .from(assets)
-      .where(and(eq(assets.workspaceId, workspaceId), eq(assets.storageState, 'too_large'))),
-  ])
+  /*
+   * ONE query, not five.
+   *
+   * Same reasoning as getGalleryFacets: five aggregates through `Promise.all`
+   * is five round trips to another continent, contending for a small pool. The
+   * home page calls this alongside the facets and the recent grid, and the
+   * combined fan-out was enough to exhaust the pool and hang the render.
+   *
+   * Both tables are summed in one statement. `filter (where …)` keeps the
+   * workspace-scoped totals in the same pass as the project-wide ones, so the
+   * cost is one scan rather than four.
+   */
+  const [row] = await getDb().execute<{
+    all_outputs: string
+    all_inputs: string
+    my_outputs: string
+    my_inputs: string
+    my_oversize: string
+  }>(sql`
+    select
+      (select coalesce(sum(bytes), 0)::text from assets where storage_state = 'stored')
+        as all_outputs,
+      (select coalesce(sum(bytes), 0)::text from input_assets)
+        as all_inputs,
+      (select coalesce(sum(bytes), 0)::text from assets
+         where storage_state = 'stored' and workspace_id = ${workspaceId})
+        as my_outputs,
+      (select coalesce(sum(bytes), 0)::text from input_assets
+         where workspace_id = ${workspaceId})
+        as my_inputs,
+      (select count(*)::text from assets
+         where storage_state = 'too_large' and workspace_id = ${workspaceId})
+        as my_oversize
+  `)
 
   // sum() over bigint comes back as a string from pg — Number() on it is exact
   // well past any plausible bucket size, but the cast has to be explicit or the
   // arithmetic below concatenates.
-  const totalBytes = num(outputs?.total) + num(inputs?.total)
-  const workspaceBytes = num(mine?.total) + num(myInputs?.total)
+  const totalBytes = num(row?.all_outputs) + num(row?.all_inputs)
+  const workspaceBytes = num(row?.my_outputs) + num(row?.my_inputs)
   const quotaBytes = env.storageQuotaBytes
   const fraction = quotaBytes > 0 ? totalBytes / quotaBytes : 0
 
@@ -84,7 +98,7 @@ export async function readUsage(workspaceId: string): Promise<StorageUsage> {
     warn: fraction >= WARN_FRACTION,
     full: totalBytes >= quotaBytes,
     maxFileBytes: env.maxFileBytes,
-    oversizeCount: num(oversize?.n),
+    oversizeCount: num(row?.my_oversize),
   }
 }
 

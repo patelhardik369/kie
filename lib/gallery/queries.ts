@@ -256,49 +256,62 @@ export interface GalleryFacets {
  * and a count of zero next to an option is more useful than hiding it.
  */
 export async function getGalleryFacets(workspaceId: string): Promise<GalleryFacets> {
-  const db = getDb()
-  const mine = eq(generations.workspaceId, workspaceId)
+  /*
+   * ONE query, not five.
+   *
+   * This used to fan out five `GROUP BY`s through `Promise.all`, which is fine
+   * when the database is a file on the same disk and ruinous when it is a
+   * pooled connection on another continent. Every round trip costs the full
+   * latency, they contend for the same small pool, and the home page — which
+   * also calls recentGenerations and readUsage — was firing thirteen at once.
+   * Past the pool's ceiling that stopped being slow and started being a hang.
+   *
+   * Postgres will happily do all five groupings in one pass with a lateral
+   * union: each row carries the dimension it belongs to, and the shape is
+   * rebuilt below. One scan of one index, one round trip.
+   */
+  const rows = await getDb().execute<{
+    dimension: string
+    value: string | null
+    n: string
+  }>(sql`
+    with mine as (
+      select family, capability, model_slug, state, favorite, nsfw
+        from generations
+       where workspace_id = ${workspaceId}
+    )
+    select 'family'     as dimension, family     as value, count(*)::text as n from mine group by 1, 2
+    union all
+    select 'capability' as dimension, capability as value, count(*)::text      from mine group by 1, 2
+    union all
+    select 'model'      as dimension, model_slug as value, count(*)::text      from mine group by 1, 2
+    union all
+    select 'state'      as dimension, state      as value, count(*)::text      from mine group by 1, 2
+    union all
+    select 'total'      as dimension, null       as value, count(*)::text      from mine
+    union all
+    select 'favorite'   as dimension, null       as value, count(*)::text      from mine where favorite
+    union all
+    select 'nsfw'       as dimension, null       as value, count(*)::text      from mine where nsfw
+  `)
 
-  const [families, capabilities, models, states, totals] = await Promise.all([
-    db
-      .select({ value: generations.family, count: count() })
-      .from(generations)
-      .where(mine)
-      .groupBy(generations.family),
-    db
-      .select({ value: generations.capability, count: count() })
-      .from(generations)
-      .where(mine)
-      .groupBy(generations.capability),
-    db
-      .select({ value: generations.modelSlug, count: count() })
-      .from(generations)
-      .where(mine)
-      .groupBy(generations.modelSlug)
-      .orderBy(desc(count())),
-    db
-      .select({ value: generations.state, count: count() })
-      .from(generations)
-      .where(mine)
-      .groupBy(generations.state),
-    db
-      .select({
-        total: count(),
-        favorites: sql<number>`sum(case when ${generations.favorite} then 1 else 0 end)`,
-        nsfw: sql<number>`sum(case when ${generations.nsfw} then 1 else 0 end)`,
-      })
-      .from(generations)
-      .where(mine),
-  ])
+  const bucket = (name: string): Facet[] =>
+    rows
+      .filter((r) => r.dimension === name && r.value !== null)
+      .map((r) => ({ value: String(r.value), count: Number(r.n) }))
+      .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value))
+
+  const scalar = (name: string): number =>
+    Number(rows.find((r) => r.dimension === name)?.n ?? 0)
 
   return {
-    families,
-    capabilities,
-    models,
-    states,
-    total: totals[0]?.total ?? 0,
-    favorites: Number(totals[0]?.favorites ?? 0),
-    nsfw: Number(totals[0]?.nsfw ?? 0),
+    families: bucket('family'),
+    capabilities: bucket('capability'),
+    models: bucket('model'),
+    states: bucket('state'),
+    total: scalar('total'),
+    favorites: scalar('favorite'),
+    nsfw: scalar('nsfw'),
   }
 }
 

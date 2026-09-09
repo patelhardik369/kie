@@ -21,20 +21,11 @@ export * from './schema.ts'
  *                     second fails with "prepared statement s1 already exists".
  *                     Drizzle's own Supabase guide sets this.
  *
- *   `max`             **Depends on whether the process outlives the request.**
- *                     On a serverless host every invocation is its own process
- *                     with its own pool, so one connection each is right — a
- *                     pool of ten per invocation exhausts Supabase Free's
- *                     connection limit long before it exhausts the function's
- *                     concurrency.
- *
- *                     On a long-lived process — `next dev`, or `next start` on
- *                     a VPS — one connection is actively harmful. Every request
- *                     in the whole server queues behind it, so a single wedged
- *                     query stalls the entire app rather than one request. That
- *                     is not hypothetical: it is what a hung connection did to
- *                     the dev server during setup, with static pages still
- *                     serving fine while everything touching the database hung.
+ *   `max`             Small, and the same everywhere. One connection stalls a
+ *                     long-lived server behind any wedged query; a large pool
+ *                     exhausts Supabase Free's pooler when serverless
+ *                     invocations multiply. See POOL_MAX below for why this is
+ *                     not branched on the host.
  *
  *   `idle_timeout`    A frozen serverless instance holds its socket open until
  *                     the server reaps it. Releasing after 20s of idle keeps the
@@ -53,13 +44,30 @@ export * from './schema.ts'
  */
 
 /**
- * True on a host that tears the process down after each request.
+ * How many connections one process may hold.
  *
- * `VERCEL` is set on every Vercel deployment; the Lambda variable covers other
- * serverless runtimes. Everything else — `next dev`, `next start`, a container —
- * is treated as long-lived.
+ * Deliberately NOT branched on `process.env.VERCEL`. That variable is a Vercel
+ * *System Environment Variable*, exposed to the runtime only when the project
+ * has "Automatically expose System Environment Variables" enabled — so the
+ * detection silently inverts on a project that does not, and the serverless
+ * deployment quietly takes the long-lived branch. That is exactly what happened
+ * here: pages fanning out thirteen queries opened enough connections to wedge
+ * against Supabase Free's pooler and hung the render, while single-query API
+ * routes on the same deployment answered in under a second.
+ *
+ * So there is one number for every host, chosen to be safe on the smallest:
+ * enough that a page render is not serialised behind a single socket, few
+ * enough that a burst of concurrent invocations cannot exhaust the pooler.
+ * Raise it with `DB_POOL_MAX` on a plan with room.
+ *
+ * The real fix was upstream of this: `getGalleryFacets` and `readUsage` each
+ * became one query instead of five. A page that needs thirteen round trips to
+ * render is a problem no pool size solves.
  */
-const SERVERLESS = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME)
+const POOL_MAX = (() => {
+  const raw = Number(process.env.DB_POOL_MAX)
+  return Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 3
+})()
 
 type Database = ReturnType<typeof drizzle<typeof schema>>
 
@@ -87,7 +95,7 @@ function connect(): Database {
 
   const client = postgres(env.databaseUrl, {
     prepare: env.poolerTransactionMode ? false : undefined,
-    max: SERVERLESS ? 1 : 8,
+    max: POOL_MAX,
     idle_timeout: 20,
     max_lifetime: 60 * 30,
     // A hung connect must not hold a serverless invocation open to its ceiling.

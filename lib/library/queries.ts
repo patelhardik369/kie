@@ -410,15 +410,31 @@ export async function balanceHistory(workspaceId: string, limit = 200) {
   return rows.reverse()
 }
 
-/** Row counts for the settings summary. */
+/**
+ * Row counts for the settings summary — one query, not three.
+ *
+ * Three `$count`s through `Promise.all` is three round trips for three integers.
+ * That is cheap against a local file and wasteful against a pooled connection on
+ * another continent, where Settings already fans out enough work to contend for
+ * the pool.
+ */
 export async function libraryCounts(workspaceId: string) {
-  const db = getDb()
-  const [presetCount, promptCount, assetCount] = await Promise.all([
-    db.$count(presets, eq(presets.workspaceId, workspaceId)),
-    db.$count(prompts, eq(prompts.workspaceId, workspaceId)),
-    db.$count(inputAssets, eq(inputAssets.workspaceId, workspaceId)),
-  ])
-  return { presets: presetCount, prompts: promptCount, inputAssets: assetCount }
+  const [row] = await getDb().execute<{
+    presets: string
+    prompts: string
+    input_assets: string
+  }>(sql`
+    select
+      (select count(*)::text from presets       where workspace_id = ${workspaceId}) as presets,
+      (select count(*)::text from prompts       where workspace_id = ${workspaceId}) as prompts,
+      (select count(*)::text from input_assets  where workspace_id = ${workspaceId}) as input_assets
+  `)
+
+  return {
+    presets: Number(row?.presets ?? 0),
+    prompts: Number(row?.prompts ?? 0),
+    inputAssets: Number(row?.input_assets ?? 0),
+  }
 }
 
 /**
