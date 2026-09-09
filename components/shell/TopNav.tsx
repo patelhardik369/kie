@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 import { PinnedMenu } from '@/components/models/PinnedMenu.tsx'
+import { NavPending } from './NavPending.tsx'
 import { Aperture, Bookmark, Gear, Grid, Layers, Plus, TextLines } from './icons.tsx'
 
 /**
@@ -73,6 +74,8 @@ export function TopNav() {
                   className={active ? 'text-(--color-accent)' : undefined}
                 />
                 {label}
+                {/* Reports THIS link's pending state — must be a child of it. */}
+                <NavPending />
               </Link>
             )
           })}
@@ -93,6 +96,7 @@ export function TopNav() {
           }`}
         >
           <Gear size={15} />
+          <NavPending />
         </Link>
 
         <Link
