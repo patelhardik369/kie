@@ -23,34 +23,61 @@ import { UPLOAD_TTL_MS } from '../kie/upload.ts'
  *
  * Server-only. Kept together because they are one feature — the things you
  * accumulate and reuse — rather than four unrelated tables.
+ *
+ * **Every function here takes a `workspaceId` as its first argument, and every
+ * query filters on it.** That repetition is the point. The service-role
+ * connection bypasses row-level security, so a query that forgets the filter
+ * does not fail — it quietly returns another person's presets. Making the id a
+ * required leading parameter means forgetting it is a type error rather than a
+ * leak.
  */
 
 // ------------------------------------------------------------------ presets
 
-export async function listPresets(modelSlug?: string): Promise<Preset[]> {
+export async function listPresets(
+  workspaceId: string,
+  modelSlug?: string,
+): Promise<Preset[]> {
   const db = getDb()
-  const query = db.select().from(presets)
-  const rows = modelSlug
-    ? await query.where(eq(presets.modelSlug, modelSlug)).orderBy(desc(presets.updatedAt))
-    : await query.orderBy(asc(presets.modelSlug), desc(presets.updatedAt))
-  return rows
+  const scope = modelSlug
+    ? and(eq(presets.workspaceId, workspaceId), eq(presets.modelSlug, modelSlug))
+    : eq(presets.workspaceId, workspaceId)
+
+  return modelSlug
+    ? db.select().from(presets).where(scope).orderBy(desc(presets.updatedAt))
+    : db
+        .select()
+        .from(presets)
+        .where(scope)
+        .orderBy(asc(presets.modelSlug), desc(presets.updatedAt))
 }
 
-export async function getPreset(id: string): Promise<Preset | undefined> {
-  const rows = await getDb().select().from(presets).where(eq(presets.id, id)).limit(1)
+export async function getPreset(
+  workspaceId: string,
+  id: string,
+): Promise<Preset | undefined> {
+  const rows = await getDb()
+    .select()
+    .from(presets)
+    .where(and(eq(presets.id, id), eq(presets.workspaceId, workspaceId)))
+    .limit(1)
   return rows[0]
 }
 
-export async function createPreset(input: {
-  name: string
-  modelSlug: string
-  params: Record<string, unknown>
-  /** Whether runs from this preset start marked private. */
-  nsfw?: boolean
-}): Promise<Preset> {
+export async function createPreset(
+  workspaceId: string,
+  input: {
+    name: string
+    modelSlug: string
+    params: Record<string, unknown>
+    /** Whether runs from this preset start marked private. */
+    nsfw?: boolean
+  },
+): Promise<Preset> {
   const now = Date.now()
   const row = {
     id: crypto.randomUUID(),
+    workspaceId,
     name: input.name,
     // Model-scoped, always. A preset is never applied across models — the
     // parameters mean different things, when they exist at all.
@@ -65,6 +92,7 @@ export async function createPreset(input: {
 }
 
 export async function updatePreset(
+  workspaceId: string,
   id: string,
   patch: { name?: string; params?: Record<string, unknown>; nsfw?: boolean },
 ): Promise<Preset | undefined> {
@@ -76,22 +104,30 @@ export async function updatePreset(
   const rows = await getDb()
     .update(presets)
     .set(values)
-    .where(eq(presets.id, id))
+    .where(and(eq(presets.id, id), eq(presets.workspaceId, workspaceId)))
     .returning()
   return rows[0]
 }
 
-export async function deletePreset(id: string): Promise<boolean> {
-  const rows = await getDb().delete(presets).where(eq(presets.id, id)).returning({
-    id: presets.id,
-  })
+export async function deletePreset(workspaceId: string, id: string): Promise<boolean> {
+  const rows = await getDb()
+    .delete(presets)
+    .where(and(eq(presets.id, id), eq(presets.workspaceId, workspaceId)))
+    .returning({ id: presets.id })
   return rows.length > 0
 }
 
 // ------------------------------------------------------------------ prompts
 
-export async function listPrompts(search?: string): Promise<Prompt[]> {
-  const rows = await getDb().select().from(prompts).orderBy(desc(prompts.createdAt))
+export async function listPrompts(
+  workspaceId: string,
+  search?: string,
+): Promise<Prompt[]> {
+  const rows = await getDb()
+    .select()
+    .from(prompts)
+    .where(eq(prompts.workspaceId, workspaceId))
+    .orderBy(desc(prompts.createdAt))
   if (!search?.trim()) return rows
 
   // Filtered in JS rather than SQL: the prompt library is small by nature, and
@@ -105,13 +141,13 @@ export async function listPrompts(search?: string): Promise<Prompt[]> {
   )
 }
 
-export async function createPrompt(input: {
-  title: string
-  body: string
-  tags: string[]
-}): Promise<Prompt> {
+export async function createPrompt(
+  workspaceId: string,
+  input: { title: string; body: string; tags: string[] },
+): Promise<Prompt> {
   const row = {
     id: crypto.randomUUID(),
+    workspaceId,
     title: input.title,
     body: input.body,
     tagsJson: JSON.stringify(normalizeTags(input.tags)),
@@ -122,6 +158,7 @@ export async function createPrompt(input: {
 }
 
 export async function updatePrompt(
+  workspaceId: string,
   id: string,
   patch: { title?: string; body?: string; tags?: string[] },
 ): Promise<Prompt | undefined> {
@@ -130,21 +167,33 @@ export async function updatePrompt(
   if (patch.body !== undefined) values.body = patch.body
   if (patch.tags !== undefined) values.tagsJson = JSON.stringify(normalizeTags(patch.tags))
 
-  if (Object.keys(values).length === 0) return getPrompt(id)
+  if (Object.keys(values).length === 0) return getPrompt(workspaceId, id)
 
-  const rows = await getDb().update(prompts).set(values).where(eq(prompts.id, id)).returning()
+  const rows = await getDb()
+    .update(prompts)
+    .set(values)
+    .where(and(eq(prompts.id, id), eq(prompts.workspaceId, workspaceId)))
+    .returning()
   return rows[0]
 }
 
-async function getPrompt(id: string): Promise<Prompt | undefined> {
-  const rows = await getDb().select().from(prompts).where(eq(prompts.id, id)).limit(1)
+async function getPrompt(
+  workspaceId: string,
+  id: string,
+): Promise<Prompt | undefined> {
+  const rows = await getDb()
+    .select()
+    .from(prompts)
+    .where(and(eq(prompts.id, id), eq(prompts.workspaceId, workspaceId)))
+    .limit(1)
   return rows[0]
 }
 
-export async function deletePrompt(id: string): Promise<boolean> {
-  const rows = await getDb().delete(prompts).where(eq(prompts.id, id)).returning({
-    id: prompts.id,
-  })
+export async function deletePrompt(workspaceId: string, id: string): Promise<boolean> {
+  const rows = await getDb()
+    .delete(prompts)
+    .where(and(eq(prompts.id, id), eq(prompts.workspaceId, workspaceId)))
+    .returning({ id: prompts.id })
   return rows.length > 0
 }
 
@@ -162,8 +211,14 @@ function normalizeTags(tags: string[]): string[] {
 }
 
 /** Every tag in use, with counts, for the filter row. */
-export async function promptTags(): Promise<{ tag: string; count: number }[]> {
-  const rows = await getDb().select({ tagsJson: prompts.tagsJson }).from(prompts)
+export async function promptTags(
+  workspaceId: string,
+): Promise<{ tag: string; count: number }[]> {
+  const rows = await getDb()
+    .select({ tagsJson: prompts.tagsJson })
+    .from(prompts)
+    .where(eq(prompts.workspaceId, workspaceId))
+
   const counts = new Map<string, number>()
   for (const row of rows) {
     for (const tag of parseTags(row.tagsJson)) {
@@ -180,7 +235,6 @@ export async function promptTags(): Promise<{ tag: string; count: number }[]> {
 export interface LibraryAsset extends InputAsset {
   /** False once the Kie upload URL has expired and a re-upload is needed. */
   live: boolean
-  /** Whether the local copy still exists to re-upload FROM. */
   expiresInMs: number | null
 }
 
@@ -188,18 +242,26 @@ export interface LibraryAsset extends InputAsset {
  * Assets usable as model inputs.
  *
  * `live` is the thing the UI needs: an expired upload is not a broken asset,
- * because the local copy is kept and `storeUpload` re-uploads transparently on
- * next use. It only means the cached URL cannot be pasted straight into a field.
+ * because our own copy is kept in the bucket and `storeUpload` re-uploads
+ * transparently on next use. It only means the cached URL cannot be pasted
+ * straight into a field.
  */
-export async function listInputAssets(kind?: string): Promise<LibraryAsset[]> {
-  const db = getDb()
-  const rows = kind
-    ? await db
-        .select()
-        .from(inputAssets)
-        .where(eq(inputAssets.kind, kind as InputAsset['kind']))
-        .orderBy(desc(inputAssets.createdAt))
-    : await db.select().from(inputAssets).orderBy(desc(inputAssets.createdAt))
+export async function listInputAssets(
+  workspaceId: string,
+  kind?: string,
+): Promise<LibraryAsset[]> {
+  const scope = kind
+    ? and(
+        eq(inputAssets.workspaceId, workspaceId),
+        eq(inputAssets.kind, kind as InputAsset['kind']),
+      )
+    : eq(inputAssets.workspaceId, workspaceId)
+
+  const rows = await getDb()
+    .select()
+    .from(inputAssets)
+    .where(scope)
+    .orderBy(desc(inputAssets.createdAt))
 
   const now = Date.now()
   return rows.map((row) => ({
@@ -209,11 +271,17 @@ export async function listInputAssets(kind?: string): Promise<LibraryAsset[]> {
   }))
 }
 
-export async function deleteInputAsset(id: string): Promise<boolean> {
-  const rows = await getDb().delete(inputAssets).where(eq(inputAssets.id, id)).returning({
-    id: inputAssets.id,
-  })
-  return rows.length > 0
+export async function deleteInputAsset(
+  workspaceId: string,
+  id: string,
+): Promise<InputAsset | undefined> {
+  // Returns the row rather than a boolean: the caller has to remove the object
+  // too, and it needs the storage key to do it.
+  const rows = await getDb()
+    .delete(inputAssets)
+    .where(and(eq(inputAssets.id, id), eq(inputAssets.workspaceId, workspaceId)))
+    .returning()
+  return rows[0]
 }
 
 export { UPLOAD_TTL_MS }
@@ -224,7 +292,7 @@ export interface SpendSummary {
   /** Latest recorded account balance, if one has been fetched. */
   balance: number | null
   balanceRecordedAt: number | null
-  /** Sum of `credits_consumed` across all generations. */
+  /** Sum of `credits_consumed` across this workspace's generations. */
   totalSpent: number
   byModel: { modelSlug: string; credits: number; runs: number }[]
   byDay: { day: string; credits: number; runs: number }[]
@@ -236,15 +304,23 @@ export interface SpendSummary {
  * Kie's logs age out after two months, so `generations.credits_consumed` is the
  * long-term record — this reads it rather than asking the API.
  */
-export async function getSpendSummary(days = 30): Promise<SpendSummary> {
+export async function getSpendSummary(
+  workspaceId: string,
+  days = 30,
+): Promise<SpendSummary> {
   const db = getDb()
   const since = Date.now() - days * 24 * 60 * 60 * 1000
+  const mine = eq(generations.workspaceId, workspaceId)
+  const recent = and(mine, gte(generations.createdAt, since))
 
   const [latest, totals, byModel, byDay] = await Promise.all([
-    db.select().from(creditLog).orderBy(desc(creditLog.recordedAt)).limit(1),
     db
-      .select({ total: sum(generations.creditsConsumed) })
-      .from(generations),
+      .select()
+      .from(creditLog)
+      .where(eq(creditLog.workspaceId, workspaceId))
+      .orderBy(desc(creditLog.recordedAt))
+      .limit(1),
+    db.select({ total: sum(generations.creditsConsumed) }).from(generations).where(mine),
     db
       .select({
         modelSlug: generations.modelSlug,
@@ -252,18 +328,20 @@ export async function getSpendSummary(days = 30): Promise<SpendSummary> {
         runs: count(),
       })
       .from(generations)
-      .where(gte(generations.createdAt, since))
+      .where(recent)
       .groupBy(generations.modelSlug)
       .orderBy(desc(sum(generations.creditsConsumed))),
     db
       .select({
-        // Local-time day, so the chart matches the folder layout on disk.
-        day: sql<string>`date(${generations.createdAt} / 1000, 'unixepoch', 'localtime')`,
+        // UTC day. The SQLite version used 'localtime' to match the folder
+        // layout on disk; there is no disk any more, and a server's local time
+        // is not the viewer's, so UTC is the only stable answer.
+        day: sql<string>`to_char(to_timestamp(${generations.createdAt} / 1000.0) at time zone 'UTC', 'YYYY-MM-DD')`,
         credits: sum(generations.creditsConsumed),
         runs: count(),
       })
       .from(generations)
-      .where(gte(generations.createdAt, since))
+      .where(recent)
       .groupBy(sql`1`)
       .orderBy(sql`1 desc`),
   ])
@@ -293,11 +371,15 @@ export async function getSpendSummary(days = 30): Promise<SpendSummary> {
  */
 const BALANCE_LOG_INTERVAL_MS = 15 * 60_000
 
-export async function recordBalance(balance: number): Promise<void> {
+export async function recordBalance(
+  workspaceId: string,
+  balance: number,
+): Promise<void> {
   const db = getDb()
   const [latest] = await db
     .select()
     .from(creditLog)
+    .where(eq(creditLog.workspaceId, workspaceId))
     .orderBy(desc(creditLog.recordedAt))
     .limit(1)
 
@@ -309,26 +391,32 @@ export async function recordBalance(balance: number): Promise<void> {
     return
   }
 
-  await db.insert(creditLog).values({ balance, recordedAt: Date.now() })
+  await db.insert(creditLog).values({
+    id: crypto.randomUUID(),
+    workspaceId,
+    balance,
+    recordedAt: Date.now(),
+  })
 }
 
 /** Balance readings over time, oldest first, for a sparkline. */
-export async function balanceHistory(limit = 200) {
+export async function balanceHistory(workspaceId: string, limit = 200) {
   const rows = await getDb()
     .select()
     .from(creditLog)
+    .where(eq(creditLog.workspaceId, workspaceId))
     .orderBy(desc(creditLog.recordedAt))
     .limit(limit)
   return rows.reverse()
 }
 
-/** Rows a generation-count query needs, for the settings summary. */
-export async function libraryCounts() {
+/** Row counts for the settings summary. */
+export async function libraryCounts(workspaceId: string) {
   const db = getDb()
   const [presetCount, promptCount, assetCount] = await Promise.all([
-    db.$count(presets),
-    db.$count(prompts),
-    db.$count(inputAssets),
+    db.$count(presets, eq(presets.workspaceId, workspaceId)),
+    db.$count(prompts, eq(prompts.workspaceId, workspaceId)),
+    db.$count(inputAssets, eq(inputAssets.workspaceId, workspaceId)),
   ])
   return { presets: presetCount, prompts: promptCount, inputAssets: assetCount }
 }
@@ -340,14 +428,19 @@ export async function libraryCounts() {
  * waiting on me", and the gallery's `state=` filter is where you go to look at
  * them one by one.
  */
-export async function parkedCounts(): Promise<{
+export async function parkedCounts(workspaceId: string): Promise<{
   total: number
   byState: Record<string, number>
 }> {
   const rows = await getDb()
     .select({ state: generations.state, n: count() })
     .from(generations)
-    .where(inArray(generations.state, [...RECOVERABLE_STATES]))
+    .where(
+      and(
+        eq(generations.workspaceId, workspaceId),
+        inArray(generations.state, [...RECOVERABLE_STATES]),
+      ),
+    )
     .groupBy(generations.state)
 
   return {
@@ -357,10 +450,18 @@ export async function parkedCounts(): Promise<{
 }
 
 /** Guards a delete of an asset still referenced by a recent generation. */
-export async function inputAssetUsage(fileUrl: string): Promise<number> {
+export async function inputAssetUsage(
+  workspaceId: string,
+  fileUrl: string,
+): Promise<number> {
   const [row] = await getDb()
     .select({ total: count() })
     .from(generations)
-    .where(and(sql`${generations.inputJson} LIKE ${'%' + fileUrl + '%'}`))
+    .where(
+      and(
+        eq(generations.workspaceId, workspaceId),
+        sql`${generations.inputJson} LIKE ${'%' + fileUrl + '%'}`,
+      ),
+    )
   return row?.total ?? 0
 }

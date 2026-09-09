@@ -1,15 +1,12 @@
 import 'server-only'
 
-import fs from 'node:fs/promises'
-
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 
 import { assets, generations, getDb, inputAssets } from '../db/index.ts'
-import { getEnv } from '../env.ts'
 import { promptOf } from '../gallery/display.ts'
-import { resolveWithin } from '../jobs/paths.ts'
 import { storeUpload } from '../jobs/uploads.ts'
+import { getObject, keyBelongsTo } from '../storage/objects.ts'
 import { URL_UPLOAD_MAX_BYTES } from '../kie/upload.ts'
 
 /**
@@ -20,10 +17,12 @@ import { URL_UPLOAD_MAX_BYTES } from '../kie/upload.ts'
  * it by hand — and doing it again tomorrow, because Kie's upload URLs expire in
  * a day.
  *
- * The bytes never leave the machine twice. An output is already on local disk
- * (rule 2 in .claude/CLAUDE.md), so reuse hands that exact path to `storeUpload`
- * as `existingPath`: no second copy, and the content hash means the same output
- * reused across ten generations is uploaded once, not ten times.
+ * The bytes are never stored twice. An output is already in the bucket (rule 2
+ * in .claude/CLAUDE.md), so reuse hands that exact object key to `storeUpload`
+ * as `existingKey`: no second copy — which matters more here than it did on a
+ * laptop, because storage is the binding constraint on the free plan — and the
+ * content hash means the same output reused across ten generations is uploaded
+ * to Kie once, not ten times.
  *
  * Kie's own `assets.remote_url` is deliberately NOT the answer here, except as
  * the last resort below. It dies after about fourteen days, and a `input_json`
@@ -68,7 +67,7 @@ export interface ReusableOutput {
   generationId: string
   modelSlug: string
   kind: OutputKind
-  localPath: string
+  storagePath: string | null
   mime: string | null
   bytes: number | null
   width: number | null
@@ -89,6 +88,7 @@ export interface ReusableOutput {
 }
 
 export interface ListOutputsOptions {
+  /** Only outputs of this workspace are ever returned. */
   /** Restrict to the kinds a parameter accepts. Empty or absent means all. */
   kinds?: readonly OutputKind[]
   limit?: number
@@ -101,18 +101,23 @@ export interface ListOutputsOptions {
 /**
  * Recent outputs, newest first, ready to be picked as an input.
  *
- * The join to `input_assets` is on `local_path`, not on a hash: reuse stores the
- * output's own path, so the row for "this file, already uploaded" is findable
- * without reading a single byte. Hashing 40 videos to render a dropdown would
- * be the wrong trade by three orders of magnitude.
+ * The join to `input_assets` is on `storage_path`, not on a hash: reuse stores
+ * the output's own key, so the row for "this file, already uploaded" is findable
+ * without reading a single byte. Pulling 40 videos back out of the bucket to
+ * hash them for a dropdown would be the wrong trade by three orders of
+ * magnitude.
  */
 export async function listReusableOutputs(
+  workspaceId: string,
   options: ListOutputsOptions = {},
 ): Promise<ReusableOutput[]> {
   const { kinds, limit = DEFAULT_OUTPUT_LIMIT, includePrivate = false, search } = options
   const now = Date.now()
 
-  const clauses: SQL[] = []
+  const clauses: SQL[] = [eq(assets.workspaceId, workspaceId)]
+  // An output that was too large to store has no bytes to reuse and no key to
+  // hand anything — listing it would offer a picker entry that cannot be picked.
+  clauses.push(eq(assets.storageState, 'stored'))
   if (kinds && kinds.length > 0) clauses.push(inArray(assets.kind, [...kinds]))
   if (!includePrivate) clauses.push(eq(generations.nsfw, false))
 
@@ -140,8 +145,14 @@ export async function listReusableOutputs(
     })
     .from(assets)
     .innerJoin(generations, eq(assets.generationId, generations.id))
-    .leftJoin(inputAssets, eq(inputAssets.localPath, assets.localPath))
-    .where(clauses.length > 0 ? and(...clauses) : undefined)
+    .leftJoin(
+      inputAssets,
+      and(
+        eq(inputAssets.storagePath, assets.storagePath),
+        eq(inputAssets.workspaceId, workspaceId),
+      ),
+    )
+    .where(and(...clauses))
     .orderBy(desc(assets.downloadedAt), desc(assets.idx))
     .limit(limit)
 
@@ -150,7 +161,7 @@ export async function listReusableOutputs(
     generationId: row.generation.id,
     modelSlug: row.generation.modelSlug,
     kind: row.asset.kind,
-    localPath: row.asset.localPath,
+    storagePath: row.asset.storagePath,
     mime: row.asset.mime,
     bytes: row.asset.bytes,
     width: row.asset.width,
@@ -196,25 +207,35 @@ export type ResolveOutcome =
  *      fallback, it is never chosen silently, and it is not offered at all once
  *      the fourteen days are up.
  */
-export async function resolveOutputAsInput(assetId: string): Promise<ResolveOutcome> {
+export async function resolveOutputAsInput(
+  workspaceId: string,
+  assetId: string,
+): Promise<ResolveOutcome> {
   const db = getDb()
 
   const [row] = await db
     .select({ asset: assets, modelSlug: generations.modelSlug })
     .from(assets)
     .innerJoin(generations, eq(assets.generationId, generations.id))
-    .where(eq(assets.id, assetId))
+    .where(and(eq(assets.id, assetId), eq(assets.workspaceId, workspaceId)))
     .limit(1)
 
   if (!row) return { ok: false, status: 404, message: 'No such output.' }
   const { asset } = row
 
   // 1. Already uploaded, still live.
-  const [cached] = await db
-    .select()
-    .from(inputAssets)
-    .where(eq(inputAssets.localPath, asset.localPath))
-    .limit(1)
+  const [cached] = asset.storagePath
+    ? await db
+        .select()
+        .from(inputAssets)
+        .where(
+          and(
+            eq(inputAssets.storagePath, asset.storagePath),
+            eq(inputAssets.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1)
+    : []
 
   if (
     cached?.kieFileUrl &&
@@ -231,22 +252,27 @@ export async function resolveOutputAsInput(assetId: string): Promise<ResolveOutc
     }
   }
 
-  // The same guard the asset-serving route uses: `local_path` is data, and data
-  // that escapes the output folder is not read.
-  const absolute = resolveWithin(getEnv().outputDir, asset.localPath)
-  if (!absolute) {
-    return { ok: false, status: 410, message: 'That output has an unusable path on disk.' }
+  // An output past the per-object ceiling was never stored, so there are no
+  // bytes of ours to upload. Its Kie URL is the only thing that points at it,
+  // and that is exactly the fallback below — reached here rather than after a
+  // pointless read.
+  if (!asset.storagePath || asset.storageState !== 'stored') {
+    return oversizeFallback(asset, asset.bytes ?? 0)
   }
 
-  let content: Uint8Array
-  try {
-    content = await fs.readFile(absolute)
-  } catch {
+  // The same guard the asset route applies: `storage_path` is data, and data
+  // naming another workspace's object is not read.
+  if (!keyBelongsTo(asset.storagePath, workspaceId)) {
+    return { ok: false, status: 410, message: 'That output has an unusable storage key.' }
+  }
+
+  const content = await getObject(asset.storagePath)
+  if (!content) {
     return {
       ok: false,
       status: 410,
       message:
-        'The local file for that output is gone, so it cannot be uploaded. ' +
+        'The stored copy of that output is gone, so it cannot be uploaded. ' +
         'Its generation may have been deleted.',
     }
   }
@@ -254,39 +280,19 @@ export async function resolveOutputAsInput(assetId: string): Promise<ResolveOutc
   // 3. Oversized — checked before the upload, because Kie would reject it after
   //    spending the whole transfer.
   if (content.byteLength > URL_UPLOAD_MAX_BYTES) {
-    const fresh = Date.now() - asset.downloadedAt < RESULT_URL_TTL_MS
-    if (!fresh) {
-      return {
-        ok: false,
-        status: 413,
-        message:
-          `That output is ${mb(content.byteLength)} MB, past Kie's ${mb(URL_UPLOAD_MAX_BYTES)} MB ` +
-          'upload ceiling, and its original result URL has expired. Shrink it before reusing it.',
-      }
-    }
-    return {
-      ok: true,
-      fileUrl: asset.remoteUrl,
-      kind: asset.kind,
-      reused: true,
-      expiresAt: asset.downloadedAt + RESULT_URL_TTL_MS,
-      source: 'result-url',
-      warning:
-        `That output is ${mb(content.byteLength)} MB, past Kie's ${mb(URL_UPLOAD_MAX_BYTES)} MB ` +
-        'upload ceiling, so its original Kie result URL was used instead. That URL dies about ' +
-        'fourteen days after the generation, and a re-run after that will fail.',
-    }
+    return oversizeFallback(asset, content.byteLength)
   }
 
   // 2. The normal path.
   const stored = await storeUpload({
+    workspaceId,
     content,
-    filename: basename(asset.localPath),
+    filename: basename(asset.storagePath),
     mime: asset.mime ?? undefined,
     // Named for where it came from, so the asset library reads as a history
     // rather than a list of hashes.
     label: `${row.modelSlug} · ${asset.generationId.slice(0, 8)}`,
-    existingPath: asset.localPath,
+    existingKey: asset.storagePath,
   })
 
   return {
@@ -299,8 +305,49 @@ export async function resolveOutputAsInput(assetId: string): Promise<ResolveOutc
   }
 }
 
-function basename(localPath: string): string {
-  return localPath.slice(localPath.lastIndexOf('/') + 1)
+/**
+ * The last resort: hand Kie its own result URL back.
+ *
+ * Taken for anything we could not or would not store — over Kie's 100 MB upload
+ * ceiling, or over the storage plan's per-object ceiling. It is a worse answer
+ * and it is never chosen silently: the URL dies about fourteen days after the
+ * generation, and with it goes the re-runnability that `input_json` exists to
+ * guarantee. Past those fourteen days it is not offered at all, because a dead
+ * URL in a request is a generation that fails for no visible reason.
+ */
+function oversizeFallback(
+  asset: { remoteUrl: string; kind: string; downloadedAt: number },
+  bytes: number,
+): ResolveOutcome {
+  const fresh = Date.now() - asset.downloadedAt < RESULT_URL_TTL_MS
+  const size = bytes > 0 ? `${mb(bytes)} MB` : 'That output'
+
+  if (!fresh) {
+    return {
+      ok: false,
+      status: 413,
+      message:
+        `${size} is too large to re-upload, and its original Kie result URL has ` +
+        'expired. Shrink it before reusing it.',
+    }
+  }
+
+  return {
+    ok: true,
+    fileUrl: asset.remoteUrl,
+    kind: asset.kind,
+    reused: true,
+    expiresAt: asset.downloadedAt + RESULT_URL_TTL_MS,
+    source: 'result-url',
+    warning:
+      `${size} is past an upload ceiling, so its original Kie result URL was used ` +
+      'instead. That URL dies about fourteen days after the generation, and a ' +
+      're-run after that will fail.',
+  }
+}
+
+function basename(storagePath: string): string {
+  return storagePath.slice(storagePath.lastIndexOf('/') + 1)
 }
 
 function mb(bytes: number): string {

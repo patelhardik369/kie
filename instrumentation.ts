@@ -1,49 +1,56 @@
 /**
  * Runs when the server starts.
  *
- * Validates the environment loudly, brings the database up to date, and puts
- * every non-terminal generation back on the poll loop. That last step is what
- * makes an in-flight generation survive a restart: the database is
- * authoritative, so a job interrupted mid-poll resumes rather than stranding.
+ * Its job shrank considerably when the studio moved off the local machine, and
+ * what it no longer does matters as much as what it does.
  *
- * Two failure rules, and the difference between them matters:
+ * **It no longer runs migrations.** On a single local process that was the right
+ * call — a fresh clone worked with no manual step. On a serverless host there is
+ * no "the server starts": there are many cold starts, concurrently, each of
+ * which would race the others to apply the same migration. Migrations now run
+ * once at deploy time via `npm run db:migrate` (see docs/DEPLOYMENT.md).
  *
- *   - **Fatal**: a bad environment or a failed migration. Nothing works without
- *     these, and failing here gives a readable message instead of a 401 or a
- *     "no such table" in the middle of a generation.
- *   - **Not fatal**: resuming in-flight jobs. A generation that fails to resume
- *     is still on disk, still in the database, and still recoverable from the
- *     UI. Taking the whole server down over it would turn a recoverable job
- *     into an app that will not boot.
+ * **It no longer resumes in-flight jobs.** There is no process to resume them
+ * into. Recovery is continuous instead of a startup event: every generation
+ * carries its own `next_poll_at`, and `/api/jobs/tick` picks up whatever is due
+ * — including anything a crashed invocation abandoned, whose lease simply ages
+ * out. That is strictly better than the old sweep, which only ran if somebody
+ * restarted the process.
+ *
+ * What is left is a startup check of the environment, so a missing variable is a
+ * loud, readable failure at boot rather than a 500 in the middle of somebody's
+ * first generation.
  */
 
-/**
- * Turbopack re-evaluates modules on hot reload, and Next may call `register`
- * more than once per process. Migrations and recovery are both idempotent, but
- * repeating them on every reload is wasted work and noisy logging.
- */
 let registered = false
 
 export async function register() {
-  // Also invoked for the edge runtime, where node:fs and libsql do not exist.
+  // Also invoked for the edge runtime, where node:crypto and postgres-js do not
+  // exist in the forms this app needs.
   if (process.env.NEXT_RUNTIME !== 'nodejs') return
   if (registered) return
   registered = true
 
   const { getEnv, EnvError } = await import('@/lib/env')
-  const { runMigrations } = await import('@/lib/db')
 
   try {
     const env = getEnv()
 
-    await runMigrations()
-
-    console.log('[kie-studio] database ready at', env.databaseFile)
-    console.log('[kie-studio] outputs ->', env.outputDir)
+    console.log('[kie-studio] database:', hostOf(env.databaseUrl))
+    console.log('[kie-studio] storage:', `${env.supabaseUrl}/${env.storageBucket}`)
+    console.log(
+      `[kie-studio] limits: ${mb(env.maxFileBytes)} MB per object, ` +
+        `${mb(env.storageQuotaBytes)} MB total`,
+    )
+    console.log(
+      env.kieApiKey
+        ? '[kie-studio] a server-side KIE_API_KEY is set — it is the fallback when a request brings none'
+        : '[kie-studio] no server-side KIE_API_KEY — every request must bring its own',
+    )
     console.log(
       env.publicUrl
         ? `[kie-studio] webhooks enabled at ${env.publicUrl}/api/kie/webhook`
-        : '[kie-studio] webhooks disabled (no KIE_PUBLIC_URL) — polling only',
+        : '[kie-studio] webhooks disabled (no KIE_PUBLIC_URL) — ticks are the only completion path',
     )
   } catch (error) {
     registered = false
@@ -55,22 +62,17 @@ export async function register() {
     }
     throw error
   }
+}
 
-  // After migrations, so the runner never queries a table a version behind —
-  // and outside the try above, because this must not be able to stop the boot.
+/** The connection host alone. A connection string carries a password. */
+function hostOf(url: string): string {
   try {
-    const { getRunner } = await import('@/lib/jobs/runner')
-    const resumed = await getRunner().recover()
-    if (resumed.length > 0) {
-      console.log(`[kie-studio] resumed ${resumed.length} in-flight generation(s)`)
-    }
-  } catch (error) {
-    console.error(
-      '[kie-studio] could not resume in-flight generations:',
-      error instanceof Error ? error.message : error,
-    )
-    console.error(
-      '  They are still in the database. Open one and use "Check again" to resume it.',
-    )
+    return new URL(url).host
+  } catch {
+    return '(unparseable DATABASE_URL)'
   }
+}
+
+function mb(bytes: number): number {
+  return Math.round(bytes / (1024 * 1024))
 }

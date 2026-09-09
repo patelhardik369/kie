@@ -1,15 +1,16 @@
 import assert from 'node:assert/strict'
-import path from 'node:path'
 import { describe, it } from 'node:test'
 
 import {
   dateSegment,
+  downloadName,
   extensionFromUrl,
-  inputRelativePath,
-  outputRelativePath,
-  resolveWithin,
+  inputObjectKey,
+  outputObjectKey,
   safeSegment,
 } from './paths.ts'
+
+const WORKSPACE = 'wk_0123456789abcdef0123456789abcdef'
 
 describe('safeSegment', () => {
   it('collapses the slash inside a model slug', () => {
@@ -20,7 +21,7 @@ describe('safeSegment', () => {
     assert.equal(safeSegment('bytedance/seedance-1.5-pro'), 'bytedance-seedance-1.5-pro')
   })
 
-  it('removes characters Windows rejects in a filename', () => {
+  it('removes characters that break a saved filename', () => {
     assert.equal(safeSegment('a<b>c:d"e|f?g*h'), 'a-b-c-d-e-f-g-h')
   })
 
@@ -56,29 +57,32 @@ describe('extensionFromUrl', () => {
   })
 })
 
-describe('outputRelativePath', () => {
+describe('outputObjectKey', () => {
   const base = {
+    workspaceId: WORKSPACE,
     generationId: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
     family: 'kling',
     modelSlug: 'kling-3.0-omni/text-to-video',
-    at: new Date(2026, 8, 1, 13, 30),
+    // Noon UTC, so the date segment cannot drift across a timezone boundary and
+    // make this assertion depend on where the test runs.
+    at: Date.UTC(2026, 8, 1, 12, 0),
   }
 
-  it('lays out date / family / model / generation-index', () => {
+  it('lays out workspace / date / family / model / generation-index', () => {
     assert.equal(
-      outputRelativePath({
+      outputObjectKey({
         ...base,
         index: 0,
         url: 'https://cdn.kie.ai/x.mp4',
         kind: 'video',
       }),
-      '2026-09-01/kling/kling-3.0-omni-text-to-video/' +
+      `${WORKSPACE}/2026-09-01/kling/kling-3.0-omni-text-to-video/` +
         'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee-0.mp4',
     )
   })
 
   it('numbers each output of a multi-file generation', () => {
-    const second = outputRelativePath({
+    const second = outputObjectKey({
       ...base,
       index: 3,
       url: 'https://cdn.kie.ai/x.png',
@@ -89,7 +93,7 @@ describe('outputRelativePath', () => {
 
   it('falls back to the kind when the URL carries no extension', () => {
     assert.ok(
-      outputRelativePath({
+      outputObjectKey({
         ...base,
         index: 0,
         url: 'https://cdn.kie.ai/opaque-id',
@@ -98,60 +102,60 @@ describe('outputRelativePath', () => {
     )
   })
 
-  it('stays relative — assets.local_path is never absolute', () => {
-    const relative = outputRelativePath({
+  /**
+   * The workspace prefix is the ONLY thing separating one browser's objects from
+   * another's in a bucket the server opens with a key that can read all of it.
+   * If this assertion ever fails, isolation is gone.
+   */
+  it('always begins with the owning workspace', () => {
+    const key = outputObjectKey({
       ...base,
       index: 0,
       url: 'https://cdn.kie.ai/x.mp4',
       kind: 'video',
     })
-    assert.equal(path.isAbsolute(relative), false)
-    assert.ok(!relative.includes('\\'))
+    assert.ok(key.startsWith(`${WORKSPACE}/`))
+    assert.ok(!key.includes('\\'))
+    assert.ok(!key.startsWith('/'))
   })
 })
 
 describe('dateSegment', () => {
   it('zero-pads to YYYY-MM-DD', () => {
-    assert.equal(dateSegment(new Date(2026, 0, 5)), '2026-01-05')
+    assert.equal(dateSegment(Date.UTC(2026, 0, 5, 12)), '2026-01-05')
+  })
+
+  it('is UTC, so a key does not depend on the server it was minted on', () => {
+    // 23:30 UTC on the 5th is already the 6th in Asia/Kolkata. A local-time
+    // segment would file the same generation under two different days depending
+    // on which region the function happened to run in.
+    assert.equal(dateSegment(Date.UTC(2026, 0, 5, 23, 30)), '2026-01-05')
   })
 })
 
-describe('inputRelativePath', () => {
-  it('names an input by its hash, under _inputs', () => {
-    assert.equal(inputRelativePath('abc123', 'png'), '_inputs/abc123.png')
-  })
-
-  it('omits an implausible extension rather than trusting it', () => {
-    assert.equal(inputRelativePath('abc123', 'not-an-extension'), '_inputs/abc123')
-    assert.equal(inputRelativePath('abc123'), '_inputs/abc123')
-  })
-})
-
-describe('resolveWithin', () => {
-  const base = path.resolve('C:/outputs')
-
-  it('resolves an ordinary relative path', () => {
+describe('inputObjectKey', () => {
+  it('names an input by its hash, under the workspace', () => {
     assert.equal(
-      resolveWithin(base, '2026-09-01/kling/model/gen-0.mp4'),
-      path.join(base, '2026-09-01', 'kling', 'model', 'gen-0.mp4'),
+      inputObjectKey(WORKSPACE, 'abc123', 'png'),
+      `${WORKSPACE}/_inputs/abc123.png`,
     )
   })
 
-  it('rejects traversal out of the output directory', () => {
-    assert.equal(resolveWithin(base, '../secrets.env'), null)
-    assert.equal(resolveWithin(base, 'a/../../secrets.env'), null)
+  it('omits an implausible extension rather than trusting it', () => {
+    assert.equal(
+      inputObjectKey(WORKSPACE, 'abc123', 'not-an-extension'),
+      `${WORKSPACE}/_inputs/abc123`,
+    )
+    assert.equal(inputObjectKey(WORKSPACE, 'abc123'), `${WORKSPACE}/_inputs/abc123`)
+  })
+})
+
+describe('downloadName', () => {
+  it('is the last segment of the key', () => {
+    assert.equal(downloadName(`${WORKSPACE}/2026-09-01/kling/m/gen-0.mp4`), 'gen-0.mp4')
   })
 
-  it('rejects an absolute path', () => {
-    assert.equal(resolveWithin(base, path.resolve('C:/windows/system32/config')), null)
-  })
-
-  it('rejects the base directory itself', () => {
-    assert.equal(resolveWithin(base, '.'), null)
-    assert.equal(resolveWithin(base, ''), null)
-  })
-
-  it('rejects a sibling whose name merely starts with the base', () => {
-    assert.equal(resolveWithin(base, '../outputs-other/file.mp4'), null)
+  it('never returns an empty name', () => {
+    assert.equal(downloadName('trailing/'), 'download')
   })
 })

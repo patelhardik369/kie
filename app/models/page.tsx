@@ -1,3 +1,4 @@
+import { currentWorkspace } from '@/lib/auth/workspace.ts'
 import Link from 'next/link'
 
 import { PinStar } from '@/components/models/PinStar.tsx'
@@ -47,7 +48,8 @@ export default async function ModelsPage({
     : undefined
 
   const matches = searchModels(ALL_MODELS, { q, family })
-  const pins = await listPins()
+  const workspaceId = await currentWorkspace()
+  const pins = workspaceId ? await listPins(workspaceId) : []
   const traps = findTraps(ALL_MODELS)
   const derived = traps.filter((t) => t.kind !== 'note')
 

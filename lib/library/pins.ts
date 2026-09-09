@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { asc, eq, inArray } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 
 import { favoriteModels, getDb } from '../db/index.ts'
 import { getModel } from '../kie/registry/index.ts'
@@ -18,31 +18,43 @@ import { applyOrder, resolvePins, type PinnedModel } from '../models/favorites.t
  * Positions are rewritten contiguously on every mutation. A sparse column would
  * work, but "the third pin" then means something different in the database than
  * on screen, and reordering by arrow keys turns into gap arithmetic.
+ *
+ * The primary key is `<workspace>:<slug>` rather than the slug alone. A slug was
+ * unique when one person owned the database; with a row per browser, two people
+ * pinning `nano-banana-2` are two pins, and a bare-slug key would have made the
+ * second one a conflict that silently did nothing.
  */
 
-async function slugsInOrder(): Promise<string[]> {
+/** The synthetic primary key. Deterministic, so a pin is idempotent by id. */
+function pinId(workspaceId: string, slug: string): string {
+  return `${workspaceId}:${slug}`
+}
+
+async function slugsInOrder(workspaceId: string): Promise<string[]> {
   const rows = await getDb()
     .select({ slug: favoriteModels.slug, position: favoriteModels.position })
     .from(favoriteModels)
+    .where(eq(favoriteModels.workspaceId, workspaceId))
     .orderBy(asc(favoriteModels.position), asc(favoriteModels.slug))
   return rows.map((row) => row.slug)
 }
 
 /** Writes `slugs` as positions 0..n-1. Assumes every slug already has a row. */
-async function renumber(slugs: readonly string[]): Promise<void> {
+async function renumber(workspaceId: string, slugs: readonly string[]): Promise<void> {
   const db = getDb()
   for (const [position, slug] of slugs.entries()) {
     await db
       .update(favoriteModels)
       .set({ position })
-      .where(eq(favoriteModels.slug, slug))
+      .where(eq(favoriteModels.id, pinId(workspaceId, slug)))
   }
 }
 
-export async function listPins(): Promise<PinnedModel[]> {
+export async function listPins(workspaceId: string): Promise<PinnedModel[]> {
   const rows = await getDb()
     .select({ slug: favoriteModels.slug, position: favoriteModels.position })
     .from(favoriteModels)
+    .where(eq(favoriteModels.workspaceId, workspaceId))
   return resolvePins(rows, getModel)
 }
 
@@ -54,23 +66,37 @@ export async function listPins(): Promise<PinnedModel[]> {
  * and a double click that silently reordered the bar would be indistinguishable
  * from a bug.
  */
-export async function addPin(slug: string): Promise<PinnedModel[]> {
-  const existing = await slugsInOrder()
+export async function addPin(
+  workspaceId: string,
+  slug: string,
+): Promise<PinnedModel[]> {
+  const existing = await slugsInOrder(workspaceId)
   if (!existing.includes(slug)) {
     await getDb()
       .insert(favoriteModels)
-      .values({ slug, position: existing.length, createdAt: Date.now() })
+      .values({
+        id: pinId(workspaceId, slug),
+        workspaceId,
+        slug,
+        position: existing.length,
+        createdAt: Date.now(),
+      })
       // Two tabs racing on the same star must not 500.
       .onConflictDoNothing()
   }
-  return listPins()
+  return listPins(workspaceId)
 }
 
-export async function removePin(slug: string): Promise<PinnedModel[]> {
-  await getDb().delete(favoriteModels).where(eq(favoriteModels.slug, slug))
+export async function removePin(
+  workspaceId: string,
+  slug: string,
+): Promise<PinnedModel[]> {
+  await getDb()
+    .delete(favoriteModels)
+    .where(eq(favoriteModels.id, pinId(workspaceId, slug)))
   // Closes the gap the removal left, so positions stay 0..n-1.
-  await renumber(await slugsInOrder())
-  return listPins()
+  await renumber(workspaceId, await slugsInOrder(workspaceId))
+  return listPins(workspaceId)
 }
 
 /**
@@ -80,17 +106,28 @@ export async function removePin(slug: string): Promise<PinnedModel[]> {
  * so a reorder sent from a stale tab can neither resurrect an unpinned model nor
  * drop one it had not heard about.
  */
-export async function reorderPins(requested: readonly string[]): Promise<PinnedModel[]> {
-  await renumber(applyOrder(await slugsInOrder(), requested))
-  return listPins()
+export async function reorderPins(
+  workspaceId: string,
+  requested: readonly string[],
+): Promise<PinnedModel[]> {
+  await renumber(workspaceId, applyOrder(await slugsInOrder(workspaceId), requested))
+  return listPins(workspaceId)
 }
 
 /** Which of these slugs are pinned — for a page that renders many stars. */
-export async function pinnedAmong(slugs: readonly string[]): Promise<Set<string>> {
+export async function pinnedAmong(
+  workspaceId: string,
+  slugs: readonly string[],
+): Promise<Set<string>> {
   if (slugs.length === 0) return new Set()
   const rows = await getDb()
     .select({ slug: favoriteModels.slug })
     .from(favoriteModels)
-    .where(inArray(favoriteModels.slug, [...slugs]))
+    .where(
+      and(
+        eq(favoriteModels.workspaceId, workspaceId),
+        inArray(favoriteModels.slug, [...slugs]),
+      ),
+    )
   return new Set(rows.map((row) => row.slug))
 }

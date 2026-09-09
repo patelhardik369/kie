@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
+import { withStudio } from '@/lib/auth/route.ts'
 import { resolveOutputAsInput } from '@/lib/library/outputs.ts'
-import { isKieError } from '@/lib/kie'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,35 +17,28 @@ export const dynamic = 'force-dynamic'
  * serves output FILES by path and would swallow it.
  */
 export async function POST(request: Request) {
-  let body: { assetId?: unknown }
-  try {
-    body = await request.json()
-  } catch {
-    return NextResponse.json({ error: 'Request body must be JSON.' }, { status: 400 })
-  }
+  return withStudio(request, async ({ workspaceId }) => {
+    let body: { assetId?: unknown }
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Request body must be JSON.' }, { status: 400 })
+    }
 
-  const assetId = typeof body.assetId === 'string' ? body.assetId.trim() : ''
-  if (!assetId) {
-    return NextResponse.json({ error: 'Expected `assetId`.' }, { status: 400 })
-  }
+    const assetId = typeof body.assetId === 'string' ? body.assetId.trim() : ''
+    if (!assetId) {
+      return NextResponse.json({ error: 'Expected `assetId`.' }, { status: 400 })
+    }
 
-  try {
-    const outcome = await resolveOutputAsInput(assetId)
+    // An upload can fail for every reason any Kie call can. Those are mapped by
+    // `withStudio`, so this route says nothing about them — one error shape
+    // across every route is what lets the form report them identically.
+    const outcome = await resolveOutputAsInput(workspaceId, assetId)
     if (!outcome.ok) {
       return NextResponse.json({ error: outcome.message }, { status: outcome.status })
     }
 
     const { ok: _ok, ...result } = outcome
     return NextResponse.json(result)
-  } catch (error) {
-    // An upload can fail for every reason any Kie call can — surfaced with the
-    // same shape the upload route uses, so the form reports it identically.
-    if (isKieError(error)) {
-      return NextResponse.json(
-        { error: error.message, kind: error.kind, detail: error.detail },
-        { status: error.kind === 'rate_limited' ? 429 : 502 },
-      )
-    }
-    throw error
-  }
+  })
 }

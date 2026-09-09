@@ -1,40 +1,34 @@
 import { NextResponse } from 'next/server'
-import { getCredits, isKieError } from '@/lib/kie'
+
+import { withStudio } from '@/lib/auth/route.ts'
+import { getCredits } from '@/lib/kie'
 import { recordBalance } from '@/lib/library/queries.ts'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/kie/credits — the account's remaining credit balance.
+ * GET /api/kie/credits — the remaining balance on the caller's own key.
  *
- * A proxy, deliberately: the browser never holds KIE_API_KEY, so every call to
- * Kie goes through a route like this one.
+ * A proxy, deliberately: the browser holds the key but must never talk to Kie
+ * directly. Doing so from the page would put the key in a cross-origin request
+ * whose response headers we do not control, and would leak it to anything
+ * inspecting the network tab of a shared screen.
+ *
+ * It doubles as the key-validation endpoint. "Test & save" in Settings calls
+ * exactly this, because it is the cheapest request that can only succeed with a
+ * working key — no credits are spent finding out.
  */
-export async function GET() {
-  try {
+export async function GET(request: Request) {
+  return withStudio(request, async ({ workspaceId }) => {
     const credits = await getCredits()
 
     // Logged so spend has a history: Kie's own logs age out after two months,
-    // which makes the local table the only long-term record. `recordBalance`
+    // which makes this table the only long-term record. `recordBalance`
     // throttles, so a page that polls this does not bury the trend.
     if (typeof credits === 'number' && Number.isFinite(credits)) {
-      await recordBalance(credits).catch(() => undefined)
+      await recordBalance(workspaceId, credits).catch(() => undefined)
     }
 
     return NextResponse.json({ credits })
-  } catch (error) {
-    if (isKieError(error)) {
-      return NextResponse.json(
-        {
-          error: error.message,
-          kind: error.kind,
-          detail: error.detail,
-          retryable: error.retryable,
-        },
-        // 401/402 are about our server's credentials, not the caller's request.
-        { status: error.kind === 'rate_limited' ? 429 : 502 },
-      )
-    }
-    throw error
-  }
+  })
 }

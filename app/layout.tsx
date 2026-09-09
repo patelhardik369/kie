@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { GeistMono } from 'geist/font/mono'
 import { GeistSans } from 'geist/font/sans'
 
+import { StudioBoot } from '@/components/setup/StudioBoot.tsx'
 import { TopNav } from '@/components/shell/TopNav.tsx'
 import { AccentScript } from '@/components/theme/AccentScript.tsx'
 import './globals.css'
@@ -48,6 +49,13 @@ export default function RootLayout({
         <AccentScript />
       </head>
       <body className="min-h-screen">
+        {/*
+          Mints this browser's workspace id and attaches it, with the Kie key, to
+          every /api request. Renders nothing. It sits above TopNav because the
+          nav's pinned-models popover fetches, and that fetch must already carry
+          the headers by the time it runs.
+        */}
+        <StudioBoot />
         <TopNav />
         {children}
       </body>

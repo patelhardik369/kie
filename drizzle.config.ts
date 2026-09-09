@@ -1,15 +1,18 @@
 import type { Config } from 'drizzle-kit'
 
 /**
- * Used for `npm run db:generate` only — generating SQL from lib/db/schema.ts.
- * Migrations are APPLIED at runtime by lib/db/index.ts via the libsql migrator
- * (see instrumentation.ts), so drizzle-kit never needs to open the database.
+ * Used for `npm run db:generate` — turning lib/db/schema.ts into SQL.
+ *
+ * Migrations are APPLIED by `npm run db:migrate`, once, at deploy time. They are
+ * deliberately NOT applied at runtime any more: on a serverless host there is no
+ * single "server start", and many cold starts racing to apply the same migration
+ * is a good way to corrupt a schema.
  */
 export default {
   schema: './lib/db/schema.ts',
   out: './lib/db/migrations',
-  dialect: 'sqlite',
+  dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? 'file:./data/kie.db',
+    url: process.env.DATABASE_URL ?? '',
   },
 } satisfies Config

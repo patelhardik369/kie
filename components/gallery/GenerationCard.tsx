@@ -32,7 +32,7 @@ import { getModel } from '@/lib/kie/registry/index.ts'
 
 export interface CardAsset {
   kind: 'image' | 'video' | 'audio'
-  localPath: string
+  storagePath: string
   width: number | null
   height: number | null
   /** Present only for a private generation, minted by the page that rendered it. */
@@ -253,7 +253,7 @@ export function GenerationCard({
 }
 
 function Preview({ asset }: { asset: CardAsset }) {
-  const src = assetHref(asset.localPath, asset.token)
+  const src = assetHref(asset.storagePath, asset.token)
 
   if (asset.kind === 'video') {
     return (

@@ -36,7 +36,7 @@ survive.
       parse resultJson (it is a STRING)
              │
              ▼
-      download every URL to KIE_OUTPUT_DIR
+      store every URL in the bucket (or record it too_large)
              │
              ├─ download fails ──► state=needs_retry (NOT complete)
              │

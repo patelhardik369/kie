@@ -24,8 +24,12 @@ import {
 export interface TaskAsset {
   id: string
   kind: 'image' | 'video' | 'audio'
-  url: string
-  localPath: string
+  /** Null when the output was too large to store — see `storageState`. */
+  url: string | null
+  storagePath: string | null
+  storageState: 'stored' | 'too_large' | 'evicted'
+  /** Kie's own URL, sent only when there is no stored copy to serve instead. */
+  remoteUrl: string | null
   mime: string | null
   bytes: number | null
   width: number | null
@@ -202,28 +206,65 @@ function Timing({ task }: { task: TaskView }) {
 }
 
 function AssetPreview({ asset }: { asset: TaskAsset }) {
+  // Null means the output was past the storage plan's per-object ceiling and was
+  // never stored. The run happened and was billed, so it is shown and explained
+  // rather than hidden — and Kie's own URL is offered while it still resolves.
+  const href = asset.url ?? asset.remoteUrl
+
   return (
     <figure className="overflow-hidden rounded-lg border border-(--color-border) bg-(--color-bg-deep)">
-      {asset.kind === 'video' ? (
+      {asset.url === null ? (
+        <Unstored asset={asset} />
+      ) : asset.kind === 'video' ? (
         <video src={asset.url} controls playsInline className="w-full bg-(--color-bg-deep)" />
       ) : asset.kind === 'audio' ? (
         <audio src={asset.url} controls className="w-full p-3" />
       ) : (
-        // A plain <img>, not next/image: these are local files served by our own
-        // route, and re-encoding a generation output would misrepresent it.
+        // A plain <img>, not next/image: these are our own stored outputs served
+        // through our own route, and re-encoding one would misrepresent it.
         <img src={asset.url} alt="" className="w-full bg-(--color-bg-deep) object-contain" />
       )}
       <figcaption className="flex flex-wrap items-center gap-x-2 border-t border-(--color-border) px-2 py-1.5 font-mono text-[11px] text-(--color-ink-muted)">
-        <a href={asset.url} target="_blank" rel="noreferrer" className="underline">
-          open
-        </a>
+        {href && (
+          <a href={href} target="_blank" rel="noreferrer" className="underline">
+            open
+          </a>
+        )}
         {asset.width && asset.height && <span>{asset.width}×{asset.height}</span>}
         {asset.durationMs && <span>{formatDuration(asset.durationMs)}</span>}
         {asset.bytes && <span>{formatBytes(asset.bytes)}</span>}
-        <span className="ml-auto truncate" title={asset.localPath}>
-          {asset.localPath}
+        <span
+          className="ml-auto truncate"
+          title={asset.storagePath ?? 'not stored'}
+        >
+          {asset.storagePath ?? 'not stored'}
         </span>
       </figcaption>
     </figure>
+  )
+}
+
+/** Said plainly, with the deadline, because after it the file is simply gone. */
+function Unstored({ asset }: { asset: TaskAsset }) {
+  return (
+    <div className="px-3 py-5 text-center">
+      <p className="text-[13px] font-medium text-(--color-warn-ink)">
+        Too large to store{asset.bytes ? ` — ${formatBytes(asset.bytes)}` : ''}
+      </p>
+      <p className="mx-auto mt-1 max-w-sm text-[12px] leading-relaxed text-(--color-ink-muted)">
+        Past this project&apos;s per-file ceiling, so it stayed on Kie. Download it
+        within about fourteen days — after that Kie deletes it.
+      </p>
+      {asset.remoteUrl && (
+        <a
+          href={asset.remoteUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 inline-flex rounded-md border border-(--color-border) px-3 py-1.5 text-[12px] text-(--color-ink) hover:border-(--color-accent)"
+        >
+          Download from Kie
+        </a>
+      )}
+    </div>
   )
 }

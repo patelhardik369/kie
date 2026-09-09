@@ -35,6 +35,7 @@ export interface BalanceReading {
 }
 
 export async function readBalance(
+  workspaceId: string,
   fallback: { balance: number | null; recordedAt: number | null },
 ): Promise<BalanceReading> {
   try {
@@ -44,7 +45,7 @@ export async function readBalance(
     // Throttled inside recordBalance, and never allowed to fail the read: a
     // locked database should not turn a good number into an error.
     const recordedAt = Date.now()
-    await recordBalance(balance).catch(() => undefined)
+    await recordBalance(workspaceId, balance).catch(() => undefined)
 
     return { balance, recordedAt, live: true }
   } catch (error) {
@@ -66,21 +67,21 @@ function describe(error: unknown): string {
 /**
  * Takes a reading and logs it, for the trend rather than for display.
  *
- * Called by the job runner after a generation that consumed credits, which is
+ * Called by the engine after a generation that consumed credits, which is
  * the only moment the balance is known to have moved. One reading per
  * generation is the point: `credit_log` is otherwise written only when someone
  * happens to open Settings, and a trend sampled at whim is not a trend.
  *
- * Never throws and is never awaited by the runner. A generation is complete
- * when its bytes are on disk; a bookkeeping number that could not be fetched
+ * Never throws and is never awaited by a driver. A generation is complete when
+ * its bytes are in the bucket; a bookkeeping number that could not be fetched
  * must not change that, or a Kie hiccup would turn finished work into a failure.
  */
-export async function sampleBalance(): Promise<number | null> {
+export async function sampleBalance(workspaceId: string): Promise<number | null> {
   try {
     const balance = await getCredits(AbortSignal.timeout(BALANCE_TIMEOUT_MS))
     if (!Number.isFinite(balance)) return null
 
-    await recordBalance(balance)
+    await recordBalance(workspaceId, balance)
     return balance
   } catch {
     return null

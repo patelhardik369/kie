@@ -4,13 +4,26 @@ import { GenerationCard } from '@/components/gallery/GenerationCard.tsx'
 import { PinnedModels, PinsHydrator } from '@/components/models/PinnedModels.tsx'
 import { PageHeader, Section } from '@/components/shell/PageHeader.tsx'
 import { ChevronRight } from '@/components/shell/icons.tsx'
+import { currentWorkspace } from '@/lib/auth/workspace.ts'
 import { getGalleryFacets, recentGenerations } from '@/lib/gallery/queries.ts'
 import { listPins } from '@/lib/library/pins.ts'
+import { readUsage, format as formatBytes } from '@/lib/storage/quota.ts'
 import { getEnv } from '@/lib/env'
 import { ALL_MODELS, FAMILIES, modelsByFamily } from '@/lib/kie/registry/index.ts'
 import { FAMILY_BLURB, FAMILY_LABEL } from '@/lib/models/labels.ts'
 
 export const dynamic = 'force-dynamic'
+
+/** What the facets look like before a browser has generated anything. */
+const EMPTY_FACETS = {
+  families: [],
+  capabilities: [],
+  models: [],
+  states: [],
+  total: 0,
+  favorites: 0,
+  nsfw: 0,
+} as const
 
 /**
  * The landing screen: where to start, and what happened recently.
@@ -24,11 +37,20 @@ export const dynamic = 'force-dynamic'
  */
 export default async function Home() {
   const env = getEnv()
-  const [recent, facets, pins] = await Promise.all([
-    recentGenerations(12),
-    getGalleryFacets(),
-    listPins(),
-  ])
+  const workspaceId = await currentWorkspace()
+
+  // Everything below is workspace-scoped, and a first-time visitor has no
+  // workspace yet. Rather than branching the whole page, the empty shapes stand
+  // in — the counters read zero and the grid shows its own empty state, which
+  // is exactly what a brand-new studio should look like.
+  const [recent, facets, pins, usage] = workspaceId
+    ? await Promise.all([
+        recentGenerations(workspaceId, 12),
+        getGalleryFacets(workspaceId),
+        listPins(workspaceId),
+        readUsage(workspaceId),
+      ])
+    : [[], EMPTY_FACETS, [], null]
 
   const running = facets.states
     .filter((s) => ['waiting', 'queuing', 'generating', 'downloading'].includes(s.value))
@@ -97,12 +119,16 @@ export default async function Home() {
                   <GenerationCard
                     assetCount={assetCount}
                     thumbnail={
-                      thumbnail && {
-                        kind: thumbnail.kind,
-                        localPath: thumbnail.localPath,
-                        width: thumbnail.width,
-                        height: thumbnail.height,
-                      }
+                      // Null when the output was too large to store; the card
+                      // shows its placeholder rather than a broken image.
+                      thumbnail?.storagePath
+                        ? {
+                            kind: thumbnail.kind,
+                            storagePath: thumbnail.storagePath,
+                            width: thumbnail.width,
+                            height: thumbnail.height,
+                          }
+                        : undefined
                     }
                     generation={{
                       id: generation.id,
@@ -157,16 +183,26 @@ export default async function Home() {
 
           <Section title="Environment">
             <dl className="panel-flush divide-y divide-(--color-border)">
-              {/* Never the key itself — only whether one is configured. */}
+              {/*
+                Never a key itself, and no longer a claim about "the" key: each
+                browser brings its own, so what the server can honestly report is
+                only whether a fallback exists. Whether YOU have one is a
+                question only the browser can answer — Settings does that.
+              */}
               <Row
-                label="API key"
-                value={env.kieApiKey ? 'configured' : 'missing'}
-                tone={env.kieApiKey ? 'ok' : 'bad'}
+                label="Server key"
+                value={env.kieApiKey ? 'fallback set' : 'bring your own'}
               />
-              <Row label="Output" value={env.outputDir} />
+              {usage ? (
+                <Row
+                  label="Storage"
+                  value={`${formatBytes(usage.totalBytes)} of ${formatBytes(usage.quotaBytes)}`}
+                  tone={usage.full ? 'bad' : usage.warn ? undefined : 'ok'}
+                />
+              ) : null}
               <Row
                 label="Webhooks"
-                value={env.publicUrl ? 'enabled' : 'polling only'}
+                value={env.publicUrl ? 'enabled' : 'ticks only'}
               />
             </dl>
             <Link

@@ -1,10 +1,24 @@
 import { NextResponse } from 'next/server'
 
+import { withStudio } from '@/lib/auth/route.ts'
+import { getEnv } from '@/lib/env'
 import { storeUpload } from '@/lib/jobs/uploads.ts'
-import { isKieError } from '@/lib/kie'
 import { URL_UPLOAD_MAX_BYTES } from '@/lib/kie/upload.ts'
+import { checkQuota } from '@/lib/storage/quota.ts'
 
 export const dynamic = 'force-dynamic'
+/**
+ * Seconds this route may run for. A literal, because Next only accepts a
+ * statically analysable number here — `'max'` is valid in vercel.json but not
+ * in a route segment config.
+ *
+ * 60 is the ceiling on Vercel's Hobby plan without Fluid compute, so it is the
+ * value that works everywhere. On Pro, or with Fluid enabled, raising it to 300
+ * lets a single invocation carry a long video further before handing back to the
+ * cron — nothing breaks either way, because the job's position lives in the
+ * database rather than on the stack.
+ */
+export const maxDuration = 60
 
 /**
  * POST /api/upload — a local file becomes a `fileUrl` a model can read.
@@ -15,14 +29,20 @@ export const dynamic = 'force-dynamic'
  *   - `application/json` with `{ dataUrl }` — for pasted or canvas-generated
  *     images, which arrive as a data URI and have nowhere else to come from.
  *
- * Both land in the same place: the bytes are kept locally and the Kie upload URL
- * is cached against their hash for 24 hours, so re-using an image across
- * generations costs one round trip, not one per generation.
+ * Both land in the same place: the bytes are kept in the bucket and the Kie
+ * upload URL is cached against their hash for 24 hours, so re-using an image
+ * across generations costs one round trip, not one per generation.
+ *
+ * Two ceilings apply now, and they are different numbers for different reasons.
+ * Kie will ingest up to 100 MB; the storage plan will hold a single object only
+ * up to its own limit (50 MB on Supabase Free). The smaller one binds, because a
+ * file we cannot keep is a file whose Kie URL dies in a day and takes the
+ * re-runnability of every generation that used it with it.
  */
 export async function POST(request: Request) {
-  const contentType = request.headers.get('content-type') ?? ''
+  return withStudio(request, async ({ workspaceId }) => {
+    const contentType = request.headers.get('content-type') ?? ''
 
-  try {
     const file = contentType.includes('multipart/form-data')
       ? await readMultipart(request)
       : await readJson(request)
@@ -31,18 +51,34 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: file.error }, { status: 400 })
     }
 
-    if (file.content.byteLength > URL_UPLOAD_MAX_BYTES) {
+    const size = file.content.byteLength
+    const { maxFileBytes } = getEnv()
+    const ceiling = Math.min(maxFileBytes, URL_UPLOAD_MAX_BYTES)
+
+    if (size > ceiling) {
       return NextResponse.json(
         {
-          error: `That file is ${mb(file.content.byteLength)} MB. Kie's ceiling is ${mb(
-            URL_UPLOAD_MAX_BYTES,
-          )} MB.`,
+          error: `That file is ${mb(size)} MB, past this project's ${mb(ceiling)} MB ceiling.`,
+          detail:
+            maxFileBytes < URL_UPLOAD_MAX_BYTES
+              ? `Supabase Free caps every stored object at ${mb(maxFileBytes)} MB, and an ` +
+                'input that cannot be stored could not be re-uploaded once its Kie URL ' +
+                'expires tomorrow. Shrink the file, or raise the plan.'
+              : `Kie's own ingestion ceiling is ${mb(URL_UPLOAD_MAX_BYTES)} MB.`,
         },
         { status: 413 },
       )
     }
 
-    const stored = await storeUpload(file)
+    const quota = await checkQuota(workspaceId, size)
+    if (!quota.ok) {
+      return NextResponse.json({ error: quota.message }, { status: 507 })
+    }
+
+    // Kie errors are mapped by `withStudio`, so nothing is caught here — one
+    // error shape across every route is what lets the form report them all
+    // the same way.
+    const stored = await storeUpload({ workspaceId, ...file })
 
     return NextResponse.json({
       fileUrl: stored.fileUrl,
@@ -54,15 +90,7 @@ export async function POST(request: Request) {
       expiresAt: stored.expiresAt,
       reused: stored.reused,
     })
-  } catch (error) {
-    if (isKieError(error)) {
-      return NextResponse.json(
-        { error: error.message, kind: error.kind, detail: error.detail },
-        { status: error.kind === 'rate_limited' ? 429 : 502 },
-      )
-    }
-    throw error
-  }
+  })
 }
 
 interface UploadInput {

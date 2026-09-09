@@ -59,7 +59,7 @@ export {
   UPLOAD_TTL_MS,
   uploadBase64,
   uploadExpiryMs,
-  uploadFile,
+  uploadBytes,
   uploadFromUrl,
   type UploadedFile,
 } from './upload.ts'

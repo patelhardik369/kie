@@ -18,7 +18,7 @@ export interface LibraryAssetItem {
   kind: string
   label: string | null
   bytes: number | null
-  localPath: string
+  storagePath: string
   createdAt: number
   live: boolean
   expiresAt: number | null
@@ -93,8 +93,8 @@ export function AssetLibrary({ initialAssets }: { initialAssets: LibraryAssetIte
               {asset.live ? 'live' : 'expired'}
             </span>
 
-            <span className="min-w-0 flex-1 truncate text-sm" title={asset.localPath}>
-              {asset.label ?? asset.localPath}
+            <span className="min-w-0 flex-1 truncate text-sm" title={asset.storagePath}>
+              {asset.label ?? asset.storagePath}
             </span>
 
             <span className="shrink-0 font-mono text-[11px] text-(--color-ink-muted)">

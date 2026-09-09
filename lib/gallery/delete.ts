@@ -1,12 +1,9 @@
 import 'server-only'
 
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import { eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 
 import { assets, generations, getDb, inputAssets } from '../db/index.ts'
-import { getEnv } from '../env.ts'
-import { resolveWithin } from '../jobs/paths.ts'
+import { removeObjects } from '../storage/objects.ts'
 import { isInFlight } from './display.ts'
 
 /**
@@ -19,10 +16,11 @@ import { isInFlight } from './display.ts'
  *
  * Three rules shape it:
  *
- *   1. **The bytes go too.** `assets.local_path` is the only record of where an
- *      output landed, so deleting the row without the file would strand it on
- *      disk with nothing left that knows it exists. Disk is the reason people
- *      delete things.
+ *   1. **The bytes go too.** `assets.storage_path` is the only record of where
+ *      an output landed, so deleting the row without the object would strand it
+ *      in the bucket with nothing left that knows it exists. On a 1 GB plan that
+ *      is not untidiness, it is the quota — reclaiming space is the reason
+ *      people delete things.
  *   2. **Nothing in flight.** The runner is still writing to a generation it is
  *      polling, and its downloader would recreate rows and files under a row
  *      that no longer exists. Wait for it to finish or fail — then delete it.
@@ -38,11 +36,11 @@ import { isInFlight } from './display.ts'
 
 export interface DeletedGeneration {
   id: string
-  /** Files removed from KIE_OUTPUT_DIR. */
+  /** Objects removed from the bucket. */
   filesDeleted: number
-  /** Asset rows whose file was already gone — counted, not an error. */
+  /** Asset rows that had no object to remove — oversize ones, counted not failed. */
   filesMissing: number
-  /** Disk reclaimed, from the recorded byte counts. */
+  /** Storage reclaimed, from the recorded byte counts. */
   bytesFreed: number
   /** Children re-pointed at the deleted generation's own parent. */
   childrenRelinked: number
@@ -54,13 +52,16 @@ export type DeleteOutcome =
   | { ok: true; deleted: DeletedGeneration }
   | { ok: false; reason: 'not_found' | 'in_flight'; message: string }
 
-export async function deleteGeneration(id: string): Promise<DeleteOutcome> {
+export async function deleteGeneration(
+  workspaceId: string,
+  id: string,
+): Promise<DeleteOutcome> {
   const db = getDb()
 
   const [generation] = await db
     .select()
     .from(generations)
-    .where(eq(generations.id, id))
+    .where(and(eq(generations.id, id), eq(generations.workspaceId, workspaceId)))
     .limit(1)
 
   if (!generation) {
@@ -80,23 +81,31 @@ export async function deleteGeneration(id: string): Promise<DeleteOutcome> {
   const owned = await db.select().from(assets).where(eq(assets.generationId, id))
 
   const { filesDeleted, filesMissing, bytesFreed } = await removeFiles(
-    owned.map((asset) => ({ localPath: asset.localPath, bytes: asset.bytes })),
+    workspaceId,
+    owned.map((asset) => ({ storagePath: asset.storagePath, bytes: asset.bytes })),
   )
 
   /*
-   * An output reused as an INPUT is registered against the output's own path —
-   * no second copy is made (see lib/jobs/uploads.ts). The file has just gone, so
-   * the row that points at it would be a library entry that can never be renewed
-   * and never explain why. It goes with the file.
+   * An output reused as an INPUT is registered against the output's own key —
+   * no second copy is made (see lib/jobs/uploads.ts). The object has just gone,
+   * so the row that points at it would be a library entry that can never be
+   * renewed and never explain why. It goes with the object.
    *
    * Rows under `_inputs/` are untouched: those are uploads with their own copy,
    * and they were never this generation's to delete.
    */
-  const reusedPaths = owned.map((asset) => asset.localPath)
+  const reusedPaths = owned
+    .map((asset) => asset.storagePath)
+    .filter((key): key is string => key !== null)
   const inputsForgotten = reusedPaths.length
     ? await db
         .delete(inputAssets)
-        .where(inArray(inputAssets.localPath, reusedPaths))
+        .where(
+          and(
+            eq(inputAssets.workspaceId, workspaceId),
+            inArray(inputAssets.storagePath, reusedPaths),
+          ),
+        )
         .returning({ id: inputAssets.id })
     : []
 
@@ -108,9 +117,10 @@ export async function deleteGeneration(id: string): Promise<DeleteOutcome> {
     .where(eq(generations.parentId, id))
     .returning({ id: generations.id })
 
-  // Explicit rather than leaning on ON DELETE CASCADE: whether SQLite enforces
-  // foreign keys depends on a per-connection pragma, and orphaned asset rows
-  // pointing at files that are already gone is not a state worth risking.
+  // Explicit rather than leaning on ON DELETE CASCADE. Postgres would honour the
+  // cascade, but the asset rows have already been read and their objects
+  // removed — doing the delete here keeps the whole operation legible in one
+  // place rather than half here and half in a constraint.
   await db.delete(assets).where(eq(assets.generationId, id))
   await db.delete(generations).where(eq(generations.id, id))
 
@@ -128,7 +138,10 @@ export async function deleteGeneration(id: string): Promise<DeleteOutcome> {
 }
 
 /** Deletes several generations, stopping at nothing — one refusal is not the rest. */
-export async function deleteGenerations(ids: string[]): Promise<{
+export async function deleteGenerations(
+  workspaceId: string,
+  ids: string[],
+): Promise<{
   deleted: DeletedGeneration[]
   refused: { id: string; reason: 'not_found' | 'in_flight'; message: string }[]
 }> {
@@ -136,7 +149,7 @@ export async function deleteGenerations(ids: string[]): Promise<{
   const refused: { id: string; reason: 'not_found' | 'in_flight'; message: string }[] = []
 
   for (const id of ids) {
-    const outcome = await deleteGeneration(id)
+    const outcome = await deleteGeneration(workspaceId, id)
     if (outcome.ok) deleted.push(outcome.deleted)
     else refused.push({ id, reason: outcome.reason, message: outcome.message })
   }
@@ -145,55 +158,43 @@ export async function deleteGenerations(ids: string[]): Promise<{
 }
 
 /**
- * Removes output files, then any folder the removal emptied.
+ * Removes an asset's objects from the bucket.
  *
- * `resolveWithin` is the guard: `local_path` is stored relative to
- * KIE_OUTPUT_DIR, and anything that resolves outside it is left alone rather
- * than deleted. A missing file is not an error — the point of the call is that
- * the file should not exist afterwards.
+ * The workspace-prefix check is the guard `resolveWithin` used to be: a
+ * `storage_path` is data, and data naming another workspace's object is not
+ * something this delete gets to act on. A row with no object — an oversize
+ * output that was never stored — is counted as missing rather than failed,
+ * which is exactly what it is.
+ *
+ * A failure to remove is deliberately NOT fatal. The rows are going either way:
+ * a stray object costs quota and can be swept later, where a gallery row
+ * pointing at a deleted generation is a permanently broken tile.
  */
 async function removeFiles(
-  files: { localPath: string; bytes: number | null }[],
+  workspaceId: string,
+  files: { storagePath: string | null; bytes: number | null }[],
 ): Promise<{ filesDeleted: number; filesMissing: number; bytesFreed: number }> {
-  const root = path.resolve(getEnv().outputDir)
-  let filesDeleted = 0
+  const keys: string[] = []
   let filesMissing = 0
   let bytesFreed = 0
 
-  const touchedDirs = new Set<string>()
-
   for (const file of files) {
-    const absolute = resolveWithin(root, file.localPath)
-    if (!absolute) continue
-
-    try {
-      await fs.unlink(absolute)
-      filesDeleted += 1
-      bytesFreed += file.bytes ?? 0
-      touchedDirs.add(path.dirname(absolute))
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') filesMissing += 1
-      // Anything else — a lock, a permission — leaves the file and is not fatal:
-      // the row is still going, and a stray file is recoverable where a stuck
-      // gallery row is not.
+    if (!file.storagePath || !file.storagePath.startsWith(workspaceId + '/')) {
+      filesMissing += 1
+      continue
     }
+    keys.push(file.storagePath)
+    bytesFreed += file.bytes ?? 0
   }
 
-  for (const dir of touchedDirs) await pruneEmpty(dir, root)
+  let filesDeleted = 0
+  try {
+    filesDeleted = await removeObjects(keys)
+  } catch (error) {
+    console.error('[kie-studio] could not remove objects:', error)
+    filesMissing += keys.length
+    bytesFreed = 0
+  }
 
   return { filesDeleted, filesMissing, bytesFreed }
-}
-
-/** Walks up from `dir`, removing empty folders, and stops at `root` itself. */
-async function pruneEmpty(dir: string, root: string): Promise<void> {
-  let current = dir
-  while (current !== root && current.startsWith(root + path.sep)) {
-    try {
-      await fs.rmdir(current)
-    } catch {
-      // Not empty, or gone already. Either way there is nothing above to prune.
-      return
-    }
-    current = path.dirname(current)
-  }
 }

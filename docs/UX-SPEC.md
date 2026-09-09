@@ -262,7 +262,7 @@ Not everything generated is worth keeping, so a tile and a detail page can both 
 
 | | |
 |---|---|
-| What goes | The row, its asset rows, and the files those rows point at, inside `KIE_OUTPUT_DIR`. Folders the delete empties are pruned |
+| What goes | The row, its asset rows, and the objects those rows point at, inside the workspace's own prefix. `bytesFreed` comes back so the storage meter can say what it bought |
 | How it is asked | Two clicks, never a `confirm()`. The tile's trash arms to **Sure?** and disarms when the pointer leaves; the detail page's **Delete** arms to **Delete for good** and says how many files and how many bytes are about to go |
 | What it refuses | Anything in flight — `waiting`, `queuing`, `generating`, `downloading`. The runner is still writing to that row and its downloader would recreate what the delete removed. **409**, with a message saying to wait |
 | Lineage | Children are re-pointed at the deleted generation's own parent. Deleting a middle link shortens the chain rather than breaking it |
@@ -327,7 +327,7 @@ Dropped fields after a registry change are reported, not silently swallowed.
 **Prompts** — taggable saved prompts, searchable, insertable into any prompt field.
 
 **Settings** — the accent picker (see Theming), API key status (never the value), credit balance and
-spend history, `KIE_OUTPUT_DIR` with disk usage, and the webhook URL when `KIE_PUBLIC_URL` is
+spend history, the storage meter against the plan's quota, and the webhook URL when `KIE_PUBLIC_URL` is
 configured.
 
 ## Interaction principles

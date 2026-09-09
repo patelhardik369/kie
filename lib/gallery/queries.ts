@@ -33,9 +33,16 @@ export interface GalleryPage {
   pageCount: number
 }
 
-/** Translates a filter into a WHERE clause. */
-function whereFor(filter: GalleryFilter): SQL | undefined {
-  const clauses: SQL[] = []
+/**
+ * Translates a filter into a WHERE clause.
+ *
+ * The workspace clause is added first and unconditionally, before anything the
+ * URL can influence. It is not a filter — it is the boundary of what exists as
+ * far as this caller is concerned, and nothing parsed from a query string is
+ * allowed to widen it.
+ */
+function whereFor(workspaceId: string, filter: GalleryFilter): SQL | undefined {
+  const clauses: SQL[] = [eq(generations.workspaceId, workspaceId)]
 
   if (filter.family) clauses.push(eq(generations.family, filter.family))
   if (filter.capability) clauses.push(eq(generations.capability, filter.capability))
@@ -69,7 +76,7 @@ function whereFor(filter: GalleryFilter): SQL | undefined {
     if (match) clauses.push(match)
   }
 
-  return clauses.length > 0 ? and(...clauses) : undefined
+  return and(...clauses)
 }
 
 /** LIKE treats these as wildcards; a literal search for them must still work. */
@@ -80,9 +87,9 @@ function escapeLike(value: string): string {
 /**
  * LIKE with an explicit ESCAPE clause.
  *
- * SQLite assumes no escape character, so without this the backslashes added by
- * `escapeLike` are matched as literal backslashes — and a search for "100%"
- * quietly returns nothing instead of the row containing it.
+ * Neither SQLite nor Postgres assumes an escape character, so without this the
+ * backslashes added by `escapeLike` are matched as literal backslashes — and a
+ * search for "100%" quietly returns nothing instead of the row containing it.
  */
 function likeLiteral(column: AnyColumn, pattern: string): SQL {
   return sql`${column} LIKE ${pattern} ESCAPE '\\'`
@@ -95,9 +102,12 @@ function likeLiteral(column: AnyColumn, pattern: string): SQL {
  * a join. A join would multiply generation rows by their asset count and make
  * both the page size and the total wrong.
  */
-export async function listGenerations(filter: GalleryFilter): Promise<GalleryPage> {
+export async function listGenerations(
+  workspaceId: string,
+  filter: GalleryFilter,
+): Promise<GalleryPage> {
   const db = getDb()
-  const where = whereFor(filter)
+  const where = whereFor(workspaceId, filter)
 
   const [{ total }] = await db
     .select({ total: count() })
@@ -167,6 +177,7 @@ export interface GenerationDetail {
  * a graph nobody reads.
  */
 export async function getGenerationDetail(
+  workspaceId: string,
   id: string,
 ): Promise<GenerationDetail | undefined> {
   const db = getDb()
@@ -174,7 +185,7 @@ export async function getGenerationDetail(
   const [generation] = await db
     .select()
     .from(generations)
-    .where(eq(generations.id, id))
+    .where(and(eq(generations.id, id), eq(generations.workspaceId, workspaceId)))
     .limit(1)
 
   if (!generation) return undefined
@@ -184,20 +195,30 @@ export async function getGenerationDetail(
     db
       .select()
       .from(generations)
-      .where(eq(generations.parentId, id))
+      .where(and(eq(generations.parentId, id), eq(generations.workspaceId, workspaceId)))
       .orderBy(desc(generations.createdAt)),
     generation.parentId
       ? db
           .select()
           .from(generations)
-          .where(eq(generations.id, generation.parentId))
+          .where(
+            and(
+              eq(generations.id, generation.parentId),
+              eq(generations.workspaceId, workspaceId),
+            ),
+          )
           .limit(1)
       : Promise.resolve([]),
     generation.batchId
       ? db
           .select()
           .from(generations)
-          .where(eq(generations.batchId, generation.batchId))
+          .where(
+            and(
+              eq(generations.batchId, generation.batchId),
+              eq(generations.workspaceId, workspaceId),
+            ),
+          )
           .orderBy(asc(generations.createdAt))
       : Promise.resolve([]),
   ])
@@ -234,26 +255,31 @@ export interface GalleryFacets {
  * reacts to the filter it belongs to can only ever read as its own selection,
  * and a count of zero next to an option is more useful than hiding it.
  */
-export async function getGalleryFacets(): Promise<GalleryFacets> {
+export async function getGalleryFacets(workspaceId: string): Promise<GalleryFacets> {
   const db = getDb()
+  const mine = eq(generations.workspaceId, workspaceId)
 
   const [families, capabilities, models, states, totals] = await Promise.all([
     db
       .select({ value: generations.family, count: count() })
       .from(generations)
+      .where(mine)
       .groupBy(generations.family),
     db
       .select({ value: generations.capability, count: count() })
       .from(generations)
+      .where(mine)
       .groupBy(generations.capability),
     db
       .select({ value: generations.modelSlug, count: count() })
       .from(generations)
+      .where(mine)
       .groupBy(generations.modelSlug)
       .orderBy(desc(count())),
     db
       .select({ value: generations.state, count: count() })
       .from(generations)
+      .where(mine)
       .groupBy(generations.state),
     db
       .select({
@@ -261,7 +287,8 @@ export async function getGalleryFacets(): Promise<GalleryFacets> {
         favorites: sql<number>`sum(case when ${generations.favorite} then 1 else 0 end)`,
         nsfw: sql<number>`sum(case when ${generations.nsfw} then 1 else 0 end)`,
       })
-      .from(generations),
+      .from(generations)
+      .where(mine),
   ])
 
   return {
@@ -282,11 +309,14 @@ export async function getGalleryFacets(): Promise<GalleryFacets> {
  * do not choose to look at — it is what loads when someone else is watching the
  * screen — so this is the surface where the exclusion matters most.
  */
-export async function recentGenerations(limit = 8): Promise<GalleryItem[]> {
+export async function recentGenerations(
+  workspaceId: string,
+  limit = 8,
+): Promise<GalleryItem[]> {
   const rows = await getDb()
     .select()
     .from(generations)
-    .where(eq(generations.nsfw, false))
+    .where(and(eq(generations.workspaceId, workspaceId), eq(generations.nsfw, false)))
     .orderBy(desc(generations.createdAt))
     .limit(limit)
 

@@ -1,23 +1,38 @@
 # Architecture
 
-Next.js 16 (App Router, Turbopack) + TypeScript + Tailwind 4, local SQLite via Drizzle + libsql,
-outputs on local disk.
-Single process, single user, no auth.
+Next.js 16 (App Router, Turbopack) + TypeScript + Tailwind 4, Supabase Postgres via Drizzle +
+postgres-js, outputs in Supabase Storage. Deployed on Vercel: serverless, so **nothing may assume a
+process outlives a request**.
 
 ## Shape
 
 ```
-browser ──► Next server routes ──► api.kie.ai
-                    │                    ▲
-                    │                    │ poll
-                    ├──► job runner ─────┘
-                    │        │
-                    │        └──► downloader ──► KIE_OUTPUT_DIR
-                    │
-                    └──► SQLite (data/kie.db)
+                    ┌── X-Kie-Key ──────────────────┐
+                    │   X-Studio-Workspace          │
+browser ────────────┴──► Next route handlers ───────┴──► api.kie.ai
+   │                          │        ▲                     ▲
+   │  signed URL              │        │ one step per call   │
+   │                          ▼        │                     │
+   │                    ┌───────────────────┐                │
+   │                    │  jobs/engine.ts   │────────────────┘
+   │                    └───────────────────┘
+   │                       ▲   ▲        │
+   │        ┌──────────────┘   │        └──► downloader ──┐
+   │        │                  │                          │
+   │   waitUntil(burst)   cron tick                        ▼
+   │   on submit          /api/jobs/tick        ┌──────────────────────┐
+   │        │                  │                │  Supabase Storage    │
+   └────────┴──────────────────┴───────────────►│  (private bucket)    │
+                               │                └──────────────────────┘
+                               ▼
+                    ┌──────────────────────┐
+                    │  Supabase Postgres   │  ◄── the only durable state
+                    └──────────────────────┘
 ```
 
-The browser never talks to Kie. It talks to our routes; the routes hold the key.
+The browser never talks to Kie. It talks to our routes, and **it supplies the key** — the server has
+none of its own on a shared deployment. The one thing the browser fetches directly is a signed
+Supabase URL for an output, which `/api/assets` hands it as a redirect.
 
 ## Layout
 
@@ -46,8 +61,9 @@ app/
     outputs/route.ts             past outputs as candidate INPUTS, filtered by kind
     outputs/reuse/route.ts       POST assetId -> a fileUrl a model can fetch
     favorite-models/route.ts     pinned models: list / pin / unpin / reorder
-    upload/route.ts              local file -> Kie file API -> cached fileUrl
-    assets/[...path]/route.ts    serves files out of KIE_OUTPUT_DIR
+    upload/route.ts              a file -> Kie file API -> cached fileUrl
+    assets/[...path]/route.ts    ?k=token -> 302 to a signed Supabase URL
+    jobs/tick/route.ts           the scheduled driver; bearer CRON_SECRET
 
 lib/
   kie/
@@ -57,7 +73,7 @@ lib/
     result.ts                    resultJson parsing, layer metadata (pure)
     polling.ts                   state machine + backoff schedule   (pure)
     tasks.ts                     createTask / recordInfo / waitForTask
-    upload.ts                    base64 | stream | url, 24h TTL
+    upload.ts                    bytes | base64 | url, 24h TTL
     account.ts                   credits, download-url
     webhook.ts                   HMAC verification                  (pure)
     index.ts                     public surface
@@ -66,15 +82,27 @@ lib/
       kling.ts  bytedance.ts  wan.ts  google.ts  openai.ts  enhance.ts
       index.ts                   byslug / byFamily / byCapability lookups
     validate.ts                  input -> ParamDef[] + Constraint[] check
+  auth/
+    workspace.ts                 wk_ id from header or cookie; the ownership model
+    kie-key.ts                   the caller's key, in an AsyncLocalStorage scope
+    route.ts                     withWorkspace / withStudio + one error shape
+  crypto/
+    seal.ts                      AES-256-GCM for a key held while a job runs
+  storage/
+    client.ts                    the service-role Supabase client
+    objects.ts                   put / sign / read / remove, workspace-prefixed
+    quota.ts                     usage, the 1 GB check, eviction candidates
   jobs/
-    runner.ts                    submission gate + poll loop + recovery
+    engine.ts                    ONE step of one generation, under a lease
+    lease.ts                     atomic claim, expiry, release, settle
+    drive.ts                     burst / driveOne / tick — the three drivers
     gate.ts                      sliding submission window          (pure)
-    downloader.ts                result URLs -> disk -> assets rows
+    downloader.ts                result URLs -> bucket -> assets rows
     uploads.ts                   input files -> Kie fileUrl, 24h cache
-    paths.ts                     output path convention             (pure)
+    paths.ts                     object-key convention              (pure)
     probe.ts                     dimensions/duration from headers   (pure)
     mime.ts                      extension <-> MIME                 (pure)
-    submit.ts                    insert generations + hand to the runner
+    submit.ts                    insert generations + seal the key
   gallery/
     filters.ts                   URL <-> GalleryFilter                (pure)
     sweep.ts                     one submission -> N inputs           (pure)
@@ -90,13 +118,15 @@ lib/
     queries.ts                   presets / prompts / assets / credits
     pins.ts                      pinned models, always returns the whole list
     outputs.ts                   an output -> an input: list + resolve
-    disk.ts                      KIE_OUTPUT_DIR usage
   theme/
     accent.ts                    accent -> interactive ramp, OKLCH       (pure)
+  client/
+    credentials.ts               localStorage key + workspace id      (browser)
+    api.ts                       studioFetch + typed ApiError         (browser)
   db/
-    schema.ts  index.ts  migrations/
+    schema.ts  index.ts  test-support.ts  migrations/
   env.ts                         validated server-only config
-instrumentation.ts               startup: env, migrations, job recovery
+instrumentation.ts               startup: validate the environment, and nothing else
 
 components/
   param-form/
@@ -132,25 +162,51 @@ Half of `lib/kie/` is deliberately pure — no env, no `server-only`, no network
 (`npm test`, Node's built-in runner). Only `client.ts` and the modules built on it touch the key.
 
 The client does auth, timeouts, envelope unwrapping and typed errors. It deliberately does **not**
-retry or rate-limit: that is policy, and only the job runner can see the whole queue. Errors
-carry a `retryable` flag for the runner to act on, and `polling.ts` holds the schedule both use.
+retry or rate-limit: that is policy, and it belongs to the job engine and its drivers. Errors carry a
+`retryable` flag for them to act on, and `polling.ts` holds the schedule both use.
 
-## Why libsql rather than better-sqlite3
+## Connecting to Postgres
 
-This is plain local SQLite either way. `better-sqlite3` was the original choice, but it compiles
-through node-gyp and needs a Visual Studio C++ toolchain on Windows, which this machine does not
-have. `@libsql/client` ships prebuilt binaries, installs with no compiler, and speaks the same
-SQLite — so the schema and migrations are unchanged. The one consequence is that its API is async,
-which is why `runMigrations()` and every query are awaited.
+Three settings in `lib/db/index.ts` are not preferences — each prevents a specific failure of this
+deployment shape:
+
+| Setting | Prevents |
+|---|---|
+| `prepare: false` | `prepared statement "s1" already exists` — Supavisor's transaction pooler hands a different backend connection to each transaction |
+| `max: 1` | Exhausting Supabase Free's connection limit; each invocation is its own process with its own pool |
+| `idle_timeout: 20` | A frozen Vercel instance holding a socket open until the server reaps it |
+
+The client is pinned to `globalThis`, because both Turbopack's hot reload and Next's route bundling
+can instantiate a module more than once in one process.
+
+## Credentials
+
+Two headers identify a caller, and `lib/auth/route.ts` resolves both in one place so fifteen route
+handlers do not each get it slightly wrong.
+
+- **`X-Studio-Workspace`** — a `wk_…` id the browser minted, mirrored into a cookie so server
+  components (which render before any of our JavaScript) can read it too. It is the entire ownership
+  model. See `lib/auth/workspace.ts`.
+- **`X-Kie-Key`** — the caller's own Kie key, put into an AsyncLocalStorage scope by
+  `lib/auth/kie-key.ts` and read only by `lib/kie/client.ts`. The scope exists so the key stays out
+  of the signature of `createTask`, `getTask`, `getCredits`, `uploadBytes` and everything that calls
+  them — none of which has any business inspecting it.
+
+Client-side, `components/setup/StudioBoot.tsx` wraps `fetch` at module scope so every same-origin
+`/api` request carries both, and no call site can forget.
 
 ## Startup
 
-`instrumentation.ts` runs once per server start: it validates the environment through `lib/env.ts`
-and applies any unapplied migrations, so a fresh clone works with `npm run dev` and nothing else. A
-missing `KIE_API_KEY` fails here with a readable message rather than surfacing as a 401 mid-generation.
+`instrumentation.ts` validates the environment and logs what it resolved. That is all it does now,
+and what it **stopped** doing matters as much:
 
-It then runs the job runner's recovery pass, so every non-terminal generation resumes polling on
-start. This is what makes an in-flight generation survive a restart.
+- **No migrations.** There is no single "server start" — there are many cold starts, concurrently,
+  each of which would race the others to apply the same migration. `npm run db:migrate` runs once at
+  deploy time, wired into `vercel.json`'s build command.
+- **No recovery sweep.** There is no process to resume jobs into. Recovery is continuous instead:
+  every generation carries its own `next_poll_at`, and the tick picks up whatever is due — including
+  anything a crashed invocation abandoned, whose lease simply ages out. Strictly better than a sweep
+  that only ran if somebody restarted the process.
 
 ## The registry is the center of the app
 
@@ -184,7 +240,7 @@ everything else omits the field and gets `'jobs'`. The dispatch happens in exact
 else produces, including a re-encoded `resultJson` **string** so `generations.result_json_raw` holds
 one shape for all 82 models.
 
-**The job runner, the downloader, the gallery and the parameter form never learn Veo exists.** The
+**The job engine, the downloader, the gallery and the parameter form never learn Veo exists.** The
 one visible seam is that polling now passes the generation's `model_slug` through to `getTask` —
 a lookup, not a branch, and the slug is already a column on the row being polled. A `model.transport`
 check anywhere outside `lib/kie/` means the adapter is leaking; fix the adapter.
@@ -192,72 +248,120 @@ check anywhere outside `lib/kie/` means the adapter is leaking; fix the adapter.
 Adding a transport is a much larger step than adding a model, and `'veo'` should stay the only one.
 Kie's other non-unified APIs — the legacy 4o Image API, Runway, Suno — are out of scope.
 
-## Job runner
+## Job engine
 
-One runner per process, started lazily on first import of the server module.
+The old design held a `for(;;)` loop per job, sleeping between polls. That worked because the process
+outlived the job. It cannot here: the invocation ends when the response is sent, taking every pending
+timer with it. **So the loop is turned inside out.**
 
-- **Submission gate** — a sliding window keeping submissions under 20 per 10 seconds.
-- **Poll loop** — every non-terminal generation, at the backoff schedule in
-  [`API-CONTRACT.md`](./API-CONTRACT.md). One poll per task regardless of how many tabs are open.
-- **Recovery** — on start, everything non-terminal in `generations` resumes polling. This is why an
-  in-flight job survives a restart, and why the DB is authoritative over any client state.
-- **Hand-off** — on terminal `success`, the downloader runs before the generation reaches `complete`.
-- **Wake** — `notify(id)` aborts a loop's backoff so it polls now. The only thing a webhook is
-  allowed to do, and the only reason the runner knows webhooks exist.
-- **Balance sampling** — after any terminal task reporting a non-zero `creditsConsumed`, a reading is
-  logged to `credit_log`. Fire-and-forget and never awaited: a bookkeeping number that could not be
-  fetched must not hold up a download or fail finished work.
+`lib/jobs/engine.ts` does **at most one thing per call** — submit, or poll once, or store — writes
+what it learned, and records when to come back. The database holds the position that a `for`
+statement used to.
 
-`stalled` and `needs_retry` are excluded from startup recovery on purpose: a task Kie has forgotten
-would otherwise be re-polled on every restart forever. They move when someone asks — "Check again"
-on one generation (`POST api/kie/task/[id]`), or "Resume all" in Settings
-(`POST api/kie/recover` → `retryAll()`). Either way the stored `kie_task_id` is reused, so a resume
-can never pay for the same generation twice.
+### Three drivers, one step
 
-Client-side, the Studio and queue poll `api/kie/task/[id]` for display only. The browser drives
-nothing.
+| Driver | Where | Covers |
+|---|---|---|
+| `burst` | `waitUntil` on the submitting request | Fast image models, often start to finish |
+| `driveOne` | An open tab's status poll | Whatever you are looking at |
+| `tick` | `POST /api/jobs/tick`, on a schedule | **Everything else** — the safety net |
+
+None of them knows the others exist. All are safe because a step only runs under a lease.
+
+### Leases (`lib/jobs/lease.ts`)
+
+A generation can be reached by all three at once. Without coordination all three would call
+`recordInfo` on the same task, all three would download the same result, and the rate limit would be
+spent three times over for one generation.
+
+The claim is a single `UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED)`, which gives two
+properties:
+
+1. **Atomic.** Two ticks in the same second claim disjoint sets rather than racing.
+2. **Self-healing.** The lease carries an expiry, not a lock. A worker killed mid-step — ordinary on
+   a serverless host, not exceptional — leaves a lease that ages out, and the next tick picks the job
+   up. Nothing has to *notice* the crash for the job to recover.
+
+### Recovering what stopped short
+
+`stalled` and `needs_retry` are excluded from the tick's sweep on purpose: a task Kie has forgotten
+would otherwise be re-polled forever. They move when someone asks — "Check again" on one generation
+(`POST /api/kie/task/[id]`) or "Resume all" in Settings (`POST /api/kie/recover`). Either way the
+stored `kie_task_id` is reused, so a resume can never pay for the same generation twice, and the key
+from the asking browser is re-sealed onto the row — which is how a job recovers after an
+`APP_ENCRYPTION_KEY` rotation left its stored key unreadable.
+
+### Balance sampling
+
+After any terminal task reporting non-zero `creditsConsumed`, a reading is logged to `credit_log`.
+Fire-and-forget and never awaited: a bookkeeping number that could not be fetched must not hold up a
+download or fail finished work.
 
 ## Downloader
 
-For each URL in `resultUrls` (and each `layers_data[].url` for layer decomposition): stream to disk,
-verify byte count, insert an `assets` row, then advance the generation to `complete`. Failures retry
-with backoff and leave the generation in `needs_retry`.
+For each URL in `resultUrls` (and each `layers_data[].url` for layer decomposition): fetch fully into
+memory, verify the byte count, upload to the bucket, insert an `assets` row, then advance the
+generation to `complete`. Failures retry with backoff and leave the generation in `needs_retry`.
 
-Two details that matter:
+Three details that matter:
 
-- **Atomic writes.** Bytes land in a `.part` file that is renamed only after the length check passes,
-  so an interrupted download can never leave a truncated file that looks complete to the gallery.
+- **Buffered, not streamed.** The `.part`-then-rename trick that guarded against truncation has no
+  equivalent in an object store, so its job is done by holding the whole response, checking the
+  length, and only then uploading — a truncated transfer never becomes an object at all. Which is
+  stricter than the rename was. Memory is bounded by the per-object ceiling.
 - **Header probing.** `width` / `height` / `duration_ms` are read straight out of the container
   header (`probe.ts` — PNG, JPEG, GIF, WebP, MP4/MOV), head and tail both, since an MP4 not written
   faststart keeps its `moov` atom at the end. No ffmpeg dependency; anything unreadable stays null.
+- **Oversize is not failure.** An output past `MAX_STORAGE_FILE_BYTES` (50 MB on Supabase Free) is
+  recorded `storage_state = 'too_large'` with `storage_path` null and its Kie URL kept. The run
+  happened and was billed; refusing to record it would lose the parameters as well as the file. The
+  gallery says so plainly, with a download link and the fourteen-day expiry.
 
-Path convention (`lib/jobs/paths.ts`):
+Key convention (`lib/jobs/paths.ts`):
 
 ```
-KIE_OUTPUT_DIR/YYYY-MM-DD/<family>/<model-slug-safe>/<generationId>-<n>.<ext>
+<workspaceId>/YYYY-MM-DD/<family>/<model-slug-safe>/<generationId>-<n>.<ext>
 ```
 
-Dated so the folder stays navigable; model-named so files are identifiable outside the app;
-generation-id'd so a file always maps back to its parameters.
+**Workspace-first**, because that prefix is the only thing separating one browser's objects from
+another's in a bucket the server opens with a key that can read all of it. Dated so the bucket stays
+navigable in the Supabase dashboard; model-named so a file is identifiable once downloaded;
+generation-id'd so a file always maps back to its parameters. The date segment is UTC, not local: a
+key that depended on the server's timezone would file one afternoon's work under two days.
 
-`KIE_OUTPUT_DIR` defaults to `C:/Users/Hardik/generations/kie-studio` — a **subfolder**, deliberately
-kept out of the flat `generations/` directory that the existing `/generate` skill and its
-`gallery.html` scan.
+## Serving an asset
+
+`/api/assets/<key>?k=<token>` **redirects** to a signed Supabase URL; it does not proxy. Pulling a
+40 MB video through a serverless function would spend the whole memory and duration budget delivering
+something the CDN already serves — with byte ranges, which video scrubbing needs and a naive proxy
+loses.
+
+Authorisation is the `?k=` token and nothing else, because nothing else can reach that route:
+`<img src>` and `<video src>` send no custom headers, so a workspace header would be checkable in
+`fetch` and absent in exactly the two cases that matter. The token is an HMAC of the object key,
+minted only by code that has already established the caller owns the row.
 
 ## Uploads
 
-Local file → `POST /api/upload` → Kie's file API (stream upload by default; base64 only for small
-pasted data) → `fileUrl` returned to the form. The `input_assets` table caches
-`local_path → kie_file_url` with `expires_at`, keyed on the file's SHA-256; a reuse inside 24h skips
-the round trip, and an expired entry re-uploads in place rather than inserting a duplicate.
+Local file → `POST /api/upload` → Kie's file API (multipart by default; base64 only for small pasted
+data) → `fileUrl` returned to the form. The `input_assets` table caches
+`storage_path → kie_file_url` with `expires_at`, keyed on `(workspace_id, sha256)`; a reuse inside
+24h skips the round trip, and an expired entry re-uploads in place rather than inserting a duplicate.
 
-A **copy of every uploaded file is kept** under `KIE_OUTPUT_DIR/_inputs/<sha256>`. Without it, an
-input whose Kie URL has expired is unrecoverable — the browser that supplied it is long gone — and
+The dedupe key gained the workspace deliberately: two people uploading the same stock image must not
+share a row, or deleting it on one side breaks the other.
+
+A **copy of every uploaded file is kept** at `<workspaceId>/_inputs/<sha256>`. Without it, an input
+whose Kie URL has expired is unrecoverable — the browser that supplied it is long gone — and
 re-running the generation becomes impossible.
+
+An output reused as an input is the exception: it is registered against the **output's own key**, so
+no second copy is made. On a 1 GB plan that is the difference between reusing a video costing nothing
+and costing another 30 MB.
 
 ## Gallery, lineage and sweeps
 
-The gallery is a server component reading SQLite directly — no API route in
+The gallery is a server component reading Postgres directly — no API route in
 between, because there is no second consumer.
 
 **Filter state lives in the URL, and only in the URL.** `lib/gallery/filters.ts`
@@ -346,7 +450,7 @@ when `KIE_PUBLIC_URL` is set, and never becomes something correctness depends on
 | Bad signature or stale timestamp | `401`, logged, nothing touched |
 | Unknown `task_id` | `200 ignored` — acknowledged so Kie stops resending |
 | Generation already settled | `200 ignored` — a duplicate delivery is a no-op, never a second download |
-| Anything else | `runner.notify(id)` — cuts the backoff short, then `recordInfo` decides the state |
+| Anything else | `waitUntil(driveOne(id))` — runs a step early, and `recordInfo` decides the state |
 
 The payload's own view of the task is never read into the state machine. `GET` on the same path
 reports only whether callbacks are enabled, which is the one question worth answering while pointing
@@ -354,12 +458,40 @@ a tunnel at the app.
 
 ## Security
 
-`KIE_API_KEY` is read only in server modules. No `NEXT_PUBLIC_` variant exists, and no route echoes
-it. `app/api/assets/[...path]` resolves and normalizes paths against `KIE_OUTPUT_DIR` and rejects
-anything escaping it, since it serves files by path.
+### Keys
 
-The same route also gates the files of a generation marked `nsfw`: it looks the path up in `assets`,
-and a private one needs `?k=`, an HMAC over the path keyed by a one-way derivation of
-`KIE_API_KEY` (`lib/gallery/asset-token.ts`). Failure is 404 rather than 403, so the response does
-not confirm the file exists. Every page allowed to render private media mints the token server-side;
-the pure `assetHref` helper only appends it, which keeps the client bundle free of the key.
+No `NEXT_PUBLIC_` variant of anything exists, and no route echoes a key. A caller's Kie key lives in
+their browser, travels as `X-Kie-Key`, and is read only by `lib/kie/client.ts` through the
+AsyncLocalStorage scope.
+
+The one place it is stored server-side is sealed and short-lived: on submit it is encrypted with
+`APP_ENCRYPTION_KEY` (AES-256-GCM, bound to the generation id as AAD) and parked on the row, so a
+tick can finish the job after the tab closes. `settle()` wipes it the moment the generation reaches a
+terminal state. Stated plainly: someone holding **both** the database and the environment can unseal
+the keys of jobs *currently in flight*. That is the honest limit of the design, and the reason the
+ciphertext is deleted rather than kept.
+
+### Isolation
+
+Every row carries a `workspace_id`, and **application code is the only thing enforcing it** — the
+`service_role` connection bypasses RLS entirely, so a query that forgets the filter returns someone
+else's work rather than erroring. Two things keep that honest: every query function takes
+`workspaceId` as a leading required parameter, so forgetting is a type error; and
+`lib/gallery/queries.test.ts` has a `workspace isolation` suite that asserts the property directly.
+
+A workspace id is a **bearer secret**, not authentication. It partitions data between browsers; it
+does not defend against database access.
+
+### Assets
+
+`app/api/assets/[...path]` takes an object key and redirects to a signed URL. Authorisation is `?k=`,
+an HMAC over the key derived from `APP_ENCRYPTION_KEY` (`lib/gallery/asset-token.ts`), and it is
+required for **every** asset rather than only private ones — on a public URL every key is guessable.
+
+It cannot be a header: `<img src>` and `<video src>` send none, and those are the only two ways an
+asset is actually fetched. Failure is 404 rather than 403, so the response does not confirm the
+object exists. Pages mint the token server-side; the pure `assetHref` helper only appends it, keeping
+the signing key out of the client bundle.
+
+The token was previously derived from `KIE_API_KEY`, which stopped making sense the moment each
+browser brought its own — the same file would have minted a different token per visitor.

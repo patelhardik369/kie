@@ -1,3 +1,4 @@
+import { currentWorkspace } from '@/lib/auth/workspace.ts'
 import Link from 'next/link'
 
 import { PresetRow } from '@/components/library/PresetRow.tsx'
@@ -18,7 +19,8 @@ export const metadata = { title: 'Presets' }
  * from the registry entirely — instead of surprising you at the form.
  */
 export default async function PresetsPage() {
-  const presets = await listPresets()
+  const workspaceId = await currentWorkspace()
+  const presets = workspaceId ? await listPresets(workspaceId) : []
 
   const byModel = new Map<string, typeof presets>()
   for (const preset of presets) {

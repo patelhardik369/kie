@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 
 import { PinStar } from '@/components/models/PinStar.tsx'
 import { ParamForm } from '@/components/param-form/ParamForm.tsx'
+import { ApiKeyGate } from '@/components/setup/ApiKeyGate.tsx'
 import { BackLink } from '@/components/shell/PageHeader.tsx'
 import { InfoTip } from '@/components/shell/InfoTip.tsx'
 import { ExternalLink } from '@/components/shell/icons.tsx'
@@ -96,8 +97,16 @@ export default async function GeneratePage({
         </div>
       </header>
 
+      {/*
+        The gate blocks nothing until this exact point — the screen where credits
+        are about to be spent. Someone who has just arrived can read the whole
+        catalogue and every parameter of every model before being asked for
+        anything, which is the difference between a tool and a signup wall.
+      */}
       <div className="mt-6">
-        <ParamForm model={model} />
+        <ApiKeyGate>
+          <ParamForm model={model} />
+        </ApiKeyGate>
       </div>
     </main>
   )

@@ -1,3 +1,4 @@
+import { currentWorkspace } from '@/lib/auth/workspace.ts'
 import Link from 'next/link'
 
 import { PinStar } from '@/components/models/PinStar.tsx'
@@ -24,7 +25,9 @@ export const metadata = { title: 'Choose a model' }
 export const dynamic = 'force-dynamic'
 
 export default async function GenerateIndex() {
-  const pins = await listPins()
+  const workspaceId = await currentWorkspace()
+  // A first visit has no workspace yet, and no pins by definition.
+  const pins = workspaceId ? await listPins(workspaceId) : []
 
   return (
     <main className="mx-auto max-w-4xl px-4 pt-6 pb-16">

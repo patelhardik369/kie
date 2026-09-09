@@ -1,7 +1,5 @@
 import 'server-only'
 
-import fs from 'node:fs/promises'
-import path from 'node:path'
 import { KIE_UPLOAD_BASE, UPLOAD_TIMEOUT_MS, kieRequest } from './client.ts'
 import { KieError } from './errors.ts'
 
@@ -14,7 +12,7 @@ import { KieError } from './errors.ts'
  * another publicly reachable URL) — never raw file content.
  *
  * Uploaded files expire in ~24 hours. The `input_assets` table caches
- * localPath -> kieFileUrl with `expiresAt` so a reuse inside the window skips
+ * storagePath -> kieFileUrl with `expiresAt` so a reuse inside the window skips
  * the round trip; past it, re-upload rather than sending a dead URL.
  */
 
@@ -101,19 +99,27 @@ interface UploadCommon {
 }
 
 /**
- * Streams a local file up as multipart.
+ * Sends bytes up as multipart.
  *
- * The default for local files: no 10 MB ceiling, no ~33% base64 inflation.
+ * The default path for a file we hold: no 10 MB ceiling, no ~33% base64
+ * inflation. It takes bytes rather than a path because there is no filesystem
+ * to read from any more — the caller has either just received the upload or
+ * just pulled it back out of the bucket.
  */
-export async function uploadFile(
-  filePath: string,
-  options: UploadCommon = {},
+export async function uploadBytes(
+  content: Uint8Array,
+  options: UploadCommon & { mime?: string } = {},
 ): Promise<UploadedFile> {
-  const bytes = await fs.readFile(filePath)
-  const name = options.fileName ?? path.basename(filePath)
+  const name = options.fileName ?? 'upload.bin'
 
   const form = new FormData()
-  form.append('file', new Blob([new Uint8Array(bytes)]), name)
+  form.append(
+    'file',
+    // The BlobPart cast keeps a plain Uint8Array acceptable to lib.dom's Blob
+    // signature; at runtime it is the same buffer either way.
+    new Blob([content as BlobPart], options.mime ? { type: options.mime } : undefined),
+    name,
+  )
   if (options.uploadPath) form.append('uploadPath', options.uploadPath)
   if (options.fileName) form.append('fileName', options.fileName)
 
@@ -131,7 +137,7 @@ export async function uploadFile(
 /**
  * Uploads a data URI.
  *
- * Only for small pasted or canvas-generated data — prefer `uploadFile`.
+ * Only for small pasted or canvas-generated data — prefer `uploadBytes`.
  * `base64Data` must keep its `data:<mime>;base64,` prefix.
  */
 export async function uploadBase64(

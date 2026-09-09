@@ -2,9 +2,11 @@ import Link from 'next/link'
 
 import { GalleryFilters } from '@/components/gallery/GalleryFilters.tsx'
 import { GenerationCard } from '@/components/gallery/GenerationCard.tsx'
+import { NoWorkspace } from '@/components/setup/NoWorkspace.tsx'
 import { PageHeader } from '@/components/shell/PageHeader.tsx'
 import { ArrowLeft, ArrowRight } from '@/components/shell/icons.tsx'
-import { assetTokenFor } from '@/lib/gallery/asset-token.ts'
+import { currentWorkspace } from '@/lib/auth/workspace.ts'
+import { assetToken } from '@/lib/gallery/asset-token.ts'
 import { galleryHref, parseGalleryFilter } from '@/lib/gallery/filters.ts'
 import { getGalleryFacets, listGenerations } from '@/lib/gallery/queries.ts'
 
@@ -15,20 +17,39 @@ export const metadata = { title: 'Gallery' }
 /**
  * Everything ever generated, newest first.
  *
- * A server component reading straight from SQLite, driven entirely by
+ * A server component reading straight from Postgres, driven entirely by
  * searchParams. No API route sits in between because there is no second
  * consumer, and the filter state lives in the URL rather than in a store — so
  * a filtered view is a link you can send yourself.
+ *
+ * The workspace comes from the cookie rather than the header the API routes
+ * read: a server component renders before any of our JavaScript, so the cookie
+ * is the only form of the id available this early. That is the whole reason the
+ * id is written to both.
  */
 export default async function GalleryPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
+  const workspaceId = await currentWorkspace()
   const filter = parseGalleryFilter(await searchParams)
+
+  if (!workspaceId) {
+    return (
+      <main className="mx-auto max-w-[1400px] px-4 pt-6 pb-16">
+        <PageHeader
+          title="Gallery"
+          description="Everything ever generated, newest first."
+        />
+        <NoWorkspace what="gallery" />
+      </main>
+    )
+  }
+
   const [page, facets] = await Promise.all([
-    listGenerations(filter),
-    getGalleryFacets(),
+    listGenerations(workspaceId, filter),
+    getGalleryFacets(workspaceId),
   ])
 
   return (
@@ -57,14 +78,18 @@ export default async function GalleryPage({
               <GenerationCard
                 assetCount={assetCount}
                 thumbnail={
-                  thumbnail && {
-                    kind: thumbnail.kind,
-                    localPath: thumbnail.localPath,
-                    width: thumbnail.width,
-                    height: thumbnail.height,
-                    // Only a grid that asked for private work can render it.
-                    token: assetTokenFor(thumbnail.localPath, generation.nsfw),
-                  }
+                  // Null `storagePath` means the output was too large to store,
+                  // so there is nothing to render a tile from — the card falls
+                  // back to its stateless placeholder rather than a broken image.
+                  thumbnail?.storagePath
+                    ? {
+                        kind: thumbnail.kind,
+                        storagePath: thumbnail.storagePath,
+                        width: thumbnail.width,
+                        height: thumbnail.height,
+                        token: assetToken(thumbnail.storagePath),
+                      }
+                    : undefined
                 }
                 generation={{
                   id: generation.id,

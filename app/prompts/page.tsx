@@ -1,3 +1,4 @@
+import { currentWorkspace } from '@/lib/auth/workspace.ts'
 import { PromptLibrary } from '@/components/library/PromptLibrary.tsx'
 import { PageHeader } from '@/components/shell/PageHeader.tsx'
 import { listPrompts, parseTags, promptTags } from '@/lib/library/queries.ts'
@@ -11,7 +12,10 @@ export const metadata = { title: 'Prompts' }
  * (docs/PRD.md F8).
  */
 export default async function PromptsPage() {
-  const [rows, tags] = await Promise.all([listPrompts(), promptTags()])
+  const workspaceId = await currentWorkspace()
+  const [rows, tags] = workspaceId
+    ? await Promise.all([listPrompts(workspaceId), promptTags(workspaceId)])
+    : [[], []]
 
   return (
     <main className="mx-auto max-w-4xl px-4 pt-6 pb-16">

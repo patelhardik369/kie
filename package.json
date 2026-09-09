@@ -3,23 +3,29 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Self-hosted generation studio on the Kie AI unified API — Kling, ByteDance and Wan, every parameter exposed.",
+  "description": "Self-hosted generation studio on the Kie AI unified API \u2014 Kling, ByteDance and Wan, every parameter exposed.",
   "scripts": {
     "dev": "next dev",
-    "dev:clean": "node scripts/dev-clean.mjs && next dev",
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "test": "node --conditions=react-server --test \"lib/**/*.test.ts\"",
     "smoke": "node --conditions=react-server --env-file=.env scripts/smoke.ts",
-    "sweep": "node --conditions=react-server scripts/sweep-forms.ts"
+    "sweep": "node --conditions=react-server scripts/sweep-forms.ts",
+    "db:migrate": "node --env-file-if-exists=.env --experimental-strip-types scripts/migrate.ts",
+    "db:import": "node --env-file-if-exists=.env --experimental-strip-types --conditions=react-server scripts/import-local.ts",
+    "storage:setup": "node --env-file-if-exists=.env --experimental-strip-types scripts/setup-storage.ts",
+    "db:find-pooler": "node --env-file-if-exists=.env --experimental-strip-types scripts/find-pooler.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
+    "@supabase/supabase-js": "^2.116.0",
+    "@vercel/functions": "^3.9.6",
     "drizzle-orm": "^0.45.2",
     "geist": "^1.7.2",
     "next": "^16.3.4",
+    "postgres": "^3.4.9",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "server-only": "^0.0.1"

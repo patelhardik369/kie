@@ -1,29 +1,39 @@
 import 'server-only'
 
-import fs from 'node:fs/promises'
-import { createWriteStream } from 'node:fs'
-import path from 'node:path'
-import { Readable } from 'node:stream'
-import { pipeline } from 'node:stream/promises'
-
 import { assets, getDb, type Generation } from '../db/index.ts'
 import { getEnv } from '../env.ts'
 import { inferAssetKind, type LayerData, type ParsedResult } from '../kie/result.ts'
+import { putObject, StorageError } from '../storage/objects.ts'
 import { mimeForExtension, kindForMime } from './mime.ts'
-import { extensionFromUrl, outputRelativePath } from './paths.ts'
+import { extensionFromUrl, outputObjectKey } from './paths.ts'
 import { mergeProbes, probeBuffer } from './probe.ts'
 
 /**
- * Result URLs to bytes on disk.
+ * Result URLs to bytes in the bucket.
  *
  * **The single most important operation in this codebase.** Kie deletes
  * generated media after 14 days, so a generation is not `complete` until its
- * bytes are local. A download failure blocks completion (`needs_retry`) rather
- * than being logged and forgotten — see docs/API-CONTRACT.md §6.
+ * bytes are ours. A store failure blocks completion (`needs_retry`) rather than
+ * being logged and forgotten — see docs/API-CONTRACT.md §6.
+ *
+ * What changed in moving off the local disk:
+ *
+ *   - **The bytes go through memory, not a temp file.** There is no writable
+ *     filesystem worth using on a serverless host, and the `.part`-then-rename
+ *     trick that guarded against truncation has no equivalent in an object
+ *     store. Its job is done instead by holding the whole response in memory,
+ *     verifying the length against `content-length`, and only then uploading —
+ *     a truncated transfer never becomes an object at all. Which is stricter
+ *     than the rename was.
+ *   - **A per-object ceiling now exists.** Supabase Free refuses anything over
+ *     50 MB. An output past it is recorded as `too_large` with its Kie URL kept,
+ *     rather than failing the generation: the run was paid for, the file is real
+ *     for another fortnight, and the honest thing is to say so and let it be
+ *     downloaded, not to pretend it never happened.
  */
 
 /** Generous: a 1080p video off a cold CDN edge is not fast. */
-const DOWNLOAD_TIMEOUT_MS = 10 * 60_000
+const DOWNLOAD_TIMEOUT_MS = 5 * 60_000
 
 /** Per-URL retry delays. A CDN 5xx right after `success` is common. */
 const RETRY_DELAYS_MS = [2_000, 5_000, 12_000]
@@ -46,7 +56,9 @@ export class DownloadError extends Error {
 export interface DownloadedAsset {
   id: string
   index: number
-  localPath: string
+  /** Null when the object was too large to store. */
+  storagePath: string | null
+  storageState: 'stored' | 'too_large'
   remoteUrl: string
   kind: 'image' | 'video' | 'audio'
   mime: string
@@ -54,52 +66,47 @@ export interface DownloadedAsset {
   width?: number
   height?: number
   durationMs?: number
+  /** Said out loud when an output could not be stored. */
+  warning?: string
 }
 
 /**
- * Downloads every URL of a finished generation and records an `assets` row for
- * each. Resolves only when all of them are on disk; throws otherwise, leaving
- * the caller to mark the generation `needs_retry`.
+ * Fetches every URL of a finished generation and records an `assets` row for
+ * each. Resolves only when all of them are accounted for; throws otherwise,
+ * leaving the caller to mark the generation `needs_retry`.
  */
 export async function downloadGenerationAssets(
-  generation: Pick<Generation, 'id' | 'family' | 'modelSlug'>,
+  generation: Pick<Generation, 'id' | 'family' | 'modelSlug' | 'workspaceId'>,
   result: ParsedResult,
 ): Promise<DownloadedAsset[]> {
-  const outputDir = getEnv().outputDir
   const layersByUrl = new Map((result.layers ?? []).map((l) => [l.url, l]))
-
   const downloaded: DownloadedAsset[] = []
 
-  // Sequential, not parallel: several 1080p videos at once saturate the link and
-  // make every one of them slower, and ordering keeps `idx` meaningful.
+  // Sequential, not parallel: several 1080p videos at once would hold all of
+  // them in one function's memory at the same time, and ordering keeps `idx`
+  // meaningful.
   for (const [index, url] of result.urls.entries()) {
     downloaded.push(
-      await downloadOne({
-        generation,
-        outputDir,
-        url,
-        index,
-        layer: layersByUrl.get(url),
-      }),
+      await storeOne({ generation, url, index, layer: layersByUrl.get(url) }),
     )
   }
 
   return downloaded
 }
 
-interface DownloadOneParams {
-  generation: Pick<Generation, 'id' | 'family' | 'modelSlug'>
-  outputDir: string
+interface StoreOneParams {
+  generation: Pick<Generation, 'id' | 'family' | 'modelSlug' | 'workspaceId'>
   url: string
   index: number
   layer?: LayerData
 }
 
-async function downloadOne(params: DownloadOneParams): Promise<DownloadedAsset> {
-  const { generation, outputDir, url, index, layer } = params
+async function storeOne(params: StoreOneParams): Promise<DownloadedAsset> {
+  const { generation, url, index, layer } = params
 
   const kind = inferAssetKind(url)
-  const relativePath = outputRelativePath({
+  const key = outputObjectKey({
+    workspaceId: generation.workspaceId,
     generationId: generation.id,
     family: generation.family,
     modelSlug: generation.modelSlug,
@@ -107,25 +114,63 @@ async function downloadOne(params: DownloadOneParams): Promise<DownloadedAsset> 
     url,
     kind,
   })
-  const absolutePath = path.join(outputDir, relativePath)
 
-  const { bytes, contentType } = await fetchToFile(url, absolutePath)
+  const { body, contentType } = await fetchToMemory(url)
 
-  const ext = extensionFromUrl(url) ?? path.extname(absolutePath).slice(1)
+  const ext = extensionFromUrl(url) ?? EXT_BY_KIND[kind]
   const mime = normalizeMime(contentType) ?? mimeForExtension(ext)
-  const probed = await probeFile(absolutePath, bytes)
+  const probed = probeBytes(body)
+
+  let storagePath: string | null = key
+  let storageState: 'stored' | 'too_large' = 'stored'
+  let warning: string | undefined
+
+  if (body.byteLength > getEnv().maxFileBytes) {
+    // Not a failure. The generation ran and was billed; refusing to record it
+    // would lose the parameters that produced it as well as the file.
+    storagePath = null
+    storageState = 'too_large'
+    warning =
+      `${mbs(body.byteLength)} MB is past the ${mbs(getEnv().maxFileBytes)} MB per-object ` +
+      'ceiling on this Supabase plan, so it was not stored. Download it from the ' +
+      'gallery within about fourteen days — after that Kie deletes it and it is gone.'
+  } else {
+    try {
+      await putObject(key, body, mime)
+    } catch (error) {
+      // A StorageError here is a real failure of the durability rule, so it
+      // propagates and parks the generation in needs_retry.
+      throw error instanceof StorageError ? error : new DownloadError(url, 1, error)
+    }
+  }
 
   const asset: DownloadedAsset = {
-    // Deterministic, so re-running a download after a partial failure updates
-    // the row rather than inserting a duplicate.
+    // Deterministic, so a retried store after a partial failure updates the row
+    // rather than inserting a duplicate.
     id: `${generation.id}-${index}`,
     index,
-    localPath: relativePath,
+    storagePath,
+    storageState,
     remoteUrl: url,
     kind: kindForMime(mime) ?? kind,
     mime,
-    bytes,
+    bytes: body.byteLength,
     ...probed,
+    warning,
+  }
+
+  const row = {
+    workspaceId: generation.workspaceId,
+    kind: asset.kind,
+    storagePath: asset.storagePath,
+    storageState: asset.storageState,
+    remoteUrl: asset.remoteUrl,
+    mime: asset.mime,
+    bytes: asset.bytes,
+    width: asset.width ?? null,
+    height: asset.height ?? null,
+    durationMs: asset.durationMs ?? null,
+    downloadedAt: Date.now(),
   }
 
   await getDb()
@@ -133,34 +178,16 @@ async function downloadOne(params: DownloadOneParams): Promise<DownloadedAsset> 
     .values({
       id: asset.id,
       generationId: generation.id,
-      kind: asset.kind,
-      localPath: asset.localPath,
-      remoteUrl: asset.remoteUrl,
-      mime: asset.mime,
-      bytes: asset.bytes,
-      width: asset.width ?? null,
-      height: asset.height ?? null,
-      durationMs: asset.durationMs ?? null,
       idx: index,
       layerMeta: layer ? JSON.stringify(layer) : null,
-      downloadedAt: Date.now(),
+      ...row,
     })
-    .onConflictDoUpdate({
-      target: assets.id,
-      set: {
-        localPath: asset.localPath,
-        remoteUrl: asset.remoteUrl,
-        mime: asset.mime,
-        bytes: asset.bytes,
-        width: asset.width ?? null,
-        height: asset.height ?? null,
-        durationMs: asset.durationMs ?? null,
-        downloadedAt: Date.now(),
-      },
-    })
+    .onConflictDoUpdate({ target: assets.id, set: row })
 
   return asset
 }
+
+const EXT_BY_KIND = { image: 'png', video: 'mp4', audio: 'mp3' } as const
 
 function normalizeMime(contentType: string | null): string | undefined {
   if (!contentType) return undefined
@@ -173,19 +200,21 @@ function normalizeMime(contentType: string | null): string | undefined {
 }
 
 /**
- * Streams one URL to disk, retrying with backoff.
+ * Fetches one URL fully into memory, retrying with backoff.
  *
- * Writes to a `.part` file and renames on success, so an interrupted download
- * can never leave a truncated file that looks complete to the gallery.
+ * Buffering rather than streaming through to Supabase is a deliberate trade. It
+ * costs memory proportional to the file — bounded, because anything over the
+ * per-object ceiling is not stored anyway — and buys three things a stream does
+ * not give: the length can be verified before a single byte is committed, the
+ * probe can read the tail (where an MP4 written without faststart keeps the
+ * `moov` atom, and with it the duration), and a failed transfer leaves no
+ * partial object behind.
  */
-async function fetchToFile(
+async function fetchToMemory(
   url: string,
-  absolutePath: string,
-): Promise<{ bytes: number; contentType: string | null }> {
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true })
-  const partPath = `${absolutePath}.part`
-
+): Promise<{ body: Uint8Array; contentType: string | null }> {
   let lastError: unknown
+
   for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
     if (attempt > 0) await sleep(RETRY_DELAYS_MS[attempt - 1]!)
 
@@ -195,31 +224,24 @@ async function fetchToFile(
         cache: 'no-store',
       })
 
-      if (!response.ok || !response.body) {
+      if (!response.ok) {
         // 403/404 here usually means the 14-day result URL already expired.
         throw new Error(`HTTP ${response.status} ${response.statusText}`)
       }
 
-      // fetch yields the DOM ReadableStream type; Readable.fromWeb wants the
-      // node:stream/web one. Same object at runtime, two separate declarations.
-      const source = response.body as Parameters<typeof Readable.fromWeb>[0]
-      await pipeline(Readable.fromWeb(source), createWriteStream(partPath))
-
-      const stat = await fs.stat(partPath)
-      if (stat.size === 0) throw new Error('Downloaded file was empty.')
+      const body = new Uint8Array(await response.arrayBuffer())
+      if (body.byteLength === 0) throw new Error('The download was empty.')
 
       // A stream cut short mid-transfer resolves cleanly; the length check is
       // the only thing that catches it.
       const expected = Number(response.headers.get('content-length'))
-      if (Number.isFinite(expected) && expected > 0 && stat.size !== expected) {
-        throw new Error(`Truncated: got ${stat.size} bytes, expected ${expected}.`)
+      if (Number.isFinite(expected) && expected > 0 && body.byteLength !== expected) {
+        throw new Error(`Truncated: got ${body.byteLength} bytes, expected ${expected}.`)
       }
 
-      await fs.rename(partPath, absolutePath)
-      return { bytes: stat.size, contentType: response.headers.get('content-type') }
+      return { body, contentType: response.headers.get('content-type') }
     } catch (error) {
       lastError = error
-      await fs.rm(partPath, { force: true }).catch(() => undefined)
     }
   }
 
@@ -227,34 +249,28 @@ async function fetchToFile(
 }
 
 /**
- * Reads dimensions and duration off the finished file.
+ * Reads dimensions and duration off the bytes in hand.
  *
- * Both ends are read: an MP4 written without faststart keeps its `moov` atom at
- * the tail, and that is where the duration lives.
+ * Both ends are read for the same reason the file version opened two windows:
+ * an MP4 written without faststart keeps its `moov` atom at the tail, and that
+ * is where the duration lives.
  */
-async function probeFile(absolutePath: string, size: number) {
-  let handle
+function probeBytes(body: Uint8Array) {
   try {
-    handle = await fs.open(absolutePath, 'r')
+    if (body.byteLength <= PROBE_WINDOW_BYTES * 2) return probeBuffer(body)
 
-    const headLength = Math.min(PROBE_WINDOW_BYTES, size)
-    const head = new Uint8Array(headLength)
-    await handle.read(head, 0, headLength, 0)
-
-    if (size <= PROBE_WINDOW_BYTES) return probeBuffer(head)
-
-    const tailLength = Math.min(PROBE_WINDOW_BYTES, size)
-    const tail = new Uint8Array(tailLength)
-    await handle.read(tail, 0, tailLength, size - tailLength)
-
+    const head = body.subarray(0, PROBE_WINDOW_BYTES)
+    const tail = body.subarray(body.byteLength - PROBE_WINDOW_BYTES)
     return mergeProbes(probeBuffer(head), probeBuffer(tail))
   } catch {
     return {}
-  } finally {
-    await handle?.close().catch(() => undefined)
   }
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function mbs(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(0)
 }

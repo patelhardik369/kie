@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { withWorkspace } from '@/lib/auth/route.ts'
 import { createPreset, listPresets } from '@/lib/library/queries.ts'
 import { getModel } from '@/lib/kie/registry/index.ts'
 import { presetableValues } from '@/lib/presets/apply.ts'
@@ -17,8 +18,10 @@ export const dynamic = 'force-dynamic'
  */
 
 export async function GET(request: Request) {
-  const modelSlug = new URL(request.url).searchParams.get('model') ?? undefined
-  return NextResponse.json({ presets: await listPresets(modelSlug) })
+  return withWorkspace(request, async ({ workspaceId }) => {
+    const modelSlug = new URL(request.url).searchParams.get('model') ?? undefined
+    return NextResponse.json({ presets: await listPresets(workspaceId, modelSlug) })
+  })
 }
 
 interface CreateBody {
@@ -35,35 +38,37 @@ interface CreateBody {
 }
 
 export async function POST(request: Request) {
-  let body: CreateBody
-  try {
-    body = (await request.json()) as CreateBody
-  } catch {
-    return NextResponse.json({ error: 'Request body must be JSON.' }, { status: 400 })
-  }
+  return withWorkspace(request, async ({ workspaceId }) => {
+    let body: CreateBody
+    try {
+      body = (await request.json()) as CreateBody
+    } catch {
+      return NextResponse.json({ error: 'Request body must be JSON.' }, { status: 400 })
+    }
 
-  const name = body.name?.trim()
-  if (!name) {
-    return NextResponse.json({ error: 'A preset needs a name.' }, { status: 400 })
-  }
+    const name = body.name?.trim()
+    if (!name) {
+      return NextResponse.json({ error: 'A preset needs a name.' }, { status: 400 })
+    }
 
-  const model = body.model ? getModel(body.model) : undefined
-  if (!model) {
-    return NextResponse.json(
-      { error: `Unknown model "${body.model ?? ''}".` },
-      { status: 400 },
-    )
-  }
+    const model = body.model ? getModel(body.model) : undefined
+    if (!model) {
+      return NextResponse.json(
+        { error: `Unknown model "${body.model ?? ''}".` },
+        { status: 400 },
+      )
+    }
 
-  // Asset URLs are stripped here: a Kie upload dies after about 24 hours, so a
-  // preset carrying one would apply cleanly and then fail at submit.
-  const params = presetableValues(model, body.params ?? {})
-  const preset = await createPreset({
-    name,
-    modelSlug: model.slug,
-    params,
-    nsfw: body.nsfw === true,
+    // Asset URLs are stripped here: a Kie upload dies after about 24 hours, so a
+    // preset carrying one would apply cleanly and then fail at submit.
+    const params = presetableValues(model, body.params ?? {})
+    const preset = await createPreset(workspaceId, {
+      name,
+      modelSlug: model.slug,
+      params,
+      nsfw: body.nsfw === true,
+    })
+
+    return NextResponse.json({ preset, savedKeys: Object.keys(params) }, { status: 201 })
   })
-
-  return NextResponse.json({ preset, savedKeys: Object.keys(params) }, { status: 201 })
 }

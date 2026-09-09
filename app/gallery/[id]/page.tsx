@@ -7,7 +7,7 @@ import { UseAsInput } from '@/components/gallery/UseAsInput.tsx'
 import { GenerationStatus } from '@/components/queue/GenerationStatus.tsx'
 import { BackLink } from '@/components/shell/PageHeader.tsx'
 import { ChevronRight, ExternalLink } from '@/components/shell/icons.tsx'
-import { assetTokenFor } from '@/lib/gallery/asset-token.ts'
+import { assetUrl } from '@/lib/gallery/asset-token.ts'
 import {
   assetHref,
   formatBytes,
@@ -19,6 +19,7 @@ import {
   stateTone,
 } from '@/lib/gallery/display.ts'
 import { getGenerationDetail } from '@/lib/gallery/queries.ts'
+import { currentWorkspace } from '@/lib/auth/workspace.ts'
 import { getModel } from '@/lib/kie/registry/index.ts'
 
 export const dynamic = 'force-dynamic'
@@ -36,7 +37,10 @@ export default async function GenerationDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const detail = await getGenerationDetail(id)
+  const workspaceId = await currentWorkspace()
+  // No workspace means no rows of ours, which is indistinguishable from a
+  // generation that belongs to someone else — both are a 404, deliberately.
+  const detail = workspaceId ? await getGenerationDetail(workspaceId, id) : undefined
   if (!detail) notFound()
 
   const { generation, assets, parent, children, siblings } = detail
@@ -95,16 +99,18 @@ export default async function GenerationDetailPage({
 
       {assets.length > 0 && (
         <section className="mt-5 space-y-3">
-          {assets.map((asset) => (
+          {assets.map((asset) => {
+            const href = assetUrl(asset.storagePath)
+            return (
             <figure key={asset.id} className="panel-flush">
-              <Media
-                kind={asset.kind}
-                src={assetHref(asset.localPath, assetTokenFor(asset.localPath, generation.nsfw))}
-                layerMeta={asset.layerMeta}
-              />
+              {href ? (
+                <Media kind={asset.kind} src={href} layerMeta={asset.layerMeta} />
+              ) : (
+                <Oversize asset={asset} />
+              )}
               <figcaption className="mono flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-(--color-border) px-3.5 py-2 text-(--color-ink-faint)">
                 <a
-                  href={assetHref(asset.localPath, assetTokenFor(asset.localPath, generation.nsfw))}
+                  href={href ?? asset.remoteUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1 underline underline-offset-2 transition-colors duration-(--dur-fast) hover:text-(--color-accent)"
@@ -123,13 +129,17 @@ export default async function GenerationDetailPage({
                 {/* The local link above opens the file HERE; this one produces a
                     URL Kie can fetch, which is what a model's *_url field wants. */}
                 <UseAsInput assetId={asset.id} />
-                {/* The local path is the durable truth; the Kie URL is long gone. */}
-                <span className="ml-auto truncate" title={asset.localPath}>
-                  {asset.localPath}
+                {/* The object key is the durable truth; the Kie URL is long gone. */}
+                <span
+                  className="ml-auto truncate"
+                  title={asset.storagePath ?? 'not stored'}
+                >
+                  {asset.storagePath ?? 'not stored'}
                 </span>
               </figcaption>
             </figure>
-          ))}
+            )
+          })}
         </section>
       )}
 
@@ -221,6 +231,57 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
       <dd className="mono mt-0.5 truncate text-(--color-ink-muted)" title={String(children)}>
         {children}
       </dd>
+    </div>
+  )
+}
+
+/**
+ * The placeholder for an output that was never stored.
+ *
+ * Supabase Free refuses any object over 50 MB, so a long 4K video can come back
+ * from Kie real, paid for, and unstorable. Recording it as a failure would be a
+ * lie — the generation succeeded — and hiding it would lose the parameters that
+ * produced it.
+ *
+ * So the row exists, the tile says exactly what happened, and the link is Kie's
+ * own result URL while it still resolves. The fourteen-day clock is stated
+ * rather than implied, because after it there is genuinely nothing left.
+ */
+function Oversize({
+  asset,
+}: {
+  asset: { remoteUrl: string; bytes: number | null; downloadedAt: number }
+}) {
+  const expiresAt = asset.downloadedAt + 14 * 24 * 60 * 60 * 1000
+  const expired = Date.now() > expiresAt
+
+  return (
+    <div className="px-3.5 py-6 text-center">
+      <p className="text-[13px] font-medium text-(--color-warn-ink)">
+        Too large to store — {formatBytes(asset.bytes)}
+      </p>
+      <p className="mx-auto mt-1.5 max-w-md text-[12px] leading-relaxed text-(--color-ink-muted)">
+        This project&apos;s plan caps a single stored file at 50&nbsp;MB, so this
+        output was left on Kie.{' '}
+        {expired ? (
+          <>Kie has since deleted it, and it cannot be recovered.</>
+        ) : (
+          <>
+            Kie deletes it around {formatTimestamp(expiresAt)} — download it
+            before then if you want to keep it.
+          </>
+        )}
+      </p>
+      {!expired && (
+        <a
+          href={asset.remoteUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-3 inline-flex rounded-md border border-(--color-border) px-3 py-1.5 text-[12px] text-(--color-ink) hover:border-(--color-accent)"
+        >
+          Download from Kie
+        </a>
+      )}
     </div>
   )
 }

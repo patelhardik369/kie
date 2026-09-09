@@ -2,12 +2,12 @@ import 'server-only'
 
 import crypto from 'node:crypto'
 
-import { generations, getDb } from '../db/index.ts'
+import { sealCurrentKeyFor } from '../auth/kie-key.ts'
+import { generations, getDb, workspaces } from '../db/index.ts'
 import type { ModelDefinition } from '../kie/registry/types.ts'
-import { getRunner } from './runner.ts'
 
 /**
- * Turning a validated input into rows the runner will pick up.
+ * Turning a validated input into rows a driver will pick up.
  *
  * Shared by `POST /api/kie/create` and `POST /api/kie/batch` so a single
  * submission and a 5-run sweep record identical rows — same columns, same
@@ -18,6 +18,11 @@ import { getRunner } from './runner.ts'
  * Validation is the caller's job. By the time anything gets here the input has
  * already been checked against the ModelDefinition, because the useful error
  * message is the one that names the constraint, not the one that names a column.
+ *
+ * Two things are written here that the local build had no need for: the owning
+ * workspace, and the submitter's Kie key sealed against the new row's id. The
+ * second is what lets a cron tick finish this job in twenty minutes' time with
+ * no browser anywhere in sight.
  */
 
 export interface SubmitOptions {
@@ -38,32 +43,30 @@ export interface SubmittedGeneration {
   input: Record<string, unknown>
 }
 
-/**
- * Inserts one generation and hands it to the runner.
- *
- * Returns as soon as the row exists — the runner may be holding the submission
- * behind the rate gate, and the row is what makes the job durable.
- */
+/** Inserts one generation. Returns as soon as the row exists. */
 export async function submitGeneration(
+  workspaceId: string,
   model: ModelDefinition,
   input: Record<string, unknown>,
   options: SubmitOptions = {},
 ): Promise<SubmittedGeneration> {
-  const [submitted] = await submitBatch(model, [input], options)
+  const [submitted] = await submitBatch(workspaceId, model, [input], options)
   return submitted!
 }
 
 /**
- * Inserts N generations sharing one `batch_id`, then enqueues them.
+ * Inserts N generations sharing one `batch_id`.
  *
  * Rows are written in a single insert so a sweep is all-or-nothing: a partial
  * batch would leave a `batch_id` whose runs cannot be compared against each
  * other, which is the entire point of sweeping.
  *
- * Enqueueing happens after the write, and is not awaited. The submission gate
- * paces the runs under Kie's 20-per-10s limit on its own.
+ * Nothing is driven from here. The caller decides — a route hands the ids to
+ * `burst` inside `waitUntil`, which is the only place that knows whether the
+ * invocation has time to spare.
  */
 export async function submitBatch(
+  workspaceId: string,
   model: ModelDefinition,
   inputs: Record<string, unknown>[],
   options: SubmitOptions = {},
@@ -76,11 +79,14 @@ export async function submitBatch(
     input,
   }))
 
+  await touchWorkspace(workspaceId)
+
   await getDb()
     .insert(generations)
     .values(
       submitted.map(({ id, input }, index) => ({
         id,
+        workspaceId,
         modelSlug: model.slug,
         family: model.family,
         // Denormalized so the gallery can filter without a registry lookup.
@@ -92,16 +98,36 @@ export async function submitBatch(
         batchId: options.batchId ?? null,
         presetId: options.presetId ?? null,
         nsfw: options.nsfw === true,
+        // Sealed per row, because the seal is bound to the row's own id — one
+        // ciphertext could not be shared across a batch even if we wanted it to.
+        kieKeyEnc: sealCurrentKeyFor(id),
+        // Due immediately; whichever driver gets there first takes the lease.
+        nextPollAt: now,
         // Offset so the grid orders a batch the way it was swept, not arbitrarily
         // by whichever row the millisecond clock happened to tie.
         createdAt: now + index,
       })),
     )
 
-  const runner = getRunner()
-  for (const { id } of submitted) runner.enqueue(id)
-
   return submitted
+}
+
+/**
+ * Records that this workspace exists and is in use.
+ *
+ * Upserted on every submission rather than at some notional signup, because
+ * there is no signup — a workspace is only ever a string a browser started
+ * sending. `lastSeenAt` is what a future sweep of abandoned workspaces would act
+ * on.
+ */
+export async function touchWorkspace(workspaceId: string): Promise<void> {
+  await getDb()
+    .insert(workspaces)
+    .values({ id: workspaceId, createdAt: Date.now(), lastSeenAt: Date.now() })
+    .onConflictDoUpdate({
+      target: workspaces.id,
+      set: { lastSeenAt: Date.now() },
+    })
 }
 
 /** A fresh batch id. Exposed so a route can report it before the rows exist. */

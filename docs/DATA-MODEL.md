@@ -1,6 +1,16 @@
 # Data model
 
-SQLite via Drizzle + `@libsql/client`, at `data/kie.db`. Single user, no auth, so no ownership columns.
+Supabase Postgres via Drizzle + `postgres-js`, reached through the transaction pooler.
+
+**Every table a person can see carries a `workspace_id`.** There are no accounts — a workspace is a
+128-bit id the browser mints (see `lib/auth/workspace.ts`) — but that column is the entire ownership
+model, and the `service_role` connection bypasses RLS, so it is enforced in application code rather
+than by the database.
+
+**Timestamps are epoch milliseconds in `bigint`, never `timestamp`.** Postgres `integer` is 32-bit
+and `Date.now()` overflows it, so the obvious port of the old SQLite schema would have silently
+corrupted every date. `bigint` with `mode: 'number'` keeps the column a JS number end to end, which
+is what every comparison, sort and formatter in the app already expects.
 
 Two principles shape it:
 
@@ -66,7 +76,8 @@ Outputs. One row per downloaded file — a generation can produce several.
 | `id` | text PK | |
 | `generation_id` | text FK → `generations.id` cascade | |
 | `kind` | text | `image` / `video` / `audio` |
-| `local_path` | text | relative to `KIE_OUTPUT_DIR` — **never absolute**, so the folder can move |
+| `storage_path` | text, null | object key in the bucket, always `<workspace_id>/…`. Null only when `storage_state` is not `stored` |
+| `storage_state` | text | `stored` \| `too_large` \| `evicted`. `too_large` is an output past the plan's per-object ceiling: real, billed, and only reachable through `remote_url` until Kie deletes it |
 | `remote_url` | text | the original Kie URL; expires in 14 days |
 | `mime` / `bytes` | text / integer | |
 | `width` / `height` / `duration_ms` | integer nullable | probed after download; powers grid layout |

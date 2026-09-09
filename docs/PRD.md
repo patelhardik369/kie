@@ -67,7 +67,7 @@ working, complete UI with no component changes.
 
 ### F2 — Durable output archive
 
-Every successful generation's bytes are downloaded to `KIE_OUTPUT_DIR` and recorded before the job is
+Every successful generation's bytes are stored in Supabase Storage and recorded before the job is
 marked complete.
 
 **Acceptance**
@@ -85,7 +85,7 @@ to completion with backoff.
 **Acceptance**
 - Multiple concurrent jobs show live state (`waiting` → `queuing` → `generating` → terminal).
 - A `429` backs off and retries rather than dropping the job.
-- Closing and reopening the browser doesn't lose an in-flight job — state is in SQLite, and polling
+- Closing and reopening the browser doesn't lose an in-flight job — state is in Postgres, and polling
   resumes on server start.
 - Failures surface `failCode` and `failMsg` verbatim.
 

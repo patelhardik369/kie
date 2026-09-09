@@ -1,37 +1,48 @@
 /**
- * The Phase 5 exit criteria, checked against a real SQLite database.
+ * The Phase 5 exit criteria, checked against a real Postgres database.
  *
  * "Every generation is findable, its exact parameters are visible, and one
  * click reproduces it. A sweep of 5 seeds yields 5 rows sharing a batch_id and
  * one parent_id. Failed generations are visible as cards, not gaps."
+ *
+ * A second criterion was added when the studio went multi-browser, and it is
+ * checked here too: **a query never returns another workspace's rows.** The
+ * service-role connection bypasses row-level security, so the only thing
+ * enforcing that is the WHERE clause in every query — which makes it exactly the
+ * kind of thing worth a test rather than a convention.
+ *
+ * Needs TEST_DATABASE_URL. Without one the suite skips rather than failing; see
+ * lib/db/test-support.ts.
  *
  * Requires --conditions=react-server, which resolves `server-only` to its
  * no-op build. See package.json's test script.
  */
 
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
 import { after, before, describe, it } from 'node:test'
 
-const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'kie-gallery-test-'))
-process.env.KIE_API_KEY = 'test-key-not-a-real-one'
-process.env.DATABASE_URL = `file:${path.join(ROOT, 'gallery.db')}`
-process.env.KIE_OUTPUT_DIR = path.join(ROOT, 'outputs')
-delete process.env.KIE_PUBLIC_URL
-delete process.env.KIE_WEBHOOK_HMAC_KEY
+import { configureTestEnv, SKIP_REASON, TEST_TABLES } from '../db/test-support.ts'
 
-const { assets, generations, getDb, runMigrations } = await import('../db/index.ts')
+const configured = configureTestEnv()
+
+const { assets, generations, getDb, getSql, closeDb } = configured
+  ? await import('../db/index.ts')
+  : ({} as never)
 const { requireModel } = await import('../kie/registry/index.ts')
-const { submitBatch, newBatchId } = await import('../jobs/submit.ts')
+const { submitBatch } = configured ? await import('../jobs/submit.ts') : ({} as never)
+const { newBatchId } = configured ? await import('../jobs/submit.ts') : ({} as never)
 const { parseGalleryFilter } = await import('./filters.ts')
 const { getGalleryFacets, getGenerationDetail, listGenerations, recentGenerations } =
-  await import('./queries.ts')
+  configured ? await import('./queries.ts') : ({} as never)
 
 const filter = (query: string) => parseGalleryFilter(new URLSearchParams(query))
 
-/** No test here should reach the network; the runner is stubbed into failing fast. */
+/** The workspace every fixture below belongs to. */
+const WS = 'wk_00000000000000000000000000000001'
+/** A second one, used only to prove nothing leaks across the boundary. */
+const OTHER_WS = 'wk_00000000000000000000000000000002'
+
+/** No test here should reach the network; Kie is stubbed into failing fast. */
 let realFetch: typeof globalThis.fetch
 
 before(async () => {
@@ -41,17 +52,11 @@ before(async () => {
       status: 200,
       headers: { 'content-type': 'application/json' },
     })) as typeof globalThis.fetch
-
-  await runMigrations()
 })
 
-after(() => {
+after(async () => {
   globalThis.fetch = realFetch
-  try {
-    fs.rmSync(ROOT, { recursive: true, force: true })
-  } catch {
-    // Windows holds the SQLite handle until the process exits; the OS reaps it.
-  }
+  if (configured) await closeDb()
 })
 
 let seq = 0
@@ -70,14 +75,18 @@ interface SeedOptions {
   failMsg?: string
   withAsset?: boolean
   nsfw?: boolean
+  /** Defaults to WS. Set only by the isolation tests. */
+  workspaceId?: string
 }
 
 async function seed(options: SeedOptions = {}): Promise<string> {
   const id = `g-${String(++seq).padStart(3, '0')}`
+  const workspaceId = options.workspaceId ?? WS
   await getDb()
     .insert(generations)
     .values({
       id,
+      workspaceId,
       modelSlug: options.modelSlug ?? 'kling-2.6/text-to-video',
       family: options.family ?? 'kling',
       capability: options.capability ?? 'text-to-video',
@@ -96,8 +105,9 @@ async function seed(options: SeedOptions = {}): Promise<string> {
     await getDb().insert(assets).values({
       id: `${id}-0`,
       generationId: id,
+      workspaceId,
       kind: 'video',
-      localPath: `2026-09-01/kling/model/${id}-0.mp4`,
+      storagePath: `${workspaceId}/2026-09-01/kling/model/${id}-0.mp4`,
       remoteUrl: 'https://cdn.test.invalid/x.mp4',
       mime: 'video/mp4',
       bytes: 1024,
@@ -107,18 +117,27 @@ async function seed(options: SeedOptions = {}): Promise<string> {
   return id
 }
 
+/**
+ * Empties every table between cases.
+ *
+ * TRUNCATE rather than DELETE: it is one statement, it resets nothing this suite
+ * depends on, and CASCADE saves having to get the foreign-key order right by
+ * hand every time a table is added.
+ */
 async function clear() {
-  await getDb().delete(assets)
-  await getDb().delete(generations)
+  await getSql().unsafe(`truncate ${TEST_TABLES.join(', ')} cascade`)
 }
 
-describe('every generation is findable', () => {
+const suite = configured ? describe : describe.skip
+if (!configured) console.log(`[skip] lib/gallery/queries.test.ts — ${SKIP_REASON}`)
+
+suite('every generation is findable', () => {
   it('lists newest first', async () => {
     await clear()
     const older = await seed({ createdAt: 1_000 })
     const newer = await seed({ createdAt: 2_000 })
 
-    const page = await listGenerations(filter(''))
+    const page = await listGenerations(WS, filter(''))
     assert.deepEqual(page.items.map((i) => i.generation.id), [newer, older])
   })
 
@@ -132,12 +151,12 @@ describe('every generation is findable', () => {
     })
 
     assert.deepEqual(
-      (await listGenerations(filter('family=wan'))).items.map((i) => i.generation.id),
+      (await listGenerations(WS, filter('family=wan'))).items.map((i) => i.generation.id),
       [wan],
     )
-    assert.equal((await listGenerations(filter('capability=text-to-image'))).total, 1)
+    assert.equal((await listGenerations(WS, filter('capability=text-to-image'))).total, 1)
     assert.equal(
-      (await listGenerations(filter('model=wan%2F2-7-image'))).total,
+      (await listGenerations(WS, filter('model=wan%2F2-7-image'))).total,
       1,
     )
   })
@@ -147,7 +166,7 @@ describe('every generation is findable', () => {
     const lemon = await seed({ prompt: 'a ripe lemon on white' })
     await seed({ prompt: 'a blue car at night' })
 
-    const page = await listGenerations(filter('q=lemon'))
+    const page = await listGenerations(WS, filter('q=lemon'))
     assert.deepEqual(page.items.map((i) => i.generation.id), [lemon])
   })
 
@@ -157,7 +176,7 @@ describe('every generation is findable', () => {
     const literal = await seed({ prompt: '100% cotton' })
 
     // Unescaped, "%" would match everything and the filter would look broken.
-    const page = await listGenerations(filter('q=100%25'))
+    const page = await listGenerations(WS, filter('q=100%25'))
     assert.deepEqual(page.items.map((i) => i.generation.id), [literal])
   })
 
@@ -166,7 +185,7 @@ describe('every generation is findable', () => {
     const starred = await seed({ favorite: true })
     await seed({ favorite: false })
 
-    const page = await listGenerations(filter('favorite=1'))
+    const page = await listGenerations(WS, filter('favorite=1'))
     assert.deepEqual(page.items.map((i) => i.generation.id), [starred])
   })
 
@@ -176,7 +195,7 @@ describe('every generation is findable', () => {
     await seed({ createdAt: new Date(2026, 8, 2, 0, 1).getTime() })
 
     // The whole of the `to` day counts, right up to 23:59.
-    const page = await listGenerations(filter('from=2026-09-01&to=2026-09-01'))
+    const page = await listGenerations(WS, filter('from=2026-09-01&to=2026-09-01'))
     assert.deepEqual(page.items.map((i) => i.generation.id), [onTheDay])
   })
 
@@ -184,9 +203,9 @@ describe('every generation is findable', () => {
     await clear()
     for (let i = 0; i < 7; i++) await seed({ createdAt: 1_000 + i })
 
-    const first = await listGenerations(filter('pageSize=3'))
-    const second = await listGenerations(filter('pageSize=3&page=2'))
-    const third = await listGenerations(filter('pageSize=3&page=3'))
+    const first = await listGenerations(WS, filter('pageSize=3'))
+    const second = await listGenerations(WS, filter('pageSize=3&page=2'))
+    const third = await listGenerations(WS, filter('pageSize=3&page=3'))
 
     assert.equal(first.total, 7)
     assert.equal(first.pageCount, 3)
@@ -197,7 +216,7 @@ describe('every generation is findable', () => {
   })
 })
 
-describe('failed generations are cards, not gaps', () => {
+suite('failed generations are cards, not gaps', () => {
   it('lists a failure that has no assets at all', async () => {
     await clear()
     await seed({ state: 'complete' })
@@ -207,7 +226,7 @@ describe('failed generations are cards, not gaps', () => {
       failMsg: 'Your prompt was flagged by our content policy.',
     })
 
-    const page = await listGenerations(filter(''))
+    const page = await listGenerations(WS, filter(''))
     // An inner join to assets would silently drop exactly this row.
     assert.equal(page.total, 2)
 
@@ -226,7 +245,7 @@ describe('failed generations are cards, not gaps', () => {
       await seed({ state, withAsset: false })
     }
 
-    const page = await listGenerations(filter('state=problem'))
+    const page = await listGenerations(WS, filter('state=problem'))
     assert.equal(page.total, 4)
   })
 
@@ -237,12 +256,12 @@ describe('failed generations are cards, not gaps', () => {
     }
     await seed({ state: 'complete' })
 
-    assert.equal((await listGenerations(filter('state=running'))).total, 4)
-    assert.equal((await listGenerations(filter('state=complete'))).total, 1)
+    assert.equal((await listGenerations(WS, filter('state=running'))).total, 4)
+    assert.equal((await listGenerations(WS, filter('state=complete'))).total, 1)
   })
 })
 
-describe('a sweep of 5 seeds', () => {
+suite('a sweep of 5 seeds', () => {
   it('yields 5 rows sharing one batch_id and one parent_id', async () => {
     await clear()
     const model = requireModel('wan/2-7-image')
@@ -250,11 +269,11 @@ describe('a sweep of 5 seeds', () => {
 
     const batchId = newBatchId()
     const inputs = [11, 22, 33, 44, 55].map((seed) => ({ prompt: 'a lemon', seed }))
-    const submitted = await submitBatch(model, inputs, { batchId, parentId: parent })
+    const submitted = await submitBatch(WS, model, inputs, { batchId, parentId: parent })
 
     assert.equal(submitted.length, 5)
 
-    const rows = await listGenerations(filter('model=wan%2F2-7-image'))
+    const rows = await listGenerations(WS, filter('model=wan%2F2-7-image'))
     const sweepRows = rows.items.filter((i) => i.generation.batchId === batchId)
 
     assert.equal(sweepRows.length, 5)
@@ -274,13 +293,12 @@ describe('a sweep of 5 seeds', () => {
     await clear()
     const model = requireModel('wan/2-7-image')
     const batchId = newBatchId()
-    const submitted = await submitBatch(
-      model,
+    const submitted = await submitBatch(WS, model,
       [1, 2, 3].map((seed) => ({ prompt: 'a lemon', seed })),
       { batchId },
     )
 
-    const detail = await getGenerationDetail(submitted[0]!.id)
+    const detail = await getGenerationDetail(WS, submitted[0]!.id)
     assert.ok(detail)
     assert.equal(detail.siblings.length, 2)
     // The row itself is never listed among its own siblings.
@@ -288,43 +306,44 @@ describe('a sweep of 5 seeds', () => {
   })
 })
 
-describe('lineage', () => {
+suite('lineage', () => {
   it('links a re-run back to what it came from, in both directions', async () => {
     await clear()
     const original = await seed({ prompt: 'first attempt' })
     const rerun = await seed({ prompt: 'first attempt', parentId: original })
     const tweak = await seed({ prompt: 'second attempt', parentId: original })
 
-    const parentDetail = await getGenerationDetail(original)
+    const parentDetail = await getGenerationDetail(WS, original)
     assert.ok(parentDetail)
     assert.equal(parentDetail.parent, undefined)
     assert.deepEqual(parentDetail.children.map((c) => c.id).sort(), [rerun, tweak].sort())
 
-    const childDetail = await getGenerationDetail(rerun)
+    const childDetail = await getGenerationDetail(WS, rerun)
     assert.ok(childDetail)
     assert.equal(childDetail.parent?.id, original)
     assert.equal(childDetail.children.length, 0)
   })
 
   it('returns undefined for an id that does not exist', async () => {
-    assert.equal(await getGenerationDetail('nope'), undefined)
+    assert.equal(await getGenerationDetail(WS, 'nope'), undefined)
   })
 })
 
-describe('exact parameters are visible', () => {
+suite('exact parameters are visible', () => {
   it('hands back the stored input verbatim, with its assets in order', async () => {
     await clear()
     const id = await seed({ prompt: 'a very specific lemon' })
     await getDb().insert(assets).values({
       id: `${id}-1`,
       generationId: id,
+      workspaceId: WS,
       kind: 'video',
-      localPath: `2026-09-01/kling/model/${id}-1.mp4`,
+      storagePath: `${WS}/2026-09-01/kling/model/${id}-1.mp4`,
       remoteUrl: 'https://cdn.test.invalid/y.mp4',
       idx: 1,
     })
 
-    const detail = await getGenerationDetail(id)
+    const detail = await getGenerationDetail(WS, id)
     assert.ok(detail)
     assert.deepEqual(JSON.parse(detail.generation.inputJson), {
       prompt: 'a very specific lemon',
@@ -334,14 +353,14 @@ describe('exact parameters are visible', () => {
   })
 })
 
-describe('facets', () => {
+suite('facets', () => {
   it('counts the whole library, not the current filter', async () => {
     await clear()
     await seed({ family: 'kling', favorite: true })
     await seed({ family: 'wan', modelSlug: 'wan/2-7-image' })
     await seed({ family: 'wan', modelSlug: 'wan/2-7-image', state: 'failed' })
 
-    const facets = await getGalleryFacets()
+    const facets = await getGalleryFacets(WS)
     assert.equal(facets.total, 3)
     assert.equal(facets.favorites, 1)
     assert.equal(facets.families.find((f) => f.value === 'wan')?.count, 2)
@@ -351,21 +370,21 @@ describe('facets', () => {
 
   it('reports zero for an empty library rather than failing', async () => {
     await clear()
-    const facets = await getGalleryFacets()
+    const facets = await getGalleryFacets(WS)
     assert.equal(facets.total, 0)
     assert.equal(facets.favorites, 0)
     assert.deepEqual(facets.families, [])
   })
 })
 
-describe('generations marked private', () => {
+suite('generations marked private', () => {
   it('never appear in Recent on the home page', async () => {
     await clear()
     const ordinary = await seed({ prompt: 'a lemon', createdAt: 1_000 })
     // Newest, so it would head the list if it were included at all.
     await seed({ prompt: 'private', nsfw: true, createdAt: 2_000 })
 
-    const recent = await recentGenerations(10)
+    const recent = await recentGenerations(WS, 10)
     assert.deepEqual(recent.map((r) => r.generation.id), [ordinary])
   })
 
@@ -374,7 +393,7 @@ describe('generations marked private', () => {
     const ordinary = await seed()
     await seed({ nsfw: true })
 
-    const page = await listGenerations(filter(''))
+    const page = await listGenerations(WS, filter(''))
     assert.deepEqual(page.items.map((i) => i.generation.id), [ordinary])
     // The total must agree with the rows, or pagination offers a page that
     // renders empty.
@@ -388,7 +407,7 @@ describe('generations marked private', () => {
     // Each of these would surface it if the exclusion were merely a default
     // rather than unconditional.
     for (const query of ['family=wan', 'model=wan/2-7-image', 'favorite=1', 'q=lemon', 'state=complete']) {
-      const page = await listGenerations(filter(query))
+      const page = await listGenerations(WS, filter(query))
       assert.equal(page.items.length, 0, `?${query} leaked a marked generation`)
     }
   })
@@ -398,7 +417,7 @@ describe('generations marked private', () => {
     await seed({ prompt: 'ordinary' })
     const marked = await seed({ prompt: 'marked', nsfw: true })
 
-    const page = await listGenerations(filter('nsfw=1'))
+    const page = await listGenerations(WS, filter('nsfw=1'))
     assert.deepEqual(page.items.map((i) => i.generation.id), [marked])
   })
 
@@ -407,7 +426,7 @@ describe('generations marked private', () => {
     await seed({ nsfw: true, family: 'wan', modelSlug: 'wan/2-7-image' })
     const marked = await seed({ nsfw: true, family: 'kling' })
 
-    const page = await listGenerations(filter('nsfw=1&family=kling'))
+    const page = await listGenerations(WS, filter('nsfw=1&family=kling'))
     assert.deepEqual(page.items.map((i) => i.generation.id), [marked])
   })
 
@@ -417,7 +436,7 @@ describe('generations marked private', () => {
     await seed({ nsfw: true })
     await seed({ nsfw: true })
 
-    const facets = await getGalleryFacets()
+    const facets = await getGalleryFacets(WS)
     assert.equal(facets.nsfw, 2)
     // Facets are library-wide by design, so the total still counts all three.
     assert.equal(facets.total, 3)
@@ -426,28 +445,27 @@ describe('generations marked private', () => {
   it('are marked at submission, before the row can ever be listed', async () => {
     await clear()
     const model = requireModel('wan/2-7-image')
-    const [open] = await submitBatch(model, [{ prompt: 'ordinary' }], {})
-    const [marked] = await submitBatch(model, [{ prompt: 'private' }], { nsfw: true })
+    const [open] = await submitBatch(WS, model, [{ prompt: 'ordinary' }], {})
+    const [marked] = await submitBatch(WS, model, [{ prompt: 'private' }], { nsfw: true })
 
     // Marking afterwards would be too late: the run would have spent the
     // minutes between finishing and being marked sitting on the home page.
-    const page = await listGenerations(filter(''))
+    const page = await listGenerations(WS, filter(''))
     assert.deepEqual(page.items.map((i) => i.generation.id), [open!.id])
-    assert.equal((await getGenerationDetail(marked!.id))?.generation.nsfw, true)
+    assert.equal((await getGenerationDetail(WS, marked!.id))?.generation.nsfw, true)
   })
 
   it('mark every run of a sweep, not just the first', async () => {
     await clear()
     const model = requireModel('wan/2-7-image')
-    const runs = await submitBatch(
-      model,
+    const runs = await submitBatch(WS, model,
       [{ prompt: 'a', seed: 1 }, { prompt: 'a', seed: 2 }, { prompt: 'a', seed: 3 }],
       { batchId: newBatchId(), nsfw: true },
     )
 
     assert.equal(runs.length, 3)
-    assert.equal((await listGenerations(filter(''))).items.length, 0)
-    assert.equal((await listGenerations(filter('nsfw=1'))).items.length, 3)
+    assert.equal((await listGenerations(WS, filter(''))).items.length, 0)
+    assert.equal((await listGenerations(WS, filter('nsfw=1'))).items.length, 3)
   })
 
   it('open normally on their own detail page', async () => {
@@ -455,8 +473,71 @@ describe('generations marked private', () => {
     const marked = await seed({ nsfw: true })
 
     // Hiding is about listings. A row asked for by id is a row you went to.
-    const detail = await getGenerationDetail(marked)
+    const detail = await getGenerationDetail(WS, marked)
     assert.equal(detail?.generation.id, marked)
     assert.equal(detail?.generation.nsfw, true)
+  })
+})
+
+/**
+ * The property that replaced "the database is on your laptop".
+ *
+ * Nothing in Postgres enforces this. The service-role connection bypasses RLS
+ * entirely, so isolation rests on a WHERE clause being present in every single
+ * query — which is precisely the kind of invariant that decays silently under
+ * maintenance. A leak here is not a bug report, it is someone else's gallery.
+ */
+suite('workspace isolation', () => {
+  it('never lists another workspace’s generations', async () => {
+    await clear()
+    const mine = await seed({ prompt: 'mine' })
+    await seed({ workspaceId: OTHER_WS, prompt: 'theirs' })
+
+    const page = await listGenerations(WS, filter(''))
+    assert.deepEqual(
+      page.items.map((i) => i.generation.id),
+      [mine],
+    )
+    assert.equal(page.total, 1)
+  })
+
+  it('does not leak through a search that would otherwise match', async () => {
+    await clear()
+    await seed({ workspaceId: OTHER_WS, prompt: 'a very distinctive lemon' })
+
+    // The term matches their row exactly. A missing scope would surface it.
+    assert.equal((await listGenerations(WS, filter('q=distinctive'))).total, 0)
+  })
+
+  it('counts only your own rows in the facets', async () => {
+    await clear()
+    await seed({ family: 'wan' })
+    await seed({ workspaceId: OTHER_WS, family: 'wan' })
+    await seed({ workspaceId: OTHER_WS, family: 'wan' })
+
+    const facets = await getGalleryFacets(WS)
+    assert.equal(facets.total, 1)
+    assert.equal(facets.families.find((f) => f.value === 'wan')?.count, 1)
+  })
+
+  it('treats another workspace’s generation as absent, not forbidden', async () => {
+    await clear()
+    const theirs = await seed({ workspaceId: OTHER_WS })
+
+    // Undefined, which the page turns into a 404. Anything that distinguished
+    // "not yours" from "does not exist" would confirm the row to a stranger.
+    assert.equal(await getGenerationDetail(WS, theirs), undefined)
+  })
+
+  it('keeps Recent to your own work', async () => {
+    await clear()
+    const mine = await seed()
+    await seed({ workspaceId: OTHER_WS })
+
+    const recent = await recentGenerations(WS, 10)
+    assert.deepEqual(
+      recent.map((r) => r.generation.id),
+      [mine],
+    )
   })
 })

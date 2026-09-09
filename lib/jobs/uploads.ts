@@ -1,29 +1,32 @@
 import 'server-only'
 
 import crypto from 'node:crypto'
-import fs from 'node:fs/promises'
-import path from 'node:path'
 
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 import { getDb, inputAssets, type InputAsset } from '../db/index.ts'
-import { getEnv } from '../env.ts'
-import { UPLOAD_TTL_MS, uploadExpiryMs, uploadFile } from '../kie/upload.ts'
+import { UPLOAD_TTL_MS, uploadExpiryMs, uploadBytes } from '../kie/upload.ts'
+import { getObject, putObject } from '../storage/objects.ts'
 import { extensionForMime, kindForMime } from './mime.ts'
-import { inputRelativePath } from './paths.ts'
+import { inputObjectKey } from './paths.ts'
 
 /**
- * Input files: local copy on disk, Kie upload URL cached for 24 hours.
+ * Input files: a durable copy in the bucket, Kie's upload URL cached for 24h.
  *
  * Every `*_url` model field wants a `fileUrl` from Kie's file API, and those
  * expire in about a day (docs/API-CONTRACT.md §6). Two consequences shape this
- * module:
+ * module, and neither changed when the copy moved from disk to object storage:
  *
- *   - **A local copy is kept.** Once the URL expires, the file has to be
+ *   - **Our own copy is kept.** Once the URL expires the file has to be
  *     re-uploaded, and the browser that supplied it is long gone. Without the
- *     copy, an expired input is unrecoverable and a re-run is impossible.
+ *     copy an expired input is unrecoverable and a re-run is impossible.
  *   - **The cache is keyed on content, not name.** Dragging the same image into
  *     five generations uploads it once.
+ *
+ * What did change: the dedupe key is now `(workspace, sha256)` rather than
+ * `sha256` alone. Two people uploading the same stock image must not end up
+ * sharing a row, because deleting it on one side would break the other — and
+ * because whose file it is would become unanswerable.
  */
 
 /**
@@ -36,7 +39,7 @@ export interface CachedUpload {
   id: string
   /** The value to put in the model's `*_url` field. */
   fileUrl: string
-  localPath: string
+  storagePath: string
   kind: InputAsset['kind']
   mime?: string
   bytes: number
@@ -47,57 +50,57 @@ export interface CachedUpload {
 }
 
 export interface StoreUploadParams {
+  workspaceId: string
   content: Uint8Array
   /** Original filename, used for the extension and the library label. */
   filename?: string
   mime?: string
   label?: string
   /**
-   * The bytes ALREADY live here, relative to KIE_OUTPUT_DIR.
+   * The bytes ALREADY live at this object key.
    *
-   * Set when a generation's own output is reused as an input. The output tree is
-   * already the durable local copy — rule 2 in .claude/CLAUDE.md exists to make
-   * sure of it — so writing a second copy under `_inputs/` would double the disk
-   * cost of every reused video to buy nothing.
+   * Set when a generation's own output is reused as an input. The output object
+   * is already the durable copy — rule 2 in .claude/CLAUDE.md exists to make
+   * sure of it — so writing a second one would double the storage cost of every
+   * reused video to buy nothing, and storage is the binding constraint on this
+   * plan.
    *
    * The consequence is deliberate and bounded: deleting that generation from the
-   * gallery takes the file, and the input row with it (see lib/gallery/delete.ts).
+   * gallery takes the object, and the input row with it (see lib/gallery/delete.ts).
    * A destructive action the user asked for is allowed to be destructive.
    */
-  existingPath?: string
+  existingKey?: string
 }
 
 /**
- * Stores a file locally, uploads it to Kie unless a live upload already exists,
- * and returns the `fileUrl` to hand the model.
+ * Stores a file, uploads it to Kie unless a live upload already exists, and
+ * returns the `fileUrl` to hand the model.
  */
 export async function storeUpload(params: StoreUploadParams): Promise<CachedUpload> {
-  const { content, filename, mime, label } = params
+  const { workspaceId, content, filename, mime, label } = params
   const db = getDb()
 
   const sha256 = crypto.createHash('sha256').update(content).digest('hex')
-  const existing = await findBySha(sha256)
+  const existing = await findBySha(workspaceId, sha256)
 
-  const ext =
-    extensionFromName(filename) ?? extensionForMime(mime) ?? undefined
-  // An existing row's path wins over the caller's: the same bytes are one asset,
+  const ext = extensionFromName(filename) ?? extensionForMime(mime) ?? undefined
+  // An existing row's key wins over the caller's: the same bytes are one asset,
   // and re-homing it on reuse would leave the older row pointing at nothing.
-  const relativePath =
-    existing?.localPath ?? params.existingPath ?? inputRelativePath(sha256, ext)
-  const absolutePath = path.join(getEnv().outputDir, relativePath)
+  const key =
+    existing?.storagePath ?? params.existingKey ?? inputObjectKey(workspaceId, sha256, ext)
 
-  // Written before the expiry check: a row can outlive its file if the output
-  // folder was cleaned out, and the re-upload path needs the bytes back. Skipped
-  // when the caller pointed us at bytes that are already on disk.
-  if (relativePath !== params.existingPath) {
-    await writeIfAbsent(absolutePath, content)
+  // Written before the expiry check: a row can outlive its object if the bucket
+  // was cleaned out, and the re-upload path needs the bytes back. Skipped when
+  // the caller pointed us at bytes that are already stored.
+  if (key !== params.existingKey) {
+    await putObject(key, content, mime ?? 'application/octet-stream')
   }
 
   if (existing?.kieFileUrl && isLive(existing.expiresAt)) {
     return {
       id: existing.id,
       fileUrl: existing.kieFileUrl,
-      localPath: existing.localPath,
+      storagePath: existing.storagePath,
       kind: existing.kind,
       mime: existing.mime ?? mime,
       bytes: existing.bytes ?? content.byteLength,
@@ -107,15 +110,19 @@ export async function storeUpload(params: StoreUploadParams): Promise<CachedUplo
     }
   }
 
-  const uploaded = await uploadFile(absolutePath, {
+  // Uploaded from the bytes in hand rather than from a path: there is no
+  // filesystem to read back, and we already have exactly what Kie needs.
+  const uploaded = await uploadBytes(content, {
     uploadPath: 'kie-studio',
-    fileName: filename,
+    fileName: filename ?? `${sha256.slice(0, 16)}${ext ? `.${ext}` : ''}`,
+    mime,
   })
   const expiresAt = uploadExpiryMs(uploaded)
   const kind: InputAsset['kind'] = kindForMime(uploaded.mimeType ?? mime) ?? 'file'
 
   const row = {
-    localPath: relativePath,
+    workspaceId,
+    storagePath: key,
     sha256,
     kind,
     mime: uploaded.mimeType ?? mime ?? null,
@@ -138,7 +145,7 @@ export async function storeUpload(params: StoreUploadParams): Promise<CachedUplo
   return {
     id,
     fileUrl: uploaded.fileUrl,
-    localPath: relativePath,
+    storagePath: key,
     kind,
     mime: row.mime ?? undefined,
     bytes: content.byteLength,
@@ -151,39 +158,41 @@ export async function storeUpload(params: StoreUploadParams): Promise<CachedUplo
 /**
  * Re-uploads a stored input whose Kie URL has expired.
  *
- * Returns null when the local copy is gone, which is the one unrecoverable
- * case — there is nothing left to upload.
+ * Returns null when our own copy is gone, which is the one unrecoverable case —
+ * there is nothing left to upload.
  */
-export async function refreshUpload(id: string): Promise<CachedUpload | null> {
-  const rows = await getDb()
+export async function refreshUpload(
+  id: string,
+  workspaceId: string,
+): Promise<CachedUpload | null> {
+  const [row] = await getDb()
     .select()
     .from(inputAssets)
-    .where(eq(inputAssets.id, id))
+    .where(and(eq(inputAssets.id, id), eq(inputAssets.workspaceId, workspaceId)))
     .limit(1)
-  const row = rows[0]
   if (!row) return null
 
-  const absolutePath = path.join(getEnv().outputDir, row.localPath)
-  let content: Uint8Array
-  try {
-    content = await fs.readFile(absolutePath)
-  } catch {
-    return null
-  }
+  const content = await getObject(row.storagePath)
+  if (!content) return null
 
   return storeUpload({
+    workspaceId,
     content,
-    filename: row.label ?? path.basename(row.localPath),
+    filename: row.label ?? basename(row.storagePath),
     mime: row.mime ?? undefined,
     label: row.label ?? undefined,
+    existingKey: row.storagePath,
   })
 }
 
-async function findBySha(sha256: string): Promise<InputAsset | undefined> {
+async function findBySha(
+  workspaceId: string,
+  sha256: string,
+): Promise<InputAsset | undefined> {
   const rows = await getDb()
     .select()
     .from(inputAssets)
-    .where(eq(inputAssets.sha256, sha256))
+    .where(and(eq(inputAssets.workspaceId, workspaceId), eq(inputAssets.sha256, sha256)))
     .limit(1)
   return rows[0]
 }
@@ -193,21 +202,16 @@ function isLive(expiresAt: number | null): boolean {
   return expiresAt - EXPIRY_MARGIN_MS > Date.now()
 }
 
-async function writeIfAbsent(absolutePath: string, content: Uint8Array) {
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true })
-  try {
-    const stat = await fs.stat(absolutePath)
-    if (stat.size === content.byteLength) return
-  } catch {
-    // Not there yet — fall through and write it.
-  }
-  await fs.writeFile(absolutePath, content)
-}
-
 function extensionFromName(filename: string | undefined): string | undefined {
   if (!filename) return undefined
-  const ext = path.extname(filename).slice(1).toLowerCase()
+  const dot = filename.lastIndexOf('.')
+  if (dot < 0) return undefined
+  const ext = filename.slice(dot + 1).toLowerCase()
   return /^[a-z0-9]{1,5}$/.test(ext) ? ext : undefined
+}
+
+function basename(key: string): string {
+  return key.slice(key.lastIndexOf('/') + 1)
 }
 
 export { UPLOAD_TTL_MS }

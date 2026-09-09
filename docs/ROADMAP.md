@@ -8,7 +8,7 @@ Phase 3, before any UI is worth polishing.
 
 ## Phase 0 — Scaffold
 
-Next.js 16 + TS + Tailwind 4. Drizzle + libsql wired, migrations applied on start. `.env`
+Next.js 16 + TS + Tailwind 4. Drizzle + postgres-js wired, migrations applied by `npm run db:migrate`. `.env`
 loading with a startup check that fails loudly on a missing `KIE_API_KEY`.
 
 **Exit:** `npm run dev` serves a page; `data/kie.db` is created with empty tables; a missing key

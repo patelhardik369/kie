@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { getEnv } from '../env.ts'
+import { currentKieKey } from '../auth/kie-key.ts'
 import { kieErrorFromCode, networkError, timeoutError } from './errors.ts'
 import { joinUrl } from './url.ts'
 
@@ -71,8 +71,12 @@ export async function kieRequest<T>(
 
   const url = joinUrl(base, path, query)
 
+  // The key comes from the ambient scope, not the environment: it belongs to
+  // whichever browser or job this call is being made on behalf of. See
+  // lib/auth/kie-key.ts — calling outside a scope throws rather than quietly
+  // spending someone else's credits.
   const headers: Record<string, string> = {
-    Authorization: `Bearer ${getEnv().kieApiKey}`,
+    Authorization: `Bearer ${currentKieKey()}`,
     Accept: 'application/json',
   }
   // fetch sets the multipart boundary itself; setting Content-Type breaks it.

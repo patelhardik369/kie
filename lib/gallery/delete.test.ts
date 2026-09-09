@@ -1,41 +1,71 @@
 /**
- * Deleting a generation: the row, its assets, and the bytes on disk.
+ * Deleting a generation: the row, its asset rows, and the objects in the bucket.
  *
  * The rules under test are the ones that make a delete safe to offer at all —
- * files actually go, an in-flight generation is refused, a path that escapes
- * KIE_OUTPUT_DIR is never touched, and lineage survives the loss of a link.
+ * an in-flight generation is refused, another workspace's object is never
+ * touched, lineage survives the loss of a link, and the bytes are accounted for
+ * so the storage meter can be trusted.
+ *
+ * The object store is stubbed rather than real. What matters here is *which*
+ * keys are handed to it and which are withheld, and that is exactly what a stub
+ * can assert precisely — where a real bucket would make the traversal test
+ * ("never remove a key outside this workspace") depend on the very code it is
+ * supposed to be checking.
+ *
+ * Needs TEST_DATABASE_URL. Without one the suite skips rather than failing; see
+ * lib/db/test-support.ts.
  *
  * Requires --conditions=react-server, which resolves `server-only` to its
  * no-op build. See package.json's test script.
  */
 
 import assert from 'node:assert/strict'
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import { after, before, describe, it } from 'node:test'
+import { after, before, beforeEach, describe, it } from 'node:test'
 
-const ROOT = fs.mkdtempSync(path.join(os.tmpdir(), 'kie-delete-test-'))
-const OUTPUT_DIR = path.join(ROOT, 'outputs')
-process.env.KIE_API_KEY = 'test-key-not-a-real-one'
-process.env.DATABASE_URL = `file:${path.join(ROOT, 'delete.db')}`
-process.env.KIE_OUTPUT_DIR = OUTPUT_DIR
-delete process.env.KIE_PUBLIC_URL
-delete process.env.KIE_WEBHOOK_HMAC_KEY
+import { configureTestEnv, SKIP_REASON, TEST_TABLES } from '../db/test-support.ts'
 
-const { assets, generations, getDb, runMigrations } = await import('../db/index.ts')
-const { deleteGeneration, deleteGenerations } = await import('./delete.ts')
+const configured = configureTestEnv()
 
-before(async () => {
-  await runMigrations()
+const { assets, generations, getDb, getSql, closeDb } = configured
+  ? await import('../db/index.ts')
+  : ({} as never)
+const objects = configured ? await import('../storage/objects.ts') : ({} as never)
+const { deleteGeneration, deleteGenerations } = configured
+  ? await import('./delete.ts')
+  : ({} as never)
+
+const WS = 'wk_00000000000000000000000000000001'
+const OTHER_WS = 'wk_00000000000000000000000000000002'
+
+/** Keys the stub was asked to remove, most recent call last. */
+let removed: string[] = []
+let realRemove: typeof objects.removeObjects
+
+before(() => {
+  if (!configured) return
+  realRemove = objects.removeObjects
+  Object.defineProperty(objects, 'removeObjects', {
+    configurable: true,
+    value: async (keys: string[]) => {
+      removed.push(...keys)
+      return keys.length
+    },
+  })
 })
 
-after(() => {
-  try {
-    fs.rmSync(ROOT, { recursive: true, force: true })
-  } catch {
-    // Windows holds the SQLite handle until the process exits; the OS reaps it.
-  }
+after(async () => {
+  if (!configured) return
+  Object.defineProperty(objects, 'removeObjects', {
+    configurable: true,
+    value: realRemove,
+  })
+  await closeDb()
+})
+
+beforeEach(async () => {
+  if (!configured) return
+  removed = []
+  await getSql().unsafe(`truncate ${TEST_TABLES.join(', ')} cascade`)
 })
 
 let seq = 0
@@ -43,18 +73,22 @@ let seq = 0
 interface SeedOptions {
   state?: string
   parentId?: string | null
-  /** Relative paths to write and register as outputs. */
-  files?: string[]
-  /** Registered without writing the file, to model a missing output. */
-  ghostFiles?: string[]
+  workspaceId?: string
+  /** Object keys to register as stored outputs. */
+  keys?: string[]
+  /** Registered with no object at all, modelling an output too large to store. */
+  unstored?: number
 }
 
 async function seed(options: SeedOptions = {}): Promise<string> {
   const id = `g-${String(++seq).padStart(3, '0')}`
+  const workspaceId = options.workspaceId ?? WS
+
   await getDb()
     .insert(generations)
     .values({
       id,
+      workspaceId,
       modelSlug: 'kling-2.6/text-to-video',
       family: 'kling',
       capability: 'text-to-video',
@@ -64,25 +98,32 @@ async function seed(options: SeedOptions = {}): Promise<string> {
       createdAt: Date.now() + seq,
     })
 
-  const registered = [
-    ...(options.files ?? []).map((rel) => ({ rel, write: true })),
-    ...(options.ghostFiles ?? []).map((rel) => ({ rel, write: false })),
-  ]
-
   let idx = 0
-  for (const { rel, write } of registered) {
-    if (write) {
-      const absolute = path.join(OUTPUT_DIR, rel)
-      fs.mkdirSync(path.dirname(absolute), { recursive: true })
-      fs.writeFileSync(absolute, 'x'.repeat(64))
-    }
+  for (const key of options.keys ?? []) {
     await getDb().insert(assets).values({
       id: `${id}-${idx}`,
       generationId: id,
+      workspaceId,
       kind: 'video',
-      localPath: rel,
+      storagePath: key,
+      storageState: 'stored',
       remoteUrl: 'https://cdn.test.invalid/x.mp4',
       bytes: 64,
+      idx,
+    })
+    idx += 1
+  }
+
+  for (let n = 0; n < (options.unstored ?? 0); n++) {
+    await getDb().insert(assets).values({
+      id: `${id}-${idx}`,
+      generationId: id,
+      workspaceId,
+      kind: 'video',
+      storagePath: null,
+      storageState: 'too_large',
+      remoteUrl: 'https://cdn.test.invalid/big.mp4',
+      bytes: 90_000_000,
       idx,
     })
     idx += 1
@@ -97,69 +138,63 @@ const rows = async (id: string) =>
 const assetRows = async (id: string) =>
   (await getDb().select().from(assets)).filter((row) => row.generationId === id)
 
-describe('deleting a generation', () => {
-  it('removes the row, its asset rows and the files', async () => {
-    const rel = '2026-09-02/kling/model/one-0.mp4'
-    const id = await seed({ files: [rel] })
+const suite = configured ? describe : describe.skip
+if (!configured) console.log(`[skip] lib/gallery/delete.test.ts — ${SKIP_REASON}`)
 
-    const outcome = await deleteGeneration(id)
+suite('deleting a generation', () => {
+  it('removes the row, its asset rows and the objects', async () => {
+    const key = `${WS}/2026-09-02/kling/model/one-0.mp4`
+    const id = await seed({ keys: [key] })
+
+    const outcome = await deleteGeneration(WS, id)
 
     assert.equal(outcome.ok, true)
     assert.equal(outcome.ok && outcome.deleted.filesDeleted, 1)
     assert.equal(outcome.ok && outcome.deleted.bytesFreed, 64)
-    assert.equal(fs.existsSync(path.join(OUTPUT_DIR, rel)), false)
+    assert.deepEqual(removed, [key])
     assert.deepEqual(await rows(id), [])
     assert.deepEqual(await assetRows(id), [])
   })
 
-  it('prunes the folders the delete emptied, and keeps the ones it did not', async () => {
-    const kept = '2026-09-03/kling/model/keeper-0.mp4'
-    const going = '2026-09-03/kling/model/going-0.mp4'
-    const lonely = '2026-09-04/wan/other/lonely-0.mp4'
-    await seed({ files: [kept] })
-    const goingId = await seed({ files: [going] })
-    const lonelyId = await seed({ files: [lonely] })
+  /**
+   * The traversal guard, in object-store terms.
+   *
+   * `storage_path` is data. A row naming another workspace's object — through a
+   * bug, a bad import, or a hand-edited database — must not turn a delete of
+   * your own generation into a delete of somebody else's file.
+   */
+  it('never removes an object outside the deleting workspace', async () => {
+    const theirs = `${OTHER_WS}/2026-09-02/kling/model/theirs-0.mp4`
+    const id = await seed({ keys: [theirs] })
 
-    await deleteGeneration(goingId)
-    // Its neighbour is still there, so nothing above it may be removed.
-    assert.equal(fs.existsSync(path.join(OUTPUT_DIR, '2026-09-03/kling/model')), true)
+    const outcome = await deleteGeneration(WS, id)
 
-    await deleteGeneration(lonelyId)
-    assert.equal(fs.existsSync(path.join(OUTPUT_DIR, '2026-09-04')), false)
-    // The pruning stops at the output root itself.
-    assert.equal(fs.existsSync(OUTPUT_DIR), true)
+    assert.equal(outcome.ok, true)
+    assert.deepEqual(removed, [], 'no key outside the workspace may be removed')
+    // Counted as missing, and its bytes are NOT claimed as freed: nothing was.
+    assert.equal(outcome.ok && outcome.deleted.filesMissing, 1)
+    assert.equal(outcome.ok && outcome.deleted.bytesFreed, 0)
+    assert.deepEqual(await rows(id), [])
   })
 
-  it('counts a file that is already gone rather than failing', async () => {
-    const id = await seed({ ghostFiles: ['2026-09-02/kling/model/ghost-0.mp4'] })
+  it('counts an output that was never stored rather than failing', async () => {
+    // An output past the 50 MB per-object ceiling has no key to remove. The
+    // generation still deletes; there is simply nothing in the bucket for it.
+    const id = await seed({ unstored: 1 })
 
-    const outcome = await deleteGeneration(id)
+    const outcome = await deleteGeneration(WS, id)
 
     assert.equal(outcome.ok, true)
     assert.equal(outcome.ok && outcome.deleted.filesMissing, 1)
     assert.equal(outcome.ok && outcome.deleted.filesDeleted, 0)
+    assert.deepEqual(removed, [])
     assert.deepEqual(await rows(id), [])
   })
 
-  it('never touches a path that escapes the output directory', async () => {
-    const outside = path.join(ROOT, 'not-ours.mp4')
-    fs.writeFileSync(outside, 'precious')
-    const id = await seed({ ghostFiles: ['../not-ours.mp4'] })
-
-    const outcome = await deleteGeneration(id)
-
-    assert.equal(outcome.ok, true)
-    assert.equal(fs.readFileSync(outside, 'utf8'), 'precious')
-    // Skipped: neither deleted nor counted as missing.
-    assert.equal(outcome.ok && outcome.deleted.filesDeleted, 0)
-    assert.equal(outcome.ok && outcome.deleted.filesMissing, 0)
-    assert.deepEqual(await rows(id), [])
-  })
-
-  it('refuses while the runner still owns the generation', async () => {
+  it('refuses while a driver still owns the generation', async () => {
     for (const state of ['waiting', 'queuing', 'generating', 'downloading']) {
       const id = await seed({ state })
-      const outcome = await deleteGeneration(id)
+      const outcome = await deleteGeneration(WS, id)
 
       assert.equal(outcome.ok, false, `${state} should be refused`)
       assert.equal(!outcome.ok && outcome.reason, 'in_flight')
@@ -170,43 +205,55 @@ describe('deleting a generation', () => {
   it('deletes a generation that stopped short, which is the point', async () => {
     for (const state of ['failed', 'stalled', 'needs_retry', 'orphaned', 'draft']) {
       const id = await seed({ state })
-      assert.equal((await deleteGeneration(id)).ok, true, `${state} should delete`)
+      assert.equal((await deleteGeneration(WS, id)).ok, true, `${state} should delete`)
     }
   })
 
   it('reports a missing generation instead of pretending', async () => {
-    const outcome = await deleteGeneration('no-such-id')
+    const outcome = await deleteGeneration(WS, 'no-such-id')
     assert.equal(outcome.ok, false)
     assert.equal(!outcome.ok && outcome.reason, 'not_found')
   })
 
-  it('re-points children at the deleted generation own parent', async () => {
+  it('will not delete another workspace’s generation', async () => {
+    const theirs = await seed({ workspaceId: OTHER_WS })
+
+    const outcome = await deleteGeneration(WS, theirs)
+
+    // not_found, not forbidden: distinguishing the two would confirm to a
+    // stranger that the id exists.
+    assert.equal(outcome.ok, false)
+    assert.equal(!outcome.ok && outcome.reason, 'not_found')
+    assert.equal((await rows(theirs)).length, 1)
+  })
+
+  it('re-points children at the deleted generation’s own parent', async () => {
     const grandparent = await seed()
     const parent = await seed({ parentId: grandparent })
     const child = await seed({ parentId: parent })
 
-    const outcome = await deleteGeneration(parent)
+    const outcome = await deleteGeneration(WS, parent)
 
     assert.equal(outcome.ok && outcome.deleted.childrenRelinked, 1)
     const [row] = await rows(child)
-    assert.equal(row.parentId, grandparent)
+    assert.equal(row!.parentId, grandparent)
   })
 
-  it('leaves a root deletion children parentless rather than dangling', async () => {
+  it('leaves a root deletion’s children parentless rather than dangling', async () => {
     const parent = await seed()
     const child = await seed({ parentId: parent })
 
-    await deleteGeneration(parent)
+    await deleteGeneration(WS, parent)
 
     const [row] = await rows(child)
-    assert.equal(row.parentId, null)
+    assert.equal(row!.parentId, null)
   })
 
   it('deletes many, and reports the ones it would not', async () => {
     const good = await seed()
     const running = await seed({ state: 'generating' })
 
-    const result = await deleteGenerations([good, running, 'no-such-id'])
+    const result = await deleteGenerations(WS, [good, running, 'no-such-id'])
 
     assert.deepEqual(
       result.deleted.map((d) => d.id),

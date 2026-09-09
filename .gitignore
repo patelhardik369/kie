@@ -1,15 +1,21 @@
-# Secrets — never commit
-.env
-.env.local
-.env.*.local
+# Secrets — never commit.
+#
+# A blanket `.env*` with one carve-out, rather than a list. The list form fails
+# open: the first time someone writes `.env.new`, `.env.staging` or `.env.bak`
+# while setting the project up, it is untracked by nothing and one `git add -A`
+# away from a public repository. This form fails closed.
+.env*
+!.env.example
 
-# Local database
+# The legacy local database, kept around only as an import source.
+# `npm run db:import` reads it; nothing at runtime does.
 data/
 *.db
 *.db-journal
 *.db-wal
 
-# Generated outputs live in KIE_OUTPUT_DIR, but ignore a local override too.
+# Outputs used to be written here. They now live in Supabase Storage, but a
+# local override or a leftover folder should still never be committed.
 # Anchored with a leading slash: unanchored, `generations/` also matched
 # app/api/generations/, and quietly kept that route out of the repository.
 /output/
@@ -21,6 +27,7 @@ node_modules/
 out/
 dist/
 *.tsbuildinfo
+.vercel/
 
 # Editor / OS
 .DS_Store
