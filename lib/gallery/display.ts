@@ -94,15 +94,19 @@ export function stateTone(state: string): string {
  * `encodeURIComponent` on the whole key would turn them into `%2F` and the
  * catch-all route would see one segment.
  *
- * `token` is now required for EVERY asset, not just a private one: the route it
- * points at has no other way to authorise a caller, because `<img>` and
- * `<video>` send no headers. It is minted server-side by
- * `lib/gallery/asset-token.ts` — this module stays pure and client-safe, so it
- * appends the value rather than computing it.
+ * `token` is REQUIRED, and typed that way deliberately. The route it points at
+ * has no other way to authorise a caller — `<img>` and `<video>` send no
+ * headers — so a URL without one is not a degraded link, it is a guaranteed
+ * 404. It was optional once, back when only private generations needed it, and
+ * that optionality is exactly how the home page shipped a grid of broken
+ * thumbnails: the call site simply omitted the argument and nothing complained.
+ *
+ * Minted server-side by `lib/gallery/asset-token.ts`. This module stays pure and
+ * client-safe, so it appends the value rather than computing it.
  */
-export function assetHref(storagePath: string, token?: string): string {
+export function assetHref(storagePath: string, token: string): string {
   const path = storagePath.split('/').map(encodeURIComponent).join('/')
-  return token ? `/api/assets/${path}?k=${encodeURIComponent(token)}` : `/api/assets/${path}`
+  return `/api/assets/${path}?k=${encodeURIComponent(token)}`
 }
 
 /** The prompt-ish field of a stored input, for a tile caption. */

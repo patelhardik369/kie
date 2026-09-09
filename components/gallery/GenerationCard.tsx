@@ -36,7 +36,11 @@ export interface CardAsset {
   width: number | null
   height: number | null
   /** Present only for a private generation, minted by the page that rendered it. */
-  token?: string
+  /**
+   * The capability token for `storagePath`. REQUIRED — a tile without one
+   * renders an <img> that always 404s. See lib/gallery/asset-token.ts.
+   */
+  token: string
 }
 
 export interface CardGeneration {

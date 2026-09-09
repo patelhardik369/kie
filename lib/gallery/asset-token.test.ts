@@ -95,6 +95,17 @@ describe('assetHref', () => {
   it('still encodes each segment separately', () => {
     // Whole-key encoding would turn the slashes into %2F and the catch-all
     // route would see one segment.
-    assert.equal(assetHref('a b/c d.png'), '/api/assets/a%20b/c%20d.png')
+    assert.equal(assetHref('a b/c d.png', 'tok'), '/api/assets/a%20b/c%20d.png?k=tok')
+  })
+
+  /**
+   * The token is a required argument, not an optional one.
+   *
+   * It was optional while only private generations needed it, and that is
+   * precisely how the home page shipped a grid of thumbnails with no `?k=` —
+   * every one of them a guaranteed 404, and nothing in the type system said so.
+   */
+  it('always emits ?k=, so a tokenless URL cannot be built by accident', () => {
+    assert.match(assetHref(KEY, assetToken(KEY)), /\?k=[A-Za-z0-9_-]+$/)
   })
 })

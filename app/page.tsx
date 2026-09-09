@@ -5,6 +5,7 @@ import { PinnedModels, PinsHydrator } from '@/components/models/PinnedModels.tsx
 import { PageHeader, Section } from '@/components/shell/PageHeader.tsx'
 import { ChevronRight } from '@/components/shell/icons.tsx'
 import { currentWorkspace } from '@/lib/auth/workspace.ts'
+import { assetToken } from '@/lib/gallery/asset-token.ts'
 import { getGalleryFacets, recentGenerations } from '@/lib/gallery/queries.ts'
 import { listPins } from '@/lib/library/pins.ts'
 import { readUsage, format as formatBytes } from '@/lib/storage/quota.ts'
@@ -127,6 +128,8 @@ export default async function Home() {
                             storagePath: thumbnail.storagePath,
                             width: thumbnail.width,
                             height: thumbnail.height,
+                            // Every asset URL needs one, or the route 404s.
+                            token: assetToken(thumbnail.storagePath),
                           }
                         : undefined
                     }
