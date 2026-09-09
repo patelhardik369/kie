@@ -190,6 +190,15 @@ export function Close({ size, className }: IconProps) {
   )
 }
 
+/** Three rules on the 16px grid, at the same 1.5 stroke as everything else. */
+export function Menu({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M2.75 4.25h10.5M2.75 8h10.5M2.75 11.75h10.5" />
+    </Svg>
+  )
+}
+
 export function ArrowUp({ size, className }: IconProps) {
   return (
     <Svg size={size} className={className}>
