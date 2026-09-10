@@ -61,6 +61,11 @@ export function BackLink({ href, children }: { href: string; children: React.Rea
 /**
  * A titled block. `right` carries the section's own action or count, which is
  * what keeps a long page navigable without a second level of headings.
+ *
+ * The hint belongs to the title, not to the body, so it sits tight under the
+ * heading and the whole group is pushed away from the content below it. Giving
+ * both gaps the same size — which is what this used to do — leaves the hint
+ * stranded between two things it could equally belong to.
  */
 export function Section({
   title,
@@ -77,12 +82,16 @@ export function Section({
 }) {
   return (
     <section className={className}>
-      <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      <div
+        className={`flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 ${
+          hint ? 'mb-1' : 'mb-2.5'
+        }`}
+      >
         <h2 className="text-[13px] font-medium text-(--color-ink)">{title}</h2>
         {right}
       </div>
       {hint && (
-        <p className="mb-2.5 max-w-2xl text-xs leading-relaxed text-(--color-ink-muted)">
+        <p className="mb-3.5 max-w-2xl text-xs leading-relaxed text-(--color-ink-muted)">
           {hint}
         </p>
       )}
