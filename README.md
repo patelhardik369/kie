@@ -38,7 +38,7 @@ Three promises:
 |---|---|
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | **Env vars, Supabase setup, scheduling, migrating from local** |
 | [`docs/PRD.md`](docs/PRD.md) | Goals, features, acceptance criteria |
-| [`docs/MODEL-CATALOG.md`](docs/MODEL-CATALOG.md) | All 82 models — what each is for |
+| [`docs/MODEL-CATALOG.md`](docs/MODEL-CATALOG.md) | All 86 models — what each is for |
 | [`docs/API-CONTRACT.md`](docs/API-CONTRACT.md) | Lifecycle, polling, retries, error mapping |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Route map, registry, job engine, storage |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Drizzle schema |
@@ -47,7 +47,7 @@ Three promises:
 
 **Authoritative parameter tables** live in
 [`.claude/skills/kie-models/references/`](.claude/skills/kie-models/references/) — every field, enum,
-default, and limit for all 82 models, each transcribed from its `docs.kie.ai` page. The docs above
+default, and limit for all 86 models, each transcribed from its `docs.kie.ai` page. The docs above
 index them; they never duplicate them.
 
 ## Setup

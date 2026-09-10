@@ -20,7 +20,7 @@ export const metadata = { title: 'Choose a model' }
  * Dynamic since the pins landed: the shortlist at the top is read from the
  * database, and it is the first thing on the screen. Rendering it on the server
  * is what lets it paint with the page instead of dropping in afterwards and
- * pushing 82 rows down by three lines.
+ * pushing 86 rows down by three lines.
  */
 export const dynamic = 'force-dynamic'
 
@@ -42,7 +42,7 @@ export default async function GenerateIndex() {
           </Link>
         }
         meta={
-          /* 82 models is a long scroll, and the family is usually decided
+          /* 86 models is a long scroll, and the family is usually decided
              before the page loads. */
           FAMILIES.map((family) => (
             <a

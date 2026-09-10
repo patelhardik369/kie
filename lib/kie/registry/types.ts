@@ -46,7 +46,7 @@ export type Capability = (typeof CAPABILITIES)[number]
  * Which HTTP contract a model speaks.
  *
  * `jobs` is the unified `POST /jobs/createTask` + `GET /jobs/recordInfo` pair
- * that 81 of the 82 models use. `veo` is Veo 3.1, which predates it: a FLAT
+ * that 85 of the 86 models use. `veo` is Veo 3.1, which predates it: a FLAT
  * request body to `/veo/generate` and a numeric `successFlag` from
  * `/veo/record-info` instead of a `state` string.
  *
@@ -248,7 +248,7 @@ export interface ModelDefinition {
   /** The docs.kie.ai page this was transcribed from. */
   docUrl: string
   outputKind: 'video' | 'image' | 'audio' | 'object'
-  /** Omit for `'jobs'`, the unified endpoint 81 of the 82 models use. */
+  /** Omit for `'jobs'`, the unified endpoint 85 of the 86 models use. */
   transport?: Transport
   params: ParamDef[]
   constraints?: Constraint[]

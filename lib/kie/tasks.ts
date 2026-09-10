@@ -111,7 +111,7 @@ const NO_SUCH_TASK = /recordinfo is null/i
  *
  * An unknown slug falls back to `jobs` rather than throwing: a generation row
  * whose model was renamed upstream must still be pollable, and `/jobs/recordInfo`
- * is the right guess for 81 of 82 models.
+ * is the right guess for 85 of 86 models.
  */
 function transportFor(modelSlug: string): 'jobs' | 'veo' {
   return getModel(modelSlug)?.transport ?? 'jobs'

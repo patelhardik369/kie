@@ -1,6 +1,6 @@
 # UX specification
 
-The design problem is not "make generation pretty." It is: **82 models with overlapping names and
+The design problem is not "make generation pretty." It is: **86 models with overlapping names and
 three incompatible parameter dialects, and none of it may be hidden.** Everything below serves
 legibility under that constraint.
 
@@ -93,7 +93,7 @@ Three panes: **model picker** (left), **parameter form** (center), **preview + q
 
 ### Choosing a model
 
-Progressive narrowing, because a flat list of 82 slugs is unusable:
+Progressive narrowing, because a flat list of 86 slugs is unusable:
 
 ```
 Family          Capability              Model

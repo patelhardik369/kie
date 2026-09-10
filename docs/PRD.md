@@ -23,10 +23,10 @@ Presets sit *on top of* full manual control. They are never a substitute for it.
 
 | # | Goal | Why |
 |---|---|---|
-| G1 | Expose 100% of documented parameters for all 82 models | The core differentiator. A hidden parameter is a bug |
+| G1 | Expose 100% of documented parameters for all 86 models | The core differentiator. A hidden parameter is a bug |
 | G2 | Never lose an output | Kie deletes generated media after 14 days |
 | G3 | Make every past generation re-runnable and tweakable | Iteration is the actual creative workflow |
-| G4 | Make model choice legible | 82 endpoints with overlapping names is otherwise unusable |
+| G4 | Make model choice legible | 86 endpoints with overlapping names is otherwise unusable |
 | G5 | Keep cost visible per generation | Credits are the real constraint |
 
 ## 4. Non-goals
@@ -146,7 +146,7 @@ image → video → upscale, and every hop of it needs a URL Kie can fetch.
 
 ### F7c — Pinned models
 
-The models actually in use sit above the 82 that merely exist.
+The models actually in use sit above the 86 that merely exist.
 
 **Acceptance**
 - A star on any model row, in the catalog, and on the generate screen itself pins or unpins it.
@@ -161,7 +161,7 @@ Saved, taggable prompts insertable into any prompt field.
 
 ### F9 — Model browser
 
-A searchable view of all 82 models: family, capability, what inputs it takes, what makes it different
+A searchable view of all 86 models: family, capability, what inputs it takes, what makes it different
 from its siblings, and its parameter table.
 
 **Acceptance**
@@ -184,5 +184,5 @@ and by day.
 
 ## 8. Success
 
-The app is working when: all 82 models generate successfully; nothing in the gallery has ever been
+The app is working when: all 86 models generate successfully; nothing in the gallery has ever been
 lost to URL expiry; and there is no reason left to open Kie's own playground — every control is here.

@@ -73,7 +73,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
    *
    * Read from `window.location` inside an effect rather than with
    * `useSearchParams()`. That hook forces a client-side-rendering bailout unless
-   * the whole form sits inside a Suspense boundary, which would take these 82
+   * the whole form sits inside a Suspense boundary, which would take these 86
    * pages out of the prerendered HTML entirely — a real cost, to support a query
    * parameter that only matters after hydration anyway.
    */

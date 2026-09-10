@@ -145,10 +145,10 @@ Two invariants:
 
 ## 7b. Two transports
 
-81 models speak the unified contract above. Veo 3.1 (`veo3`, `veo3_fast`, `veo3_lite`) speaks its
+85 models speak the unified contract above. Veo 3.1 (`veo3`, `veo3_fast`, `veo3_lite`) speaks its
 own, and the registry declares which with `transport` on the `ModelDefinition`.
 
-| | `jobs` (81 models) | `veo` (3 models) |
+| | `jobs` (85 models) | `veo` (3 models) |
 |---|---|---|
 | Create | `POST /jobs/createTask` | `POST /veo/generate` |
 | Poll | `GET /jobs/recordInfo` | `GET /veo/record-info` |
@@ -159,7 +159,7 @@ own, and the registry declares which with `transport` on the `ModelDefinition`.
 | Failure | `failCode` / `failMsg` | `errorCode` / `errorMessage` |
 
 `lib/kie/veo.ts` normalizes the Veo shape into the same `Task` the rest of the app consumes, and
-re-encodes `resultUrls` into a `resultJson` string so one column holds one shape for all 82 models.
+re-encodes `resultUrls` into a `resultJson` string so one column holds one shape for all 86 models.
 Auth, the envelope, rate limits, webhook signing, uploads and the expiry rules are unchanged.
 
 Two consequences worth knowing before debugging a Veo job:

@@ -1,11 +1,11 @@
 ---
 name: kie-models
-description: The Kie Studio model registry — the ModelDefinition/ParamDef schema every model is described with, the rule that parameters are transcribed from docs.kie.ai and never invented, the constraint system for mutually-exclusive inputs, the transport field that lets Veo live beside the unified endpoint, and the family reference index covering all 82 in-scope Kling / ByteDance / Wan / Google / OpenAI / Enhance endpoints. Load this before adding, editing, or auditing any model in lib/kie/registry, before building or changing the parameter form, or whenever you need a model's exact fields, enums, defaults, or limits.
+description: The Kie Studio model registry — the ModelDefinition/ParamDef schema every model is described with, the rule that parameters are transcribed from docs.kie.ai and never invented, the constraint system for mutually-exclusive inputs, the transport field that lets Veo live beside the unified endpoint, and the family reference index covering all 86 in-scope Kling / ByteDance / Wan / Google / OpenAI / Enhance endpoints. Load this before adding, editing, or auditing any model in lib/kie/registry, before building or changing the parameter form, or whenever you need a model's exact fields, enums, defaults, or limits.
 ---
 
 # Kie Studio — Model Registry
 
-82 generation endpoints across six families. Every one is described as **data** — a
+86 generation endpoints across six families. Every one is described as **data** — a
 `ModelDefinition` — never as a bespoke form or route. The parameter UI is generated from these
 definitions, so a correct definition is the whole feature.
 
@@ -38,7 +38,7 @@ Use the `kie-model-scout` agent (`.claude/agents/kie-model-scout.md`) to transcr
 | `references/bytedance.md` | 10 Seedance video + 10 Seedream image |
 | `references/wan.md` | 18 Wan video + 2 Wan image |
 | `references/google.md` | 5 video (Veo ×3, Gemini Omni ×2) + 8 image (Imagen 4 ×3, Nano Banana ×5) + 1 audio (Gemini TTS) |
-| `references/openai.md` | 4 GPT Image models (1.5 ×2, 2 ×2) |
+| `references/openai.md` | 8 GPT Image models (1.5 ×2, 2 ×2, 2.5 ×4) |
 | `references/enhance.md` | 3 image + 2 video upscale / background-removal models |
 | `references/utility.md` | Uploads, credits, download-URL, webhook verification |
 
@@ -147,7 +147,7 @@ character-for-character from the doc's `model` enum, which outranks any prose on
 ### Transports
 
 `transport` names which HTTP contract a model speaks. Omit it and the model uses `'jobs'`, the unified
-`POST /api/v1/jobs/createTask` + `GET /api/v1/jobs/recordInfo` pair that 81 of the 82 models use.
+`POST /api/v1/jobs/createTask` + `GET /api/v1/jobs/recordInfo` pair that 85 of the 86 models use.
 
 `transport: 'veo'` marks the three Veo models, which post a **flat** body to `/api/v1/veo/generate` —
 no `input` wrapper — and poll `/api/v1/veo/record-info`, which reports a numeric `successFlag` instead
@@ -176,6 +176,9 @@ machine-readable so the form can disable or narrow the conflicting controls *bef
   `character_ids`; `last_frame_url` requires `first_frame_url`.
 - **GPT Image 2** — `background` needs 1K; `1:1` cannot reach 4K; `auto` reaches only 1K; several
   ratios are 1K-only. All `allowedValuesWhen` on `resolution`.
+- **GPT Image 2.5** — `27:16`, `16:27`, `9:8` and `8:9` are 1K-only, and those four are the ONLY
+  cap: `auto` is unrestricted here, unlike on GPT Image 2, and there is no `background` field to
+  restrict. A worked example of "sibling models genuinely differ".
 - **Veo** — `REFERENCE_2_VIDEO` supports only `duration: 8`, and only on `veo3_fast` / `veo3_lite`.
 
 Encode each as a `Constraint`, with the `message` written for the user, not the developer.

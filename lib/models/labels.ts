@@ -28,7 +28,7 @@ export const FAMILY_BLURB: Record<Family, string> = {
   bytedance: 'Seedance video, Seedream image',
   wan: 'Video, image, layer decomposition',
   google: 'Veo, Gemini Omni, Imagen 4, Nano Banana',
-  openai: 'GPT Image 1.5 and 2',
+  openai: 'GPT Image 1.5, 2 and 2.5',
   // Named for what it does, not who made it — see lib/kie/registry/enhance.ts.
   enhance: 'Upscale and background removal',
 }

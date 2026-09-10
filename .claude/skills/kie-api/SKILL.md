@@ -5,7 +5,7 @@ description: The Kie AI API contract — base URLs, auth, the unified createTask
 
 # Kie AI — API Contract
 
-**81 of this project's 82 models go through one endpoint.** Only the `model` string and the shape of
+**85 of this project's 86 models go through one endpoint.** Only the `model` string and the shape of
 `input` change; there is no per-model route. Veo is the single exception — it speaks a different
 contract, described in §2b, and `lib/kie/veo.ts` adapts it so nothing above `lib/kie/` can tell.
 
@@ -123,7 +123,7 @@ Veo 3.1 (`veo3`, `veo3_fast`, `veo3_lite`) predates Kie's unified market API and
 contract. The registry declares this with `transport: 'veo'` on the `ModelDefinition`; every other
 model omits `transport` and gets `'jobs'`.
 
-| Concern | `jobs` (81 models) | `veo` (3 models) |
+| Concern | `jobs` (85 models) | `veo` (3 models) |
 |---|---|---|
 | Create | `POST /api/v1/jobs/createTask` | `POST /api/v1/veo/generate` |
 | Poll | `GET /api/v1/jobs/recordInfo?taskId=` | `GET /api/v1/veo/record-info?taskId=` |

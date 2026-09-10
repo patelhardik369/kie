@@ -24,14 +24,14 @@ import {
 } from './index.ts'
 
 describe('catalog completeness', () => {
-  it('holds all 82 in-scope models', () => {
+  it('holds all 86 in-scope models', () => {
     assert.equal(KLING_MODELS.length, 19)
     assert.equal(BYTEDANCE_MODELS.length, 20)
     assert.equal(WAN_MODELS.length, 20)
     assert.equal(GOOGLE_MODELS.length, 14)
-    assert.equal(OPENAI_MODELS.length, 4)
+    assert.equal(OPENAI_MODELS.length, 8)
     assert.equal(ENHANCE_MODELS.length, 5)
-    assert.equal(ALL_MODELS.length, 82)
+    assert.equal(ALL_MODELS.length, 86)
   })
 
   it('splits Google 5 video / 8 image / 1 audio', () => {
@@ -136,8 +136,13 @@ describe('slugs are verbatim', () => {
     assert.ok(getModel('nano-banana-2-lite'))
     assert.ok(getModel('nano-banana-pro'))
     assert.ok(getModel('gpt-image-2-text-to-image'))
+    assert.ok(getModel('gpt-image-2-5-flare-text-to-image'))
+    assert.ok(getModel('gpt-image-2-5-sunburst-image-to-image'))
     assert.equal(getModel('google/nano-banana-2'), undefined)
     assert.equal(getModel('gpt/gpt-image-2-text-to-image'), undefined)
+    // 2.5 keeps the dashes: no dot, no prefix, no `gpt-image/2.5-…` form.
+    assert.equal(getModel('gpt-image/2.5-flare-text-to-image'), undefined)
+    assert.equal(getModel('gpt-image-2.5-flare-text-to-image'), undefined)
 
     // …while its own predecessor IS prefixed.
     assert.ok(getModel('google/nano-banana'), 'prefixed Nano Banana 1')
@@ -301,7 +306,7 @@ describe('lookups', () => {
     assert.equal(modelsByFamily('bytedance').length, 20)
     assert.equal(modelsByFamily('wan').length, 20)
     assert.equal(modelsByFamily('google').length, 14)
-    assert.equal(modelsByFamily('openai').length, 4)
+    assert.equal(modelsByFamily('openai').length, 8)
     assert.equal(modelsByFamily('enhance').length, 5)
   })
 
@@ -446,6 +451,55 @@ describe('documented traps are encoded', () => {
     assert.match(getModel('grok-imagine/upscale')!.notes ?? '', /DOC AMBIGUITY/)
   })
 
+  it('keeps GPT Image 2.5 aspect ratios distinct from GPT Image 2 in both directions', () => {
+    const ratios = (slug: string) =>
+      new Set(getModel(slug)!.params.find((p) => p.key === 'aspect_ratio')!.enum!)
+
+    const two = ratios('gpt-image-2-text-to-image')
+    const twoFive = ratios('gpt-image-2-5-flare-text-to-image')
+
+    // Neither list contains the other, so a payload copied between the two
+    // generations is a 422 in whichever direction it travels.
+    assert.ok(twoFive.has('9:8') && !two.has('9:8'), '9:8 is new in 2.5')
+    assert.ok(two.has('2:1') && !twoFive.has('2:1'), '2:1 is gone in 2.5')
+    assert.equal(twoFive.size, 13)
+    assert.equal(two.size, 16)
+  })
+
+  it('gives all four GPT Image 2.5 endpoints the identical ratio list', () => {
+    const slugs = [
+      'gpt-image-2-5-flare-text-to-image',
+      'gpt-image-2-5-flare-image-to-image',
+      'gpt-image-2-5-sunburst-text-to-image',
+      'gpt-image-2-5-sunburst-image-to-image',
+    ]
+    // GPT Image 2's two endpoints DO differ from each other; 2.5's four do not.
+    // The image-to-image pages carry a stale x-apidog-enum annotation showing
+    // GPT Image 2's ratios — this is the assertion that the `enum` won.
+    const first = getModel(slugs[0]!)!.params.find((p) => p.key === 'aspect_ratio')!.enum
+    for (const slug of slugs) {
+      const enumOf = getModel(slug)!.params.find((p) => p.key === 'aspect_ratio')!.enum
+      assert.deepEqual(enumOf, first, slug)
+    }
+  })
+
+  it('gives GPT Image 2.5 no background field, unlike GPT Image 2', () => {
+    assert.ok(
+      getModel('gpt-image-2-text-to-image')!.params.some((p) => p.key === 'background'),
+    )
+    for (const slug of [
+      'gpt-image-2-5-flare-text-to-image',
+      'gpt-image-2-5-flare-image-to-image',
+      'gpt-image-2-5-sunburst-text-to-image',
+      'gpt-image-2-5-sunburst-image-to-image',
+    ]) {
+      assert.ok(
+        !getModel(slug)!.params.some((p) => p.key === 'background'),
+        `${slug} must not offer transparency the model does not have`,
+      )
+    }
+  })
+
   it('gives Gemini TTS no prompt at all', () => {
     const tts = getModel('google/gemini-3-1-flash-tts')!
     assert.ok(!tts.params.some((p) => p.key === 'prompt'))
@@ -494,6 +548,34 @@ describe('allowedValuesWhen narrows, never invents', () => {
       '1K',
       '2K',
     ])
+  })
+
+  it('caps only the four narrow ratios on GPT Image 2.5, and never `auto`', () => {
+    for (const slug of [
+      'gpt-image-2-5-flare-text-to-image',
+      'gpt-image-2-5-flare-image-to-image',
+      'gpt-image-2-5-sunburst-text-to-image',
+      'gpt-image-2-5-sunburst-image-to-image',
+    ]) {
+      const gates = (getModel(slug)!.constraints ?? []).filter(
+        (c) => c.kind === 'allowedValuesWhen',
+      )
+      assert.deepEqual(
+        gates.map((c) => ('when' in c ? c.when.equals : undefined)),
+        ['27:16', '16:27', '9:8', '8:9'],
+        slug,
+      )
+
+      /*
+       * GPT Image 2 caps `auto` at 1K; 2.5 does not, and 2.5 is what the form
+       * OPENS on. Carrying the older rule across would silently deny 2K and 4K
+       * on the default shape — a regression nothing in the UI could explain.
+       */
+      const capsAuto = gates.some(
+        (c) => 'when' in c && c.when.key === 'aspect_ratio' && c.when.equals === 'auto',
+      )
+      assert.equal(capsAuto, false, `${slug} must not inherit GPT Image 2's auto rule`)
+    }
   })
 
   it('restricts fewer ratios on GPT Image 2 image-to-image than text-to-image', () => {

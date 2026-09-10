@@ -121,7 +121,7 @@ leaving one that can never be renewed.
 
 ### `favorite_models`
 
-Models pinned above the 82 in the picker, the home sidebar and the nav.
+Models pinned above the 86 in the picker, the home sidebar and the nav.
 
 | column | type | notes |
 |---|---|---|

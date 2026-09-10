@@ -135,7 +135,7 @@ export function veoRecordToTask(
     param: record?.paramJson ?? null,
     /*
      * Re-encoded rather than passed through as an object: `result_json_raw`
-     * stores one shape for all 82 models, and a Veo row holding a bare object
+     * stores one shape for all 86 models, and a Veo row holding a bare object
      * would break every consumer that parses that column.
      */
     resultJson: urls ? JSON.stringify({ resultUrls: urls }) : null,
@@ -164,7 +164,7 @@ const NO_SUCH_TASK = /record is null|record result data (not exist|is blank|is e
  * Fetches a Veo task and normalizes it into a `TaskRecord`.
  *
  * `resultJson` is re-encoded rather than passed through as an object, because
- * `generations.result_json_raw` stores one shape for all 82 models. A Veo row
+ * `generations.result_json_raw` stores one shape for all 86 models. A Veo row
  * that held a bare object would break every consumer that parses that column.
  */
 export async function getVeoRecord(

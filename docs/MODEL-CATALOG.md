@@ -1,4 +1,4 @@
-# Model catalog — 82 endpoints
+# Model catalog — 86 endpoints
 
 Index only. **Parameter detail lives in `.claude/skills/kie-models/references/`** so there is exactly
 one source of truth; each family section links there.
@@ -9,9 +9,9 @@ one source of truth; each family section links there.
 | ByteDance (Seedance / Seedream) | 10 | 10 | — | 20 |
 | Wan | 18 | 2 | — | 20 |
 | Google (Veo / Gemini Omni / Imagen 4 / Nano Banana) | 5 | 8 | 1 | 14 |
-| OpenAI (GPT Image) | — | 4 | — | 4 |
+| OpenAI (GPT Image) | — | 8 | — | 8 |
 | Enhance (upscale / background removal) | 2 | 3 | — | 5 |
-| | **54** | **27** | **1** | **82** |
+| | **54** | **31** | **1** | **86** |
 
 Verify against upstream with `/verify-catalog`. Add one with `/add-model <slug>`.
 
@@ -179,7 +179,7 @@ task, so they belong in the asset library rather than the registry.
 
 ---
 
-## OpenAI — 4 image models
+## OpenAI — 8 image models
 → [`references/openai.md`](../.claude/skills/kie-models/references/openai.md)
 
 | Model slug | Capability | Pick it for |
@@ -188,12 +188,22 @@ task, so they belong in the asset library rather than the registry.
 | `gpt-image/1.5-image-to-image` | image-to-image | 1.5 editing, up to 16 inputs |
 | `gpt-image-2-text-to-image` | text-to-image | 16 aspect ratios, 4K, transparent backgrounds |
 | `gpt-image-2-image-to-image` | image-to-image | GPT Image 2 editing, up to 16 inputs |
+| `gpt-image-2-5-flare-text-to-image` | text-to-image | 2.5 fast tier; 13 ratios, 4K, no transparency |
+| `gpt-image-2-5-flare-image-to-image` | image-to-image | 2.5 fast tier editing, up to 16 inputs |
+| `gpt-image-2-5-sunburst-text-to-image` | text-to-image | 2.5 premium tier; same schema as Flare |
+| `gpt-image-2-5-sunburst-image-to-image` | image-to-image | 2.5 premium tier editing, up to 16 inputs |
 
-**Traps:** GPT Image 1.5 keeps a `gpt-image/` prefix **and** a dot (`1.5`); GPT Image 2 has neither,
-despite living under `market/gpt/`. 1.5 marks three fields required with documented defaults; 2
-documents no default at all. GPT Image 2's resolution tiers are gated on the aspect ratio — `auto` is
-1K-only, `1:1` cannot reach 4K, and transparency needs 1K — which the form enforces by narrowing the
-resolution control rather than rejecting the job afterwards.
+**Traps:** GPT Image 1.5 keeps a `gpt-image/` prefix **and** a dot (`1.5`); GPT Image 2 and 2.5 have
+neither, despite living under `market/gpt/` — and 2.5 spells its version `2-5`. 1.5 marks three fields
+required with documented defaults; 2 documents no default at all; 2.5 documents `auto` / `1K` on its
+kie.ai page while its OpenAPI block documents none.
+
+**GPT Image 2.5 is not a superset of 2.** Its thirteen aspect ratios and 2's sixteen each contain what
+the other lacks — 2.5 adds `27:16` `16:27` `9:8` `8:9` and drops `5:4` `4:5` `2:1` `1:2` `3:1` `1:3`
+`9:21` — so a payload copied either way is a 422. 2.5 also has **no `background` field**, and unlike 2
+it does **not** cap `auto` at 1K; its only cap is those four narrow ratios. Both generations gate
+`resolution` on the chosen `aspect_ratio`, and 2's gating differs between its own two endpoints while
+2.5's four are identical.
 
 Sora is not offered by Kie. The legacy 4o Image API (`/api/v1/gpt4o-image/*`) is a separate
 non-unified endpoint and is deliberately out of scope.

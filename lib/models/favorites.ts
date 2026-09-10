@@ -1,7 +1,7 @@
 import type { Capability, Family, ModelDefinition } from '../kie/registry/types.ts'
 
 /**
- * Pinned models — the shortlist that sits above the 82.
+ * Pinned models — the shortlist that sits above the 86.
  *
  * Pure module. No env, no db, no React: the same functions run in the API route
  * that persists an order and in the client store that predicts it, so a pin that

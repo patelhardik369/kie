@@ -13,7 +13,7 @@ import { ALL_MODELS, capabilitiesOf, getModel } from '@/lib/kie/registry/index.t
  * Pre-render every model page — the registry is static.
  *
  * Production only, deliberately. In dev Next renders on demand, so enumerating
- * all 82 slugs buys nothing and costs a worker pass over the whole registry on
+ * all 86 slugs buys nothing and costs a worker pass over the whole registry on
  * every navigation to this route. That pass is what fails as
  * "Failed to generate static paths for /generate/[...slug]", which surfaces to
  * the browser as the opaque "Jest worker encountered N child process

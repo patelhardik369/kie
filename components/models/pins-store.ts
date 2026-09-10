@@ -8,7 +8,7 @@ import { move, type PinnedModel } from '@/lib/models/favorites.ts'
  * The pinned-model list, shared by every star and every pin bar on the page.
  *
  * A module-level store rather than a context provider, for one reason: the stars
- * are rendered by SERVER components (the picker's 82 rows, the model page
+ * are rendered by SERVER components (the picker's 86 rows, the model page
  * header, the nav), and a provider would force each of those trees to become a
  * client component just to carry state through. A module singleton crosses those
  * boundaries without touching them — the only shared thing is the import.
