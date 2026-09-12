@@ -1,3 +1,5 @@
+import { MARK_ACCENT_TOKEN, MARK_SVG } from './mark.ts'
+
 /**
  * The accent engine.
  *
@@ -17,14 +19,25 @@
  * into <head> so the accent is applied before first paint. It publishes
  * `window.__kieAccent`, which the React layer then calls. Duplicating the
  * algorithm in TypeScript would guarantee the two copies drift, so the script
- * is the implementation and TS only types it.
+ * is the implementation and TS only types it. The constants it needs — the
+ * storage key, the default hex, the mark — are interpolated in from the exports
+ * below for the same reason: one definition, no second copy to forget.
+ *
+ * The tab icon rides along. `app/icon.svg` is the static default that ships in
+ * the HTML; once this script has a hex it redraws the same mark in that colour,
+ * so the favicon tracks the accent instead of contradicting it.
  */
 
 /** localStorage key holding the chosen hex. */
 export const ACCENT_KEY = 'kie-studio.accent'
 
-/** What the studio ships with, and what an unreadable stored value resets to. */
-export const DEFAULT_ACCENT = '#4F7FFF'
+/**
+ * What the studio ships with, what Reset returns to, and what an unreadable
+ * stored value falls back to. Kept in step by three other places, all derived
+ * rather than retyped: the pre-paint script below, the no-JavaScript ramp in
+ * `app/globals.css`, and the static `app/icon.svg`.
+ */
+export const DEFAULT_ACCENT = '#FFC53D'
 
 /**
  * Starting points, not a restriction — the picker takes any hex.
@@ -53,8 +66,10 @@ export const ACCENT_PRESETS: readonly { hex: string; name: string }[] = [
  */
 export const ACCENT_SCRIPT = String.raw`
 (function () {
-  var KEY = 'kie-studio.accent';
-  var DEFAULT = '#4F7FFF';
+  var KEY = ${JSON.stringify(ACCENT_KEY)};
+  var DEFAULT = ${JSON.stringify(DEFAULT_ACCENT)};
+  var MARK = ${JSON.stringify(MARK_SVG)};
+  var MARK_TOKEN = ${JSON.stringify(MARK_ACCENT_TOKEN)};
   var root = document.documentElement;
 
   function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
@@ -133,6 +148,51 @@ export const ACCENT_SCRIPT = String.raw`
     };
   }
 
+  /**
+   * The tab icon, redrawn in the current accent.
+   *
+   * Next serves app/icon.svg and emits its <link rel="icon"> into the same
+   * <head> this script sits in — possibly AFTER it. Writing an href now would
+   * just be overwritten when the parser reaches that link, so the swap waits
+   * for DOMContentLoaded and then replaces every icon link with one we own.
+   * The new link is appended before the old ones are dropped, so the tab never
+   * flashes an empty favicon.
+   *
+   * Everything here is best-effort. If any of it throws, the static
+   * app/icon.svg is already installed and correct for the default accent —
+   * which is also what bookmarks, history and non-JS clients get.
+   */
+  var iconHex = null;
+
+  function paintIcon() {
+    if (!iconHex) return;
+    try {
+      var link = document.createElement('link');
+      link.setAttribute('rel', 'icon');
+      link.setAttribute('type', 'image/svg+xml');
+      link.setAttribute('data-kie-icon', '');
+      link.setAttribute(
+        'href',
+        'data:image/svg+xml,' + encodeURIComponent(MARK.split(MARK_TOKEN).join(iconHex))
+      );
+
+      var stale = document.querySelectorAll('link[rel~="icon"]');
+      (document.head || document.documentElement).appendChild(link);
+      for (var i = 0; i < stale.length; i++) {
+        if (stale[i].parentNode) stale[i].parentNode.removeChild(stale[i]);
+      }
+    } catch (e) { /* the served icon stands */ }
+  }
+
+  function setIcon(hex) {
+    iconHex = parseHex(hex) ? hex : DEFAULT;
+    // During head parsing there is nothing to replace yet; the listener below
+    // runs once the document's own icon links exist.
+    if (document.readyState !== 'loading') paintIcon();
+  }
+
+  document.addEventListener('DOMContentLoaded', paintIcon);
+
   function apply(hex) {
     var vars = build(hex);
     var style = root.style;
@@ -140,6 +200,7 @@ export const ACCENT_SCRIPT = String.raw`
       style.setProperty(key, vars[key]);
     }
     root.setAttribute('data-accent', hex);
+    setIcon(hex);
     return vars;
   }
 
