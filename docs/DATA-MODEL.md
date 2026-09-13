@@ -102,6 +102,8 @@ holds outputs.
 | `kie_file_url` | text nullable | from the upload API |
 | `expires_at` | integer nullable | **~24h after upload** |
 | `label` | text nullable | user-facing name in the asset library |
+| `annotation_json` | text nullable | the `AnnotationDoc` these bytes were marked up with |
+| `source_asset_id` | text nullable | the row the marks were drawn on top of |
 | `created_at` | integer | |
 
 Index on `sha256` and on `expires_at`. A lookup that finds a row whose `expires_at` has passed
@@ -118,6 +120,22 @@ An output is already the durable local copy, so reusing one writes **no second c
 `storeUpload({ existingPath })`. The cost of that is bounded and deliberate: deleting the generation
 takes the file, so `lib/gallery/delete.ts` removes any `input_assets` row pointing at it rather than
 leaving one that can never be renewed.
+
+**The two annotation columns.** A marked-up image is an ordinary input asset that happens to carry
+its provenance: `annotation_json` is the vector document from `lib/annotate/doc.ts`, and
+`source_asset_id` names the clean original. Stored here rather than in a table of their own because
+the relationship is strictly one-to-one with the bytes — the flattened PNG *is* the annotation, and a
+join would buy nothing.
+
+`annotation_json` is text for the same reason `generations.input_json` is: it is a document whose
+shape belongs to one module, not a set of columns a schema change could invalidate. `parseDoc`
+re-validates it on the way out and returns null rather than half-restoring marks it does not
+understand.
+
+`source_asset_id` is deliberately **not** a foreign key. The original can be deleted on its own, and
+a dangling reference is better than cascading away a marked-up image the user still has in a field.
+The two are also never chained: re-editing an annotated image records the ORIGINAL again, so the
+column is always one hop, never a list.
 
 ### `favorite_models`
 

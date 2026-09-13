@@ -144,6 +144,29 @@ image → video → upscale, and every hop of it needs a URL Kie can fetch.
 - A gallery asset offers the same thing as a copyable URL.
 - Kie's own result URL is used only for a file past the 100 MB upload ceiling, and says so.
 
+### F7d — Mark up an input image
+
+Point at the thing you want changed instead of describing it. "Replace the sign" is ambiguous with
+three signs in frame, and the ambiguity costs a whole generation to discover.
+
+The constraint that shapes it: **no in-scope Kie endpoint accepts a mask channel**, so the marks are
+drawn into a copy of the image and named in the prompt. That is what the model vendors document, and
+because it is a pixel-level technique it works on every prompt-driven image model rather than one.
+
+**Acceptance**
+- Every image-accepting `url` / `url[]` field on a model that has a prompt offers **Mark up** — 52 of
+  the 86. The five image endpoints with no prompt do not, and that falls out of registry data rather
+  than a list of slugs.
+- Circle, box, arrow, line, freehand, shading, text label and numbered pin, each carrying a note.
+  Marks stay selectable and movable, with undo and redo.
+- Marks are saved as vectors. Reopening an annotated image restores them for editing, over the clean
+  original rather than over the flattened copy.
+- The notes assemble into prompt text — led by an instruction not to reproduce the marks — which is
+  written into the **visible** prompt field, never appended at submit time. `input_json` stays
+  exactly what was on screen.
+- A list field with a spare slot can send the unmarked original alongside the marked one.
+- The gallery shows which of a generation's inputs were marked up.
+
 ### F7c — Pinned models
 
 The models actually in use sit above the 86 that merely exist.

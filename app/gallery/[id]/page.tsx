@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { GenerationActions } from '@/components/gallery/GenerationActions.tsx'
 import { Lineage } from '@/components/gallery/Lineage.tsx'
 import { ParamProvenance } from '@/components/gallery/ParamProvenance.tsx'
+import { annotatedUrls } from '@/lib/annotate/resolve.ts'
 import { UseAsInput } from '@/components/gallery/UseAsInput.tsx'
 import { GenerationStatus } from '@/components/queue/GenerationStatus.tsx'
 import { BackLink } from '@/components/shell/PageHeader.tsx'
@@ -47,6 +48,14 @@ export default async function GenerationDetailPage({
   const model = getModel(generation.modelSlug)
   const input = (safeParse(generation.inputJson) ?? {}) as Record<string, unknown>
   const live = isInFlight(generation.state) || isResumable(generation.state)
+  /*
+   * Which inputs were marked-up images. One query for the whole record, so a
+   * `tempfile` URL in the parameter table can say what it actually was rather
+   * than staying opaque forever. Read-side only — `input_json` is untouched.
+   */
+  const marked = workspaceId
+    ? await annotatedUrls(workspaceId, urlsIn(input))
+    : new Set<string>()
 
   return (
     <main className="mx-auto max-w-5xl px-4 pt-5 pb-16">
@@ -175,7 +184,7 @@ export default async function GenerationDetailPage({
           Exactly what was sent to Kie, stored verbatim.
         </p>
         <div className="mt-2.5">
-          <ParamProvenance model={model} input={input} />
+          <ParamProvenance model={model} input={input} annotated={marked} />
         </div>
 
         <details className="panel-flush group mt-3">
@@ -331,4 +340,16 @@ function safeParse(json: string): unknown {
   } catch {
     return null
   }
+}
+
+/** Every string in a stored input that looks like a fetchable URL. */
+function urlsIn(input: Record<string, unknown>): string[] {
+  const found: string[] = []
+  for (const value of Object.values(input)) {
+    if (typeof value === 'string') found.push(value)
+    else if (Array.isArray(value)) {
+      for (const item of value) if (typeof item === 'string') found.push(item)
+    }
+  }
+  return found.filter((value) => /^https?:\/\//.test(value))
 }

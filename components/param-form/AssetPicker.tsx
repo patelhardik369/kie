@@ -54,6 +54,8 @@ interface UploadItem {
   bytes: number | null
   createdAt: number
   live: boolean
+  /** These bytes carry drawn-on marks. Worth saying before they go to a model. */
+  annotated: boolean
 }
 
 /** The output kinds a parameter will accept. Empty means "no restriction". */
@@ -369,6 +371,20 @@ export function AssetPicker({
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-xs">
                           {item.label ?? 'Uploaded file'}
+                          {/*
+                            An annotated image has instructions painted into its
+                            pixels. Picking one unawares and sending it to a
+                            model that was never told about the marks is how a
+                            red circle ends up in an output.
+                          */}
+                          {item.annotated && (
+                            <span
+                              className="chip chip-accent ml-1.5 align-middle"
+                              title="This image has marks drawn into it. Use Mark up on the field to reopen or adjust them."
+                            >
+                              marked up
+                            </span>
+                          )}
                         </span>
                         <span className="mono block text-(--color-ink-faint)">
                           {item.kind} · {formatBytes(item.bytes)} ·{' '}

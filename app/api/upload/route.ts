@@ -98,6 +98,7 @@ interface UploadInput {
   filename?: string
   mime?: string
   label?: string
+  annotation?: { docJson: string; sourceAssetId: string | null }
 }
 
 async function readMultipart(request: Request): Promise<UploadInput | { error: string }> {
@@ -112,11 +113,51 @@ async function readMultipart(request: Request): Promise<UploadInput | { error: s
   }
 
   const label = form.get('label')
+  const annotation = readAnnotation(form.get('annotation'))
+  if (annotation && 'error' in annotation) return annotation
+
   return {
     content: new Uint8Array(await file.arrayBuffer()),
     filename: file.name,
     mime: file.type || undefined,
     label: typeof label === 'string' && label ? label : undefined,
+    ...(annotation ? { annotation } : {}),
+  }
+}
+
+/**
+ * The markup editor's companion field: the vector document behind a flattened
+ * image, plus the clean original it was drawn on.
+ *
+ * Validated only as far as this route can honestly validate it — that it is
+ * JSON, and that it declares the version this build writes. The document's real
+ * shape belongs to `lib/annotate/doc.ts`, and `parseDoc` re-checks it on the way
+ * back out; a route that duplicated those rules would be a second place to keep
+ * them in step.
+ */
+function readAnnotation(
+  raw: FormDataEntryValue | null,
+): { docJson: string; sourceAssetId: string | null } | { error: string } | undefined {
+  if (typeof raw !== 'string' || raw.length === 0) return undefined
+
+  let parsed: { doc?: unknown; sourceAssetId?: unknown }
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return { error: 'The `annotation` field is not valid JSON.' }
+  }
+
+  const doc = parsed.doc
+  if (typeof doc !== 'object' || doc === null || (doc as { version?: unknown }).version !== 1) {
+    return { error: 'The `annotation` field does not carry a version 1 document.' }
+  }
+
+  return {
+    docJson: JSON.stringify(doc),
+    sourceAssetId:
+      typeof parsed.sourceAssetId === 'string' && parsed.sourceAssetId
+        ? parsed.sourceAssetId
+        : null,
   }
 }
 

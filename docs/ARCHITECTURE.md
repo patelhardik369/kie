@@ -359,6 +359,41 @@ An output reused as an input is the exception: it is registered against the **ou
 no second copy is made. On a 1 GB plan that is the difference between reusing a video costing nothing
 and costing another 30 MB.
 
+## Image markup
+
+Drawing on an input image so the model knows which part of it to change. `components/annotate/`,
+with the geometry in `lib/annotate/doc.ts` and the field gate in `lib/annotate/targets.ts`.
+
+> **No in-scope endpoint accepts a mask.** Verified 2026-09-13 against the registry, the reference
+> tables under `.claude/skills/kie-models/references/`, and the live doc page for
+> `gpt-image-2-5-flare-image-to-image`, whose entire input is `prompt`, `input_urls`, `aspect_ratio`
+> and `resolution`. **Do not add a `mask` / `mask_url` parameter to make this "proper"** — it would
+> be invented, which breaks the first non-negotiable. The marks are burned into the pixels and named
+> in the prompt, which is what the model vendors document and what works across all 52 qualifying
+> models rather than one.
+
+| step | what |
+|---|---|
+| Open | `GET /api/annotate/context?url=` says what to draw on, whether marks already exist, and whether a clean original can be paired |
+| Load | `GET /api/annotate/source` streams the bytes **from our own origin** |
+| Draw | Vector shapes in normalized 0–1 coordinates, so one document renders at any scale |
+| Save | Flattened at the image's natural size, `POST /api/upload` with an `annotation` field, which writes `input_assets.annotation_json` |
+
+### Why `/api/annotate/source` proxies where `/api/assets` redirects
+
+`toDataURL()` throws on a canvas any cross-origin image has touched, and both possible sources are
+cross-origin: a Kie `downloadUrl`, and the Supabase signed URL that `/api/assets` 302s to. So this
+route streams the bytes instead. The reason `/api/assets` redirects — keeping 40 MB videos out of a
+function — does not apply to one image fetched once per editor session, and no CORS configuration on
+a third party's host has to stay put for it to keep working.
+
+It resolves the URL against this workspace's own `input_assets` / `assets` rows first, so the common
+case never leaves the building. The fallback, for a hand-pasted URL, is a server-side fetch of a
+client-supplied URL — SSRF by construction — and is fenced by `lib/annotate/source-guard.ts`: https
+only, public addresses only (including v4-mapped v6 forms), `image/*` but never SVG, size-capped, and
+redirects re-validated at each hop rather than followed. The residual DNS-rebinding window is
+documented at the call site.
+
 ## Gallery, lineage and sweeps
 
 The gallery is a server component reading Postgres directly — no API route in

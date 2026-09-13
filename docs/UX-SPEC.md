@@ -144,7 +144,7 @@ You always know what you're sending.
 | `enum` | Segmented control at ≤4 options, select above that (`.select-field`) |
 | `number` | Slider **plus** a numeric input — the slider for feel, the box for exactness. Honors `step` |
 | `boolean` | Switch, with cost implications labelled ("increases generation cost") |
-| `url` | Paste a URL, **Reuse** (a past output or an earlier upload), or **Upload** a local file |
+| `url` | Paste a URL, **Reuse** (a past output or an earlier upload), or **Upload** a local file. An image field also gets **Mark up** |
 | `url[]` | Same, per row and appending, with an `n / maxItems` counter |
 | `seed` | Number input with a dice button, and a "lock" that carries the seed to the next run |
 | `object[]` | Repeating card list with add / remove / drag-reorder |
@@ -153,6 +153,33 @@ You always know what you're sending.
 
 Every control shows its `describe` text on hover, and its documented default is visibly marked as
 default so a deliberate change reads as deliberate.
+
+### Mark up — drawing on an input image
+
+Describing an edit in prose is lossy. "Replace the sign" is ambiguous with three signs in frame, and
+the cost of the ambiguity is a whole generation. **Mark up** opens a full-screen editor on the image
+in that row: circle, box, arrow, shade, label or drop a numbered pin, attach a note to each mark, and
+the marks are flattened into a new image that goes into the field.
+
+**It is pixels, not a mask.** No endpoint in scope accepts a mask channel — checked against the
+registry and the live docs — so the marks are drawn INTO a copy of the image and named in the prompt.
+That is the technique the model vendors themselves document, and because it works at the pixel level
+it applies to every prompt-driven image model rather than one.
+
+| | |
+|---|---|
+| Where it appears | Any `url` / `url[]` field whose `accept` includes `image`, on a model that has a prompt. 52 of the 86 |
+| Where it does not | The five image endpoints with no prompt — the two upscalers, the background remover, both Wan animate models. There is no field in which to explain a mark, so the button is absent. Decided by `lib/annotate/targets.ts` from registry data, never by slug |
+| Tools | select/move, freehand, highlighter, arrow, line, box, circle, text label, numbered pin. Keys `V B H A L R O T N`, `Ctrl+Z` / `Ctrl+Shift+Z`, `Del` |
+| Colours | Seven, each with a **name**. The name is what the legend says and therefore what the model reads, so the palette is the set that is unambiguous in words — no eyedropper |
+| Re-editable | Marks are vectors, saved to `input_assets.annotation_json`. Reopening replays them over the **clean original**, never over the flattened copy, so editing twice does not burn two layers of circles |
+| Legend | Notes on the marks assemble into prompt text, always led by "these marks are instructions, do not reproduce them". Shown editable, then written into the **visible** prompt field — never appended at submit time, so `input_json` stays exactly what was on screen |
+| Pairing | On a list field with a spare slot, "also send the clean original" appends the unmarked photo. The best defence against the model painting your red circle into the output |
+
+The geometry is normalized 0–1 against the source image, so one document renders identically in the
+600px preview and in the 4000px upload. The source is fetched through `/api/annotate/source` on our
+own origin — a Kie or Supabase URL would taint the canvas and make the export throw at the very end
+of the interaction.
 
 **Reuse** is listed before **Upload** on purpose. The file you want is usually something this studio
 made twenty minutes ago, and the old answer to that was to go and find it in the output folder. The

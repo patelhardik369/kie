@@ -255,6 +255,29 @@ export const inputAssets = pgTable(
     /** ~24h after upload. Past this, re-upload in place rather than inserting a duplicate. */
     expiresAt: epochMs('expires_at'),
     label: text('label'),
+    /**
+     * The `AnnotationDoc` this image was marked up with, when it was.
+     *
+     * Null for an ordinary upload. Present means these bytes are a flattened
+     * copy of `sourceAssetId` with marks burned into them, and the vector
+     * document that produced them is right here — so the marks can be reopened
+     * and adjusted weeks later instead of redrawn.
+     *
+     * Stored as text like `generations.input_json`, and for the same reason: it
+     * is a document whose shape belongs to lib/annotate/doc.ts, not a set of
+     * columns a schema change could invalidate.
+     */
+    annotationJson: text('annotation_json'),
+    /**
+     * The `input_assets` row these marks were drawn on top of.
+     *
+     * Kept so the clean original can be offered alongside the annotated copy —
+     * the pairing that stops a model treating a red circle as content — and so
+     * the gallery can show what a generation's input looked like before it was
+     * marked. Not a foreign key: the original can be deleted independently, and
+     * losing the reference is better than cascading the annotated copy away.
+     */
+    sourceAssetId: text('source_asset_id'),
     createdAt: epochMs('created_at').notNull().default(now),
   },
   (t) => [

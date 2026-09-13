@@ -33,6 +33,12 @@ export async function GET(request: Request) {
         live: asset.live,
         expiresAt: asset.expiresAt,
         fileUrl: asset.live ? asset.kieFileUrl : null,
+        /*
+         * A flag, not the document. A stroke-heavy annotation is kilobytes, and
+         * the list renders dozens of rows that only need to know whether to show
+         * a badge — the marks themselves are fetched when an editor opens.
+         */
+        annotated: asset.annotationJson !== null,
       })),
     })
   })

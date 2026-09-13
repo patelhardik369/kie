@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react'
 
+import { MarkupButton } from '@/components/annotate/MarkupButton.tsx'
 import { Close, Dice, Plus, Upload } from '@/components/shell/icons.tsx'
 import type { ParamDef } from '@/lib/kie/registry/types.ts'
 import { AssetPicker } from './AssetPicker.tsx'
@@ -40,6 +41,19 @@ export interface ControlProps<T = unknown> {
    * rendering. Extending the schema is what keeps this generic.
    */
   sourceUrls?: string[]
+  /**
+   * Present when an image in this field can be marked up.
+   *
+   * Its presence IS the gate — `lib/annotate/targets.ts` decides from registry
+   * data whether the field takes an image and whether the model has a prompt to
+   * name the marks in, and the form passes this only when both hold. A control
+   * therefore never tests a slug, a family or a capability to know whether to
+   * offer the editor.
+   */
+  annotate?: {
+    /** Appends legend text to the model's prompt field. */
+    onLegend: (text: string) => void
+  }
 }
 
 /** The effective requiredness, honouring constraint-derived overrides. */
@@ -484,16 +498,30 @@ function UploadButton({
 }
 
 export function UrlControl(props: ControlProps) {
-  const { param, value, onChange, disabled } = props
+  const { param, value, onChange, disabled, annotate } = props
+  const url = typeof value === 'string' ? value : ''
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <input
         className={`${inputBase} font-mono text-xs`}
-        value={typeof value === 'string' ? value : ''}
+        value={url}
         disabled={disabled}
         placeholder={`https://… (${acceptHint(param)})`}
         onChange={(e) => onChange(e.target.value)}
       />
+      {annotate && (
+        <MarkupButton
+          url={url}
+          disabled={disabled}
+          /* A single-URL field has exactly one slot, so there is nowhere to put
+             the clean original alongside the marked copy. */
+          canPair={false}
+          onResult={(result) => {
+            onChange(result.fileUrl)
+            if (result.legend) annotate.onLegend(result.legend)
+          }}
+        />
+      )}
       {/* Before Upload, deliberately. Most of the time the file you want is
           something this studio already made, and the old answer to that was to
           go and find it on disk. */}
@@ -565,16 +593,46 @@ export function StringListControl({ param, value, onChange, disabled, max }: Con
   )
 }
 
-export function UrlListControl({ param, value, onChange, disabled, max }: ControlProps) {
+export function UrlListControl({
+  param,
+  value,
+  onChange,
+  disabled,
+  max,
+  annotate,
+}: ControlProps) {
   const list = Array.isArray(value) ? (value as string[]) : []
   const ceiling = max ?? param.maxItems
 
   const update = (next: string[]) => onChange(next.filter((v) => v !== undefined))
 
+  /**
+   * Whether the clean original can ride along with the marked-up copy.
+   *
+   * A local fact, not something the form has to work out: this control is the
+   * only thing that knows how many slots the list has used and what its ceiling
+   * currently is — and the ceiling moves, because a constraint can lower it.
+   */
+  const roomForClean = ceiling === undefined || list.length + 1 < ceiling
+
+  /**
+   * Replaces the row that was marked up, then appends the clean original when
+   * one was asked for.
+   *
+   * Both in one update. Two `update` calls would each rebuild from the same
+   * stale `list` closure, and the second would drop the first.
+   */
+  const applyMarkup = (index: number, fileUrl: string, cleanUrl: string | null) => {
+    const next = [...list]
+    next[index] = fileUrl
+    if (cleanUrl && (ceiling === undefined || next.length < ceiling)) next.push(cleanUrl)
+    update(next)
+  }
+
   return (
     <div className="space-y-2">
       {list.map((item, index) => (
-        <div key={index} className="flex gap-2">
+        <div key={index} className="flex flex-wrap gap-2">
           <input
             className={`${inputBase} font-mono text-xs`}
             value={item}
@@ -586,6 +644,17 @@ export function UrlListControl({ param, value, onChange, disabled, max }: Contro
               update(next)
             }}
           />
+          {annotate && (
+            <MarkupButton
+              url={item}
+              disabled={disabled}
+              canPair={roomForClean}
+              onResult={(result) => {
+                applyMarkup(index, result.fileUrl, result.cleanUrl)
+                if (result.legend) annotate.onLegend(result.legend)
+              }}
+            />
+          )}
           <AssetPicker
             param={param}
             disabled={disabled}

@@ -17,10 +17,20 @@ import type { ModelDefinition, ParamDef } from '@/lib/kie/registry/types.ts'
 export function ParamProvenance({
   model,
   input,
+  annotated,
 }: {
   /** Absent when the model has been dropped from the registry since. */
   model?: ModelDefinition
   input: Record<string, unknown>
+  /**
+   * Input URLs that point at an image with marks drawn into it.
+   *
+   * Looked up on the server from `input_assets`, never derived from the URL
+   * itself. The record stays verbatim — this only annotates how it is read, so
+   * a marked-up input is recognisable months later instead of being one more
+   * opaque `tempfile` link.
+   */
+  annotated?: ReadonlySet<string>
 }) {
   const byKey = new Map((model?.params ?? []).map((p) => [p.key, p]))
   const sent = Object.entries(input)
@@ -49,7 +59,13 @@ export function ParamProvenance({
           </thead>
           <tbody className="divide-y divide-(--color-border)">
             {sent.map(([key, value]) => (
-              <Row key={key} paramKey={key} value={value} param={byKey.get(key)} />
+              <Row
+                key={key}
+                paramKey={key}
+                value={value}
+                param={byKey.get(key)}
+                annotated={annotated}
+              />
             ))}
           </tbody>
         </table>
@@ -81,10 +97,12 @@ function Row({
   paramKey,
   value,
   param,
+  annotated,
 }: {
   paramKey: string
   value: unknown
   param?: ParamDef
+  annotated?: ReadonlySet<string>
 }) {
   const isDefault = param?.default !== undefined && sameValue(param.default, value)
 
@@ -118,13 +136,19 @@ function Row({
         )}
       </td>
       <td className="px-3 py-2">
-        <ValueCell value={value} />
+        <ValueCell value={value} annotated={annotated} />
       </td>
     </tr>
   )
 }
 
-function ValueCell({ value }: { value: unknown }) {
+function ValueCell({
+  value,
+  annotated,
+}: {
+  value: unknown
+  annotated?: ReadonlySet<string>
+}) {
   if (typeof value === 'string' && value.length > 120) {
     return (
       <p className="font-mono text-xs leading-relaxed whitespace-pre-wrap">{value}</p>
@@ -151,6 +175,14 @@ function ValueCell({ value }: { value: unknown }) {
             ) : (
               JSON.stringify(item)
             )}
+            {typeof item === 'string' && annotated?.has(item) && (
+              <span
+                className="chip chip-accent ml-1.5 align-middle"
+                title="This input had marks drawn into it before it was sent."
+              >
+                marked up
+              </span>
+            )}
           </li>
         ))}
       </ul>
@@ -158,7 +190,17 @@ function ValueCell({ value }: { value: unknown }) {
   }
 
   return (
-    <code className="font-mono text-xs break-all">{JSON.stringify(value)}</code>
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <code className="font-mono text-xs break-all">{JSON.stringify(value)}</code>
+      {typeof value === 'string' && annotated?.has(value) && (
+        <span
+          className="chip chip-accent"
+          title="This input had marks drawn into it before it was sent."
+        >
+          marked up
+        </span>
+      )}
+    </span>
   )
 }
 

@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { GenerationStatus } from '@/components/queue/GenerationStatus.tsx'
+import { insertLegend } from '@/lib/annotate/doc.ts'
+import { canMarkUp, promptKeyOf } from '@/lib/annotate/targets.ts'
 import { deriveFields, pendingRequirements } from '@/lib/kie/constraints.ts'
-import type { ModelDefinition, ParamGroup } from '@/lib/kie/registry/types.ts'
+import type { ModelDefinition, ParamDef, ParamGroup } from '@/lib/kie/registry/types.ts'
 import { buildRequestInput } from '@/lib/kie/request.ts'
 import { openingValues, studioDefaults } from '@/lib/kie/studio-defaults.ts'
 import { validateInput } from '@/lib/kie/validate.ts'
@@ -37,6 +39,8 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
   const opening = useMemo(() => openingValues(model), [model])
   /** Only the overridden keys, so a field can show both numbers. */
   const preferences = useMemo(() => studioDefaults(model), [model])
+  /** Where an annotation legend is written. Null when the model has no prompt. */
+  const promptKey = useMemo(() => promptKeyOf(model), [model])
   const [values, setValues] = useState<Record<string, unknown>>(opening)
   /**
    * Which fields the user has actually edited, and whether Generate has been
@@ -227,6 +231,39 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
     return Array.isArray(urls) ? (urls as string[]) : []
   }
 
+  /**
+   * Whether an image in this field can be marked up, and where the legend goes.
+   *
+   * `lib/annotate/targets.ts` answers both from registry data alone — the field
+   * has to accept an image, and the model has to have a prompt in which a mark
+   * can be named. The five image endpoints with no prompt (the upscalers, the
+   * background remover, the two Wan animate models) therefore never offer it,
+   * without anything here listing them.
+   *
+   * Returning `undefined` rather than a flag is deliberate: the control's gate
+   * is the presence of this object, so there is no way to render the button
+   * without also having somewhere to put the legend.
+   */
+  const annotateFor = (param: ParamDef) => {
+    if (!promptKey || !canMarkUp(model, param)) return undefined
+    return {
+      onLegend: (legend: string) => {
+        /*
+         * Written into the VISIBLE prompt field, now.
+         *
+         * Not appended at submit time, and not carried in a side channel:
+         * `input_json` is stored verbatim and has to be exactly what was sent,
+         * so a prompt the user cannot read before pressing Generate would make
+         * every stored record a little bit of a lie. `insertLegend` also
+         * replaces a legend from an earlier pass rather than stacking a second
+         * one underneath it.
+         */
+        const current = values[promptKey]
+        set(promptKey, insertLegend(typeof current === 'string' ? current : '', legend))
+      },
+    }
+  }
+
   /** A field's messages, once it is fair to show them. */
   const errorsFor = (key: string) =>
     attempted || touched.has(key) ? errorsByKey[key] : undefined
@@ -340,6 +377,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
             errors={errorsFor(param.key)}
             studioDefault={preferences[param.key] as string | number | undefined}
             sourceUrls={sourceUrlsFor(param)}
+            annotate={annotateFor(param)}
           />
         ))}
       </section>
@@ -402,6 +440,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
                   errors={errorsFor(param.key)}
                   studioDefault={preferences[param.key] as string | number | undefined}
                   sourceUrls={sourceUrlsFor(param)}
+                  annotate={annotateFor(param)}
                 />
             ))}
           </div>

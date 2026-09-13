@@ -344,3 +344,117 @@ export function EyeOff({ size, className }: IconProps) {
     </Svg>
   )
 }
+
+/* ---------------------------------------------------------------- markup
+ *
+ * The annotation toolbar. Each one has to read at 14–16px next to its
+ * neighbours, so they are drawn as the GESTURE rather than as the tool: a
+ * pointer that selects, a nib that draws, a chisel tip that shades. Drawing
+ * literal implements at this size produces eight indistinguishable grey blobs.
+ */
+
+/** Select and move — the arrow pointer, the one shape everyone already reads. */
+export function Cursor({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M3.25 2.25l3.6 10.9 1.9-4.35 4.35-1.9z" />
+    </Svg>
+  )
+}
+
+/** Freehand: a pen nib on its stroke. */
+export function Pen({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M11.4 1.98a1.75 1.75 0 0 1 2.47 2.47l-7.3 7.3-3.3.83.83-3.3z" />
+      <path d="M10.15 3.23l2.47 2.47" />
+    </Svg>
+  )
+}
+
+/** Highlighter: the same stroke with a chisel tip and a laid-down band. */
+export function Highlighter({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M9.9 2.35a1.6 1.6 0 0 1 2.26 2.26l-5.1 5.1-2.9.64.64-2.9z" />
+      <path d="M2.25 13.4h11.5" />
+    </Svg>
+  )
+}
+
+/** A pointing arrow — the single most effective marker in the set. */
+export function ArrowMark({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M2.75 13.25L12.4 3.6" />
+      <path d="M7.6 3.25h5v5" />
+    </Svg>
+  )
+}
+
+/** A bare line, for pointing without an arrowhead. */
+export function LineMark({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M2.75 13.25L13.25 2.75" />
+    </Svg>
+  )
+}
+
+/** Box a region. */
+export function Square({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <rect x="2.75" y="2.75" width="10.5" height="10.5" rx="1.5" />
+    </Svg>
+  )
+}
+
+/** Circle a subject. */
+export function Circle({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <circle cx="8" cy="8" r="5.25" />
+    </Svg>
+  )
+}
+
+/** A typed label: a serif A, which reads as "text" smaller than a T does. */
+export function TypeMark({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M3 13.25L8 2.75l5 10.5" />
+      <path d="M4.9 9.5h6.2" />
+    </Svg>
+  )
+}
+
+/** A numbered badge — the marker that turns one prompt into a list. */
+export function Pin({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <circle cx="8" cy="8" r="5.5" />
+      <path d="M6.9 6.2l1.5-.95v5.5M6.9 10.75h3" />
+    </Svg>
+  )
+}
+
+/** Undo: a step back along the history. */
+export function Undo({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M2.75 7.25h7.5a3.25 3.25 0 0 1 0 6.5H6" />
+      <path d="M5.25 3.75l-2.5 3.5 2.5 3.5" />
+    </Svg>
+  )
+}
+
+/** Redo: the same step, mirrored. */
+export function Redo({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M13.25 7.25h-7.5a3.25 3.25 0 0 0 0 6.5H10" />
+      <path d="M10.75 3.75l2.5 3.5-2.5 3.5" />
+    </Svg>
+  )
+}

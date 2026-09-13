@@ -70,6 +70,25 @@ export interface StoreUploadParams {
    * A destructive action the user asked for is allowed to be destructive.
    */
   existingKey?: string
+  /**
+   * These bytes are a marked-up copy of another image.
+   *
+   * Carries the vector document that produced them, so the marks can be
+   * reopened and edited rather than redrawn, and the id of the clean original
+   * so it can be offered alongside.
+   *
+   * **Omitting it never clears what a row already has.** The fields are spread
+   * in conditionally for exactly that reason: `refreshUpload` re-uploads an
+   * expired asset through this same function with no annotation in hand, and a
+   * flat assignment would silently drop the marks off every annotated image the
+   * moment its 24-hour URL lapsed.
+   */
+  annotation?: {
+    /** A serialized `AnnotationDoc` — see lib/annotate/doc.ts. */
+    docJson: string
+    /** The `input_assets` row the marks were drawn on, when it is known. */
+    sourceAssetId: string | null
+  }
 }
 
 /**
@@ -97,6 +116,29 @@ export async function storeUpload(params: StoreUploadParams): Promise<CachedUplo
   }
 
   if (existing?.kieFileUrl && isLive(existing.expiresAt)) {
+    /*
+     * The bytes are cached, but the DOCUMENT may still have changed.
+     *
+     * Editing only a shape's note changes the legend and changes nothing on the
+     * canvas, so the flattened image hashes identically and lands on this fast
+     * path. Returning here without writing would accept the new note in the
+     * prompt and silently keep the old one on the asset, so reopening the marks
+     * later would show text the user had already replaced.
+     */
+    if (
+      params.annotation &&
+      (params.annotation.docJson !== existing.annotationJson ||
+        params.annotation.sourceAssetId !== existing.sourceAssetId)
+    ) {
+      await db
+        .update(inputAssets)
+        .set({
+          annotationJson: params.annotation.docJson,
+          sourceAssetId: params.annotation.sourceAssetId,
+        })
+        .where(eq(inputAssets.id, existing.id))
+    }
+
     return {
       id: existing.id,
       fileUrl: existing.kieFileUrl,
@@ -130,6 +172,12 @@ export async function storeUpload(params: StoreUploadParams): Promise<CachedUplo
     kieFileUrl: uploaded.fileUrl,
     expiresAt,
     label: label ?? filename ?? null,
+    ...(params.annotation
+      ? {
+          annotationJson: params.annotation.docJson,
+          sourceAssetId: params.annotation.sourceAssetId,
+        }
+      : {}),
   }
 
   let id = existing?.id
