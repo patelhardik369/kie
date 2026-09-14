@@ -25,7 +25,9 @@ import { MARK_ACCENT_TOKEN, MARK_SVG } from './mark.ts'
  *
  * The tab icon rides along. `app/icon.svg` is the static default that ships in
  * the HTML; once this script has a hex it redraws the same mark in that colour,
- * so the favicon tracks the accent instead of contradicting it.
+ * so the favicon tracks the accent instead of contradicting it. It does so
+ * WITHOUT touching the served link — see `paintIcon` for the navigation bug
+ * that touching it caused.
  */
 
 /** localStorage key holding the chosen hex. */
@@ -151,47 +153,68 @@ export const ACCENT_SCRIPT = String.raw`
   /**
    * The tab icon, redrawn in the current accent.
    *
-   * Next serves app/icon.svg and emits its <link rel="icon"> into the same
-   * <head> this script sits in — possibly AFTER it. Writing an href now would
-   * just be overwritten when the parser reaches that link, so the swap waits
-   * for DOMContentLoaded and then replaces every icon link with one we own.
-   * The new link is appended before the old ones are dropped, so the tab never
-   * flashes an empty favicon.
+   * **This script must never remove, move or edit a node it did not create.**
+   * Next's <link rel="icon"> for app/icon.svg is a React-owned hoistable: React
+   * holds a reference to that exact element and removes it itself when metadata
+   * re-renders, which is every client-side navigation. An earlier version of
+   * this function deleted it to make room for the tinted one. React's next
+   * unmount then ran parentNode.removeChild on a detached node, threw, and
+   * abandoned the commit — AFTER the router had already pushed the new URL. The
+   * visible result was the address bar changing while the old page stayed on
+   * screen, on the first click after every load. Rewriting its href instead is
+   * no better: React matches head links by href when it hydrates, so it would
+   * stop recognising the node and insert a duplicate.
+   *
+   * So the served link is left exactly as React put it, and this adds one link
+   * of its own, kept LAST among the icon links. Browsers take the last of
+   * equally suitable icons, and both are sizes="any" SVG. React can insert a
+   * fresh icon link after ours at any time — the parser reaching Next's link,
+   * hydration, a navigation — so a MutationObserver moves ours back to the end
+   * whenever that happens. Moving our own node is safe; nothing else holds it.
    *
    * Everything here is best-effort. If any of it throws, the static
    * app/icon.svg is already installed and correct for the default accent —
    * which is also what bookmarks, history and non-JS clients get.
    */
   var iconHex = null;
+  var iconLink = null;
 
   function paintIcon() {
     if (!iconHex) return;
     try {
-      var link = document.createElement('link');
-      link.setAttribute('rel', 'icon');
-      link.setAttribute('type', 'image/svg+xml');
-      link.setAttribute('data-kie-icon', '');
-      link.setAttribute(
-        'href',
-        'data:image/svg+xml,' + encodeURIComponent(MARK.split(MARK_TOKEN).join(iconHex))
-      );
+      var head = document.head;
+      if (!head) return;
 
-      var stale = document.querySelectorAll('link[rel~="icon"]');
-      (document.head || document.documentElement).appendChild(link);
-      for (var i = 0; i < stale.length; i++) {
-        if (stale[i].parentNode) stale[i].parentNode.removeChild(stale[i]);
+      if (!iconLink) {
+        iconLink = document.createElement('link');
+        iconLink.setAttribute('rel', 'icon');
+        iconLink.setAttribute('type', 'image/svg+xml');
+        iconLink.setAttribute('sizes', 'any');
+        iconLink.setAttribute('data-kie-icon', '');
       }
+
+      var href =
+        'data:image/svg+xml,' + encodeURIComponent(MARK.split(MARK_TOKEN).join(iconHex));
+      if (iconLink.getAttribute('href') !== href) iconLink.setAttribute('href', href);
+
+      // Only when something else has become the last icon — so the observer's
+      // own reaction to this append finds nothing to do and cannot loop.
+      var icons = head.querySelectorAll('link[rel~="icon"]');
+      if (icons[icons.length - 1] !== iconLink) head.appendChild(iconLink);
     } catch (e) { /* the served icon stands */ }
   }
 
   function setIcon(hex) {
     iconHex = parseHex(hex) ? hex : DEFAULT;
-    // During head parsing there is nothing to replace yet; the listener below
-    // runs once the document's own icon links exist.
-    if (document.readyState !== 'loading') paintIcon();
+    paintIcon();
   }
 
-  document.addEventListener('DOMContentLoaded', paintIcon);
+  try {
+    new MutationObserver(paintIcon).observe(document.head, { childList: true });
+  } catch (e) {
+    // No observer: settle for one repaint once the parser has placed Next's link.
+    document.addEventListener('DOMContentLoaded', paintIcon);
+  }
 
   function apply(hex) {
     var vars = build(hex);
