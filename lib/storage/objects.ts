@@ -115,6 +115,31 @@ export async function createUploadUrl(
 }
 
 /**
+ * The widths a thumbnail may be asked for.
+ *
+ * A closed set, not a free number, and that is the whole point. Supabase meters
+ * transformations and caches them per distinct size, so a width taken straight
+ * from a query string would let one crawler mint a thousand cache entries and a
+ * thousand billable transforms out of a single picture. Four sizes cover every
+ * place this app shows an image smaller than full: the 40px row thumbnail, the
+ * asset picker, the gallery tile, and the same tile on a 2x screen.
+ */
+export const THUMB_WIDTHS = [96, 240, 432, 864] as const
+export type ThumbWidth = (typeof THUMB_WIDTHS)[number]
+
+/**
+ * The smallest allowed width that still covers `requested`.
+ *
+ * Rounding UP rather than to the nearest keeps a thumbnail from ever being
+ * upscaled into its box, which is the one artefact people actually notice.
+ * Anything past the largest entry means "give me the original".
+ */
+export function thumbWidth(requested: number | null): ThumbWidth | null {
+  if (requested === null || !Number.isFinite(requested) || requested <= 0) return null
+  return THUMB_WIDTHS.find((width) => width >= requested) ?? null
+}
+
+/**
  * A time-limited URL the browser can fetch directly.
  *
  * Direct is the point: the bytes go from Supabase's CDN to the browser without
@@ -122,12 +147,39 @@ export async function createUploadUrl(
  * invocation would spend the function's whole memory and duration budget to
  * deliver something the CDN already serves — with byte-range support for video
  * scrubbing, which a naive proxy loses.
+ *
+ * ## `width` — resize at the origin
+ *
+ * Measured on this project's own bucket, one 1536px output PNG shown in a 216px
+ * gallery tile:
+ *
+ * | | bytes | time |
+ * |---|---|---|
+ * | original | 2591 KB | 1799 ms |
+ * | 432px, still PNG | 338 KB | 872 ms |
+ * | 432px, WebP | **35 KB** | 738 ms |
+ *
+ * A gallery page was fetching 23.75 MB to draw ten 216-pixel squares. The WebP
+ * is not asked for: Storage picks it from the browser's own `Accept` header, so
+ * a browser that cannot take one still gets a PNG.
+ *
+ * Only ever pass a width from `thumbWidth`. Null means the original, untouched —
+ * which is what the full-size view and every download must keep using, because a
+ * resized copy of a generation is no longer the thing the model produced.
  */
 export async function signedUrl(
   key: string,
   ttlSeconds = SIGNED_URL_TTL_SECONDS,
+  width: ThumbWidth | null = null,
 ): Promise<string | null> {
-  const { data, error } = await bucket().createSignedUrl(key, ttlSeconds)
+  const { data, error } = await bucket().createSignedUrl(
+    key,
+    ttlSeconds,
+    // `resize: 'contain'` rather than 'cover': the caller decides the crop with
+    // `object-cover` in CSS, and cropping here as well would throw away pixels
+    // the layout might want back at another breakpoint.
+    width ? { transform: { width, resize: 'contain' } } : undefined,
+  )
   if (error || !data?.signedUrl) return null
   return data.signedUrl
 }

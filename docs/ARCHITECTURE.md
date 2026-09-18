@@ -382,6 +382,47 @@ An output reused as an input is the exception: it is registered against the **ou
 no second copy is made. On a 1 GB plan that is the difference between reusing a video costing nothing
 and costing another 30 MB.
 
+## Serving images: never the original for a thumbnail
+
+Outputs are full-resolution PNGs — 2-6 MB each, one upscale at 29.6 MB — and the
+gallery draws them in 216px tiles. Measured on a real workspace, a gallery page
+fetched **23.75 MB to paint ten tiles**, the largest a 5.8 MB PNG in a 216-pixel
+square. That, not the network, was what made the app feel slow.
+
+Supabase Storage resizes at the origin, and it works on the Free plan. Same
+image, 1536px output PNG:
+
+| served as | bytes | note |
+|---|---|---|
+| original | 2591 KB | what the tile used to fetch |
+| 432px PNG | 338 KB | |
+| **432px WebP** | **35 KB** | chosen from the browser's own `Accept` |
+
+So `/api/assets/<key>?k=<token>&w=<width>` signs a resize transform and redirects
+to it, and `/api/annotate/source?url=…&w=<width>` does the same for an input
+image the workspace holds. Whole gallery page: **23.75 MB → 0.40 MB, 59x.** A
+40px row thumbnail: **4759 KB → 5 KB.**
+
+Two rules make this safe to leave on:
+
+| rule | why |
+|---|---|
+| Widths snap to `THUMB_WIDTHS` (96/240/432/864) | The width rides in an editable URL, and an unconstrained number mints unbounded distinct renders — each cached and metered separately |
+| No `w` means the original, untouched | The full-size view, every download, and anything a model reads must get the real file; a resized copy of a generation is not what the model produced |
+
+Video and audio are never sized — the renderer is for stills, and asking it to
+resize an mp4 turns a working URL into a broken one.
+
+### What is left, and it is not the app
+
+The project's Supabase lives in `ap-northeast-1`. From the author's connection
+that is a **204 ms** round trip, against 12-15 ms to a nearby anycast edge, so
+every request pays a fifth of a second before any byte moves — a sized thumbnail
+still takes ~1.5s cold because it costs three Tokyo round trips (row lookup,
+sign, render). Bandwidth is not the constraint: 28 Mbit/s measured, and the
+transfers already saturate it. Moving the project region is the only lever left,
+and it is a migration, not a setting.
+
 ## Image markup
 
 Drawing on an input image so the model knows which part of it to change. `components/annotate/`,

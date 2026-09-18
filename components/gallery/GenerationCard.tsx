@@ -261,8 +261,20 @@ export function GenerationCard({
   )
 }
 
+/**
+ * The tile is 216 CSS px at its widest; 432 covers it on a 2x screen.
+ *
+ * Only images are resized. A video is served whole either way — `preload` is
+ * what keeps a grid of them cheap — and Storage's renderer is for stills.
+ */
+const TILE_WIDTH = 432
+
 function Preview({ asset }: { asset: CardAsset }) {
-  const src = assetHref(asset.storagePath, asset.token)
+  const src = assetHref(
+    asset.storagePath,
+    asset.token,
+    asset.kind === 'image' ? TILE_WIDTH : undefined,
+  )
 
   if (asset.kind === 'video') {
     return (
@@ -293,8 +305,10 @@ function Preview({ asset }: { asset: CardAsset }) {
   }
 
   return (
-    // A plain <img>: these are local files from our own route, and re-encoding
-    // a generation output would misrepresent it.
+    // A plain <img>: these are local files from our own route. The `w` on the
+    // src asks Storage for a tile-sized render — the ORIGINAL is what the
+    // full-size view and every download still get, because a resized copy of a
+    // generation is no longer the thing the model produced.
     <img src={src} alt="" loading="lazy" className="h-full w-full object-cover" />
   )
 }

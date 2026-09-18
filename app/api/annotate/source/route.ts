@@ -13,7 +13,13 @@ import {
   type SourceRejection,
 } from '@/lib/annotate/source-guard.ts'
 import { withWorkspace } from '@/lib/auth/route.ts'
-import { objectStream, type ObjectStream } from '@/lib/storage/objects.ts'
+import {
+  SIGNED_URL_TTL_SECONDS,
+  objectStream,
+  signedUrl,
+  thumbWidth,
+  type ObjectStream,
+} from '@/lib/storage/objects.ts'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -34,7 +40,20 @@ export const maxDuration = 60
  * Neither applies here: this is a single image, fetched once when an editor
  * opens, and it is the only shape that produces an untainted canvas.
  *
- * It **streams** rather than buffers, though, and that part is not a detail.
+ * ## `?w=` — a thumbnail, and then none of the above applies
+ *
+ * A width means the caller wants a small picture, not a canvas source, so the
+ * two rules above stop mattering: it redirects to a resized render at Storage
+ * and never touches the bytes. That is the only sane answer for the 40px
+ * thumbnails on an image row, which were otherwise pulling whole multi-megabyte
+ * originals to fill a square the size of a fingernail.
+ *
+ * Only for images we hold. Somebody else's URL cannot be resized by us, so a
+ * width on one of those is ignored and the guarded proxy runs as usual.
+ *
+ * ## Without a width
+ *
+ * It **streams** rather than buffers, and that part is not a detail.
  * Reading the whole object into the function first cost about two seconds on a
  * 0.88 MB image before the browser saw a single byte — and then the same bytes
  * still had to come down a second link, with neither half overlapping the other.
@@ -63,10 +82,19 @@ export async function GET(request: Request) {
      * rather than by URL precisely because its 24-hour Kie URL may be long
      * gone — our own copy is the durable thing.
      */
+    const width = thumbWidth(Number(search.get('w')) || null)
+
     const assetId = search.get('assetId')
     if (assetId) {
       const row = await resolveByAssetId(workspaceId, assetId)
-      const stored = row.storagePath ? await objectStream(row.storagePath) : null
+      if (!row.storagePath) {
+        return NextResponse.json({ error: 'That image is no longer stored.' }, { status: 404 })
+      }
+      if (width) {
+        const thumb = await redirectToThumb(row.storagePath, width)
+        if (thumb) return thumb
+      }
+      const stored = await objectStream(row.storagePath)
       if (!stored) {
         return NextResponse.json({ error: 'That image is no longer stored.' }, { status: 404 })
       }
@@ -80,6 +108,10 @@ export async function GET(request: Request) {
     // ---- 1. Something we already hold -----------------------------------
     const known = await resolveSource(workspaceId, raw!)
     if (known.storagePath) {
+      if (width) {
+        const thumb = await redirectToThumb(known.storagePath, width)
+        if (thumb) return thumb
+      }
       const stored = await objectStream(known.storagePath)
       if (stored) return streamed(stored, known.mime)
       // The row outlived its object — fall through and try the URL itself,
@@ -90,6 +122,34 @@ export async function GET(request: Request) {
     const fetched = await fetchGuarded(parsed)
     if (typeof fetched === 'string') return refuse(fetched)
     return image(fetched.bytes, fetched.contentType)
+  })
+}
+
+/**
+ * A thumbnail: hand the browser straight to Storage's renderer.
+ *
+ * A redirect rather than a stream, which everything else in this route
+ * deliberately avoids — because the reason to avoid it is canvas tainting, and
+ * nothing draws a 40px thumbnail onto a canvas. The bytes never enter the
+ * function, and Storage caches the render.
+ *
+ * Null when the URL cannot be signed, so the caller falls through to serving
+ * the original rather than failing.
+ */
+async function redirectToThumb(
+  storagePath: string,
+  width: Parameters<typeof signedUrl>[2],
+): Promise<Response | null> {
+  const url = await signedUrl(storagePath, SIGNED_URL_TTL_SECONDS, width)
+  if (!url) return null
+
+  return NextResponse.redirect(url, {
+    status: 302,
+    headers: {
+      // Expires before the signature it points at, so a cached redirect can
+      // never outlive the URL inside it.
+      'Cache-Control': `private, max-age=${SIGNED_URL_TTL_SECONDS - 300}`,
+    },
   })
 }
 

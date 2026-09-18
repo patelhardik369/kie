@@ -104,9 +104,25 @@ export function stateTone(state: string): string {
  * Minted server-side by `lib/gallery/asset-token.ts`. This module stays pure and
  * client-safe, so it appends the value rather than computing it.
  */
-export function assetHref(storagePath: string, token: string): string {
+export function assetHref(
+  storagePath: string,
+  token: string,
+  /**
+   * Ask for a resized render instead of the original.
+   *
+   * Pass the width the image will actually be DRAWN at and let the route snap it
+   * to an allowed size — see `THUMB_WIDTHS`. Omit it anywhere the real file is
+   * the point: the full-size view, a download, anything a model will read.
+   *
+   * It matters more than it looks. A gallery page was pulling 23.75 MB of
+   * 1536px PNG to paint ten 216px tiles; the same tiles as WebP renders came to
+   * about 35 KB each.
+   */
+  width?: number,
+): string {
   const path = storagePath.split('/').map(encodeURIComponent).join('/')
-  return `/api/assets/${path}?k=${encodeURIComponent(token)}`
+  const sized = width ? `&w=${width}` : ''
+  return `/api/assets/${path}?k=${encodeURIComponent(token)}${sized}`
 }
 
 /** The prompt-ish field of a stored input, for a tile caption. */

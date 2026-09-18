@@ -455,11 +455,16 @@ function Tab({
   )
 }
 
+/** The picker's tiles are small; 240 covers them on a 2x screen. */
+const PICKER_THUMB_WIDTH = 240
+
 function Thumb({ item }: { item: OutputItem }) {
   if (item.kind === 'image') {
     return (
       <img
-        src={item.href}
+        // Sized: the picker showed a dozen tiles at once and was fetching a
+        // dozen full-resolution originals to do it.
+        src={`${item.href}&w=${PICKER_THUMB_WIDTH}`}
         alt=""
         loading="lazy"
         className="h-full w-full object-cover"

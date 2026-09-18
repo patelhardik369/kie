@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { assetTokenMatches } from '@/lib/gallery/asset-token.ts'
-import { SIGNED_URL_TTL_SECONDS, signedUrl } from '@/lib/storage/objects.ts'
+import { SIGNED_URL_TTL_SECONDS, signedUrl, thumbWidth } from '@/lib/storage/objects.ts'
 
 export const dynamic = 'force-dynamic'
 
@@ -28,6 +28,18 @@ export const dynamic = 'force-dynamic'
  * lib/gallery/asset-token.ts.
  *
  * A bad token is a 404, not a 403, so a probe cannot confirm a key exists.
+ *
+ * ## `?w=` — a thumbnail instead of the original
+ *
+ * The gallery draws 216px tiles, and it was fetching the 1536px originals behind
+ * them: 23.75 MB of PNG to paint ten squares, measured. With a width it redirects
+ * to a resized render instead, which the same measurement put at 35 KB.
+ *
+ * The width is snapped to `THUMB_WIDTHS` rather than used as given. It arrives in
+ * a URL anyone holding a token can edit, and an unconstrained number would let
+ * one request mint an unbounded number of distinct renders — each one cached and
+ * metered separately. Omit it and nothing changes: the original is served
+ * untouched, which is what the full-size view and every download depend on.
  */
 export async function GET(
   request: Request,
@@ -42,7 +54,9 @@ export async function GET(
     return new NextResponse('Not found', { status: 404 })
   }
 
-  const url = await signedUrl(key)
+  const width = thumbWidth(Number(new URL(request.url).searchParams.get('w')) || null)
+
+  const url = await signedUrl(key, SIGNED_URL_TTL_SECONDS, width)
   if (!url) {
     return new NextResponse('Not found', { status: 404 })
   }

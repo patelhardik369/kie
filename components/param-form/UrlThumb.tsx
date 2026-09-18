@@ -37,31 +37,41 @@ import type { AssetKind, ParamDef } from '@/lib/kie/registry/types.ts'
  * mouseover leaves a preview stuck on screen that nothing will ever dismiss —
  * so the tap opens the viewer and the hover never fires at all.
  *
- * ## Where the pixels come from: the URL first, then us
+ * ## Where the pixels come from: a resized copy first, the raw URL second
  *
- * The `<img>` points straight at the field's own URL. These are already public
- * and already on a CDN — a Kie `downloadUrl`, or something pasted — so it costs
- * this app nothing and is the fastest path a thumbnail can take. Proxying by
- * default is what made the markup editor's own image slow to open (measured in
- * `objectStream`), and there is no reason to repeat that for a 40-pixel square.
+ * The obvious thing is to point the `<img>` at the field's own URL — it is
+ * already public, already on a CDN, and costs this app nothing. That is what
+ * this did first, and it was wrong by about two orders of magnitude: those URLs
+ * are full-resolution generations, routinely 2-6 MB of PNG, and this box is
+ * forty pixels across. Fetching six megabytes to fill a fingernail is the
+ * single most expensive thing the form does.
  *
- * Two things make a direct load fail, though, and neither means the picture is
- * gone:
+ * So it asks `/api/annotate/source?…&w=` instead, which resolves the URL against
+ * this workspace's own rows and redirects to a resized render. Measured on one
+ * 1536px output: 2591 KB as the original, 35 KB as a WebP render. The round trip
+ * to ask is real, and it is still a rout.
  *
- *   - **The host refuses to be hotlinked.** Some do, by `Referer`. Wikimedia is
- *     one, which is how this was found.
- *   - **A Kie URL has passed its ~24 hours.** The bytes are still ours — every
- *     upload keeps a copy in the bucket precisely for this.
- *
- * So a failed direct load falls back to `/api/annotate/source`, which resolves
- * the URL against this workspace's own rows and streams the stored copy when it
- * finds one (and fetches it under the SSRF guard when it does not). Only after
- * BOTH fail is the slot drawn as broken — which by then is the honest answer,
- * because the same URL is what would be sent to the model.
+ * The raw URL is the FALLBACK, for the case the route cannot serve: an image we
+ * do not hold — someone else's URL, pasted — which we have no way to resize. And
+ * a failure there is not evidence the picture is gone, so only after both have
+ * failed is the slot drawn as broken. By then it is the honest answer, because
+ * the same URL is what would be sent to the model.
  */
 
 /** The hover preview's longest edge. */
 const PREVIEW_PX = 260
+
+/**
+ * Widths to ask the resizer for, from `THUMB_WIDTHS`.
+ *
+ * 96 covers the 40px square on a 2x screen; the hover preview and the
+ * full-screen viewer each get the next size that covers them. The viewer is
+ * deliberately NOT the original: it is a look at the picture, not a download,
+ * and 864px is already more than most screens will show it at.
+ */
+const THUMB_W = 96
+const PREVIEW_W = 432
+const VIEWER_W = 864
 
 export function UrlThumb({
   url,
@@ -79,7 +89,15 @@ export function UrlThumb({
 
   const trimmed = url.trim()
   const kind = kindOf(trimmed, param)
-  const { src, failed, onError } = useImageSource(trimmed)
+  const { src, sizedSrc, failed, onError } = useImageSource(trimmed)
+
+  /*
+   * Only a still can be resized — Storage's renderer does not do video, and
+   * asking it to would turn a working URL into a broken one. A video or an audio
+   * file is played from its own URL, which also keeps tens of megabytes from
+   * being streamed through a function to do it.
+   */
+  const at = (width: number) => (kind === 'image' ? sizedSrc(width) : trimmed)
 
   const canHover = useHoverCapable()
 
@@ -138,9 +156,16 @@ export function UrlThumb({
         )}
       </button>
 
-      {hovering && !viewing && showable && <HoverPreview anchor={anchor} url={src} />}
+      {hovering && !viewing && showable && (
+        <HoverPreview anchor={anchor} url={at(PREVIEW_W)} />
+      )}
       {viewing && (
-        <Viewer url={src} rawUrl={trimmed} kind={kind} onClose={() => setViewing(false)} />
+        <Viewer
+          url={at(VIEWER_W)}
+          rawUrl={trimmed}
+          kind={kind}
+          onClose={() => setViewing(false)}
+        />
       )}
     </>
   )
@@ -300,15 +325,15 @@ function Viewer({
 // ------------------------------------------------------------------- helpers
 
 /**
- * The thumbnail's source, escalating from the URL itself to our own proxy.
+ * The thumbnail's source, falling back from a resized copy to the raw URL.
  *
- * Three states, in order, and the URL only reaches the last one when both of the
+ * Three states, in order, and a slot only reaches the last one when both of the
  * first two have actually failed to decode in the browser:
  *
  * | stage | src | covers |
  * |---|---|---|
- * | `direct` | the field's URL | everything that is live and hotlinkable |
- * | `proxied` | `/api/annotate/source?url=` | hotlink-blocked hosts, and expired Kie URLs whose bytes we still hold |
+ * | `sized` | `/api/annotate/source?url=…&w=` | anything this workspace holds — a resized render, tens of KB |
+ * | `raw` | the field's URL | images we do not hold and so cannot resize |
  * | `failed` | — | genuinely gone |
  *
  * Keyed on the URL so that editing the field starts the escalation over: a slot
@@ -316,22 +341,27 @@ function Viewer({
  */
 function useImageSource(url: string): {
   src: string
+  sizedSrc: (width: number) => string
   failed: boolean
   onError: () => void
 } {
-  const [stage, setStage] = useState<'direct' | 'proxied' | 'failed'>('direct')
+  const [stage, setStage] = useState<'sized' | 'raw' | 'failed'>('sized')
 
-  useEffect(() => setStage('direct'), [url])
+  useEffect(() => setStage('sized'), [url])
 
   const onError = useCallback(() => {
-    setStage((current) => (current === 'direct' ? 'proxied' : 'failed'))
+    setStage((current) => (current === 'sized' ? 'raw' : 'failed'))
   }, [])
 
-  return {
-    src: stage === 'proxied' ? `/api/annotate/source?url=${encodeURIComponent(url)}` : url,
-    failed: stage === 'failed',
-    onError,
-  }
+  const sizedSrc = useCallback(
+    (width: number) =>
+      stage === 'sized'
+        ? `/api/annotate/source?url=${encodeURIComponent(url)}&w=${width}`
+        : url,
+    [stage, url],
+  )
+
+  return { src: sizedSrc(THUMB_W), sizedSrc, failed: stage === 'failed', onError }
 }
 
 /**
