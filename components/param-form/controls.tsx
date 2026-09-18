@@ -514,7 +514,7 @@ export function UrlControl(props: ControlProps) {
   const { param, value, onChange, disabled, annotate } = props
   const url = typeof value === 'string' ? value : ''
   return (
-    <div className="flex flex-wrap items-start gap-2">
+    <div className="asset-row flex flex-wrap items-center gap-2">
       {/* What is actually in the slot, not just the URL naming it. */}
       <UrlThumb url={url} param={param} />
       <input
@@ -665,7 +665,7 @@ export function UrlListControl({
   return (
     <div className="space-y-2">
       {list.map((item, index) => (
-        <div key={index} className="flex flex-wrap items-start gap-2">
+        <div key={index} className="asset-row flex flex-wrap items-center gap-2">
           {/*
             Numbered, because the order is the thing the URLs hide. Marking up a
             picture rewrites its own row and inserts the clean original beneath
@@ -724,7 +724,7 @@ export function UrlListControl({
         </div>
       ))}
 
-      <div className="flex items-center gap-3">
+      <div className="asset-row flex flex-wrap items-center gap-3">
         <button
           type="button"
           disabled={disabled || (ceiling !== undefined && list.length >= ceiling)}

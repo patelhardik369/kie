@@ -432,6 +432,55 @@ h3 {
     opacity: 0.4;
   }
 
+  /* --- Asset rows ------------------------------------------------------- */
+
+  /*
+     One height for every control sitting on an image row.
+
+     The row is a thumbnail, a URL field and four buttons, and left to their own
+     recipes they came out at four different heights — 40px for the picture,
+     ~33px for the field, 26px for a `btn-sm`, 32px for the icon button. Six
+     controls on one line, none of them agreeing, which reads as a rendering
+     fault rather than as a hierarchy.
+
+     The thumbnail sets the number, because it is the one control whose size is
+     doing real work: below about 40px a photograph stops being recognisable,
+     which is the entire point of putting it there. Everything else matches it.
+     `--asset-control` is that number, declared once so the row cannot drift.
+
+     Note it also lands exactly on the 2.5rem touch target from the
+     `pointer: coarse` block further down — so on a phone these rows now measure
+     the same as every other tappable thing, rather than being the exception.
+
+     The selectors are deliberately depth-limited. `.asset-row > div > .btn`
+     reaches the Reuse trigger, which sits inside AssetPicker's positioning
+     wrapper; the tab buttons INSIDE that picker's popup are a level deeper and
+     keep their own size, which a blanket descendant selector would have
+     silently resized. */
+  .asset-row {
+    --asset-control: 2.5rem;
+  }
+
+  .asset-row > .input,
+  .asset-row > .btn,
+  .asset-row > div > .btn {
+    height: var(--asset-control);
+  }
+
+  /* Kept square. `.btn-icon` pins its own width, so the height alone would
+     leave a 40x32 rectangle around a 14px glyph. */
+  .asset-row > .btn-icon,
+  .asset-row > div > .btn-icon {
+    width: var(--asset-control);
+  }
+
+  /* The thumbnail reads the same token rather than carrying its own number, so
+     there is exactly one place to change the row's height. */
+  .asset-thumb {
+    height: var(--asset-control, 2.5rem);
+    width: var(--asset-control, 2.5rem);
+  }
+
   /* --- Chips ------------------------------------------------------------ */
   .chip {
     display: inline-flex;

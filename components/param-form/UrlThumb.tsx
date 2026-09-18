@@ -20,6 +20,11 @@ import type { AssetKind, ParamDef } from '@/lib/kie/registry/types.ts'
  * So each row gets a thumbnail, numbered, and the order becomes something you
  * read rather than reconstruct.
  *
+ * Its size comes from `--asset-control` in globals.css, which every other
+ * control on the row is also measured against — see `.asset-row` there. The
+ * thumbnail is what sets that number: below about 40px a photograph stops being
+ * recognisable, and recognising it is the whole job.
+ *
  * ## Two ways to see it bigger, for two kinds of device
  *
  * | input | what happens |
@@ -55,9 +60,6 @@ import type { AssetKind, ParamDef } from '@/lib/kie/registry/types.ts'
  * because the same URL is what would be sent to the model.
  */
 
-/** The thumbnail's edge, in pixels. Big enough to recognise a photograph by. */
-const THUMB_PX = 40
-
 /** The hover preview's longest edge. */
 const PREVIEW_PX = 260
 
@@ -84,8 +86,7 @@ export function UrlThumb({
   if (!trimmed) {
     return (
       <div
-        className="flex shrink-0 items-center justify-center rounded-md border border-dashed border-(--color-border) text-(--color-ink-faint)"
-        style={{ width: THUMB_PX, height: THUMB_PX }}
+        className="asset-thumb flex shrink-0 items-center justify-center rounded-md border border-dashed border-(--color-border) text-(--color-ink-faint)"
         aria-hidden
       >
         <ImageIcon size={14} />
@@ -107,8 +108,7 @@ export function UrlThumb({
         onBlur={() => setHovering(false)}
         title={index ? `Image ${index} — click to view full size` : 'Click to view full size'}
         aria-label={index ? `View image ${index} full size` : 'View image full size'}
-        className="relative shrink-0 overflow-hidden rounded-md border border-(--color-border) bg-(--color-surface-raised) transition-colors duration-(--dur-fast) hover:border-(--color-accent-line) focus-visible:border-(--color-accent-line)"
-        style={{ width: THUMB_PX, height: THUMB_PX }}
+        className="asset-thumb relative shrink-0 overflow-hidden rounded-md border border-(--color-border) bg-(--color-surface-raised) transition-colors duration-(--dur-fast) hover:border-(--color-accent-line) focus-visible:border-(--color-accent-line)"
       >
         {showable ? (
           <img
