@@ -675,7 +675,13 @@ function ZoomBar({
 }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center">
-      <div className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-(--color-border) bg-(--color-surface)/95 px-1 py-1 shadow-[var(--shadow-lg)] backdrop-blur-sm">
+      {/*
+        Square, not a pill. The buttons inside are `btn-icon`, which is a rounded
+        SQUARE everywhere else in this app — a capsule wrapped around a row of
+        them reads as two different shape languages stacked on top of each other.
+        The corner radius matches the toolbar's own controls.
+      */}
+      <div className="pointer-events-auto flex items-center gap-0.5 rounded-lg border border-(--color-border) bg-(--color-surface)/95 px-1 py-1 shadow-[var(--shadow-lg)] backdrop-blur-sm">
         <button
           type="button"
           onClick={onOut}

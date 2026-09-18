@@ -13,7 +13,7 @@ import {
   type SourceRejection,
 } from '@/lib/annotate/source-guard.ts'
 import { withWorkspace } from '@/lib/auth/route.ts'
-import { getObject } from '@/lib/storage/objects.ts'
+import { objectStream, type ObjectStream } from '@/lib/storage/objects.ts'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -33,6 +33,12 @@ export const maxDuration = 60
  * function would burn the invocation's whole duration budget on every seek.
  * Neither applies here: this is a single image, fetched once when an editor
  * opens, and it is the only shape that produces an untainted canvas.
+ *
+ * It **streams** rather than buffers, though, and that part is not a detail.
+ * Reading the whole object into the function first cost about two seconds on a
+ * 0.88 MB image before the browser saw a single byte — and then the same bytes
+ * still had to come down a second link, with neither half overlapping the other.
+ * `objectStream` carries the measurements. Same origin, a tenth of the wait.
  *
  * Two paths, in order:
  *
@@ -60,11 +66,11 @@ export async function GET(request: Request) {
     const assetId = search.get('assetId')
     if (assetId) {
       const row = await resolveByAssetId(workspaceId, assetId)
-      const bytes = row.storagePath ? await getObject(row.storagePath) : null
-      if (!bytes) {
+      const stored = row.storagePath ? await objectStream(row.storagePath) : null
+      if (!stored) {
         return NextResponse.json({ error: 'That image is no longer stored.' }, { status: 404 })
       }
-      return image(bytes, row.mime ?? 'application/octet-stream')
+      return streamed(stored, row.mime)
     }
 
     const raw = search.get('url')
@@ -74,8 +80,8 @@ export async function GET(request: Request) {
     // ---- 1. Something we already hold -----------------------------------
     const known = await resolveSource(workspaceId, raw!)
     if (known.storagePath) {
-      const bytes = await getObject(known.storagePath)
-      if (bytes) return image(bytes, known.mime ?? 'application/octet-stream')
+      const stored = await objectStream(known.storagePath)
+      if (stored) return streamed(stored, known.mime)
       // The row outlived its object — fall through and try the URL itself,
       // which may still be live.
     }
@@ -84,6 +90,33 @@ export async function GET(request: Request) {
     const fetched = await fetchGuarded(parsed)
     if (typeof fetched === 'string') return refuse(fetched)
     return image(fetched.bytes, fetched.contentType)
+  })
+}
+
+/**
+ * The stored path: bytes forwarded as they arrive.
+ *
+ * The browser gets the first chunk in about a tenth of the time buffering took,
+ * and decodes progressively from there — see `objectStream` for the numbers. The
+ * row's own `mime` wins over what storage reports, because it is what the file
+ * was accepted as; storage falls back to `application/octet-stream` for anything
+ * it was not told about at upload time.
+ */
+function streamed(stored: ObjectStream, mime: string | null | undefined): Response {
+  const contentType =
+    mime ?? (stored.contentType && stored.contentType !== 'application/octet-stream'
+      ? stored.contentType
+      : 'application/octet-stream')
+
+  return new NextResponse(stored.body, {
+    headers: {
+      'Content-Type': contentType,
+      ...(stored.contentLength !== null
+        ? { 'Content-Length': String(stored.contentLength) }
+        : {}),
+      'Cache-Control': 'private, max-age=300',
+      'X-Content-Type-Options': 'nosniff',
+    },
   })
 }
 

@@ -8,6 +8,7 @@ import { errorMessage } from '@/lib/client/api.ts'
 import { uploadInput } from '@/lib/client/upload.ts'
 import type { ParamDef } from '@/lib/kie/registry/types.ts'
 import { AssetPicker } from './AssetPicker.tsx'
+import { UrlThumb } from './UrlThumb.tsx'
 
 /**
  * Leaf controls, one per ParamType.
@@ -513,9 +514,19 @@ export function UrlControl(props: ControlProps) {
   const { param, value, onChange, disabled, annotate } = props
   const url = typeof value === 'string' ? value : ''
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex flex-wrap items-start gap-2">
+      {/* What is actually in the slot, not just the URL naming it. */}
+      <UrlThumb url={url} param={param} />
       <input
-        className={`${inputBase} font-mono text-xs`}
+        /*
+          `flex-1` because `.input` is `width: 100%`, which on its own claims the
+          whole row and strands the thumbnail on a line of its own. The minimum
+          is what stops the opposite failure: with `min-w-0` the input is free to
+          collapse, and at phone width it shrank to 25px rather than letting the
+          buttons wrap. A floor makes the row wrap when it genuinely runs out of
+          room and stay on one line when it does not.
+        */
+        className={`${inputBase} min-w-[11rem] flex-1 font-mono text-xs`}
         value={url}
         disabled={disabled}
         placeholder={`https://… (${acceptHint(param)})`}
@@ -628,25 +639,41 @@ export function UrlListControl({
   const roomForClean = ceiling === undefined || list.length + 1 < ceiling
 
   /**
-   * Replaces the row that was marked up, then appends the clean original when
-   * one was asked for.
+   * Replaces the row that was marked up, and puts the clean original directly
+   * beneath it when one was asked for.
    *
-   * Both in one update. Two `update` calls would each rebuild from the same
-   * stale `list` closure, and the second would drop the first.
+   * **Beneath it, not at the end of the list.** Appending was the old behaviour
+   * and it read as the list reordering itself: mark up the first of four
+   * pictures and the first slot becomes a URL you have never seen while the one
+   * you started from turns up in fourth place. They are one pair — the same
+   * picture twice, once with marks — so they belong next to each other, and the
+   * marked copy stays first because for most models the first image is the
+   * primary one.
+   *
+   * Both edits in one update. Two `update` calls would each rebuild from the
+   * same stale `list` closure, and the second would drop the first.
    */
   const applyMarkup = (index: number, fileUrl: string, cleanUrl: string | null) => {
     const next = [...list]
     next[index] = fileUrl
-    if (cleanUrl && (ceiling === undefined || next.length < ceiling)) next.push(cleanUrl)
+    if (cleanUrl && (ceiling === undefined || next.length < ceiling)) {
+      next.splice(index + 1, 0, cleanUrl)
+    }
     update(next)
   }
 
   return (
     <div className="space-y-2">
       {list.map((item, index) => (
-        <div key={index} className="flex flex-wrap gap-2">
+        <div key={index} className="flex flex-wrap items-start gap-2">
+          {/*
+            Numbered, because the order is the thing the URLs hide. Marking up a
+            picture rewrites its own row and inserts the clean original beneath
+            it, and that is only legible if you can see which is which.
+          */}
+          <UrlThumb url={item} param={param} index={index + 1} />
           <input
-            className={`${inputBase} font-mono text-xs`}
+            className={`${inputBase} min-w-[11rem] flex-1 font-mono text-xs`}
             value={item}
             disabled={disabled}
             placeholder={`https://… (${acceptHint(param)})`}
