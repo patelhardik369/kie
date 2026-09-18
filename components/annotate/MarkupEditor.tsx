@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { Close } from '@/components/shell/icons.tsx'
+import { errorMessage, studioFetch } from '@/lib/client/api.ts'
+import { uploadInput } from '@/lib/client/upload.ts'
 import {
   DEFAULT_COLOR,
   DEFAULT_WIDTH,
@@ -15,6 +17,7 @@ import {
   type Shape,
 } from '@/lib/annotate/doc.ts'
 import { flatten } from './flatten.ts'
+import { isTypingTarget } from './keys.ts'
 import { Inspector } from './Inspector.tsx'
 import { Surface, type Tool } from './Surface.tsx'
 import { TOOLS, Toolbar } from './Toolbar.tsx'
@@ -86,6 +89,15 @@ export function MarkupEditor({
   const [legendOverride, setLegendOverride] = useState<string | null>(null)
   const [paired, setPaired] = useState(false)
   const [saving, setSaving] = useState(false)
+  /**
+   * 0-1 while the flattened image is in transit, null otherwise.
+   *
+   * A marked-up 4K screenshot is routinely ten megabytes and takes real seconds
+   * to upload. Without this the button says "Saving…" and nothing else moves,
+   * which is how someone concludes it has hung and presses Cancel on ten minutes
+   * of marking.
+   */
+  const [progress, setProgress] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const panel = useRef<HTMLDivElement>(null)
@@ -110,15 +122,13 @@ export function MarkupEditor({
     let cancelled = false
     void (async () => {
       try {
-        const response = await fetch(`/api/annotate/context?url=${encodeURIComponent(url)}`, {
-          cache: 'no-store',
-        })
-        const data = await response.json()
-        if (cancelled) return
-        if (!response.ok) throw new Error(data?.error ?? 'That image could not be opened.')
-        setContext(data as Context)
+        const data = await studioFetch<Context>(
+          `/api/annotate/context?url=${encodeURIComponent(url)}`,
+          { cache: 'no-store' },
+        )
+        if (!cancelled) setContext(data)
       } catch (cause) {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause))
+        if (!cancelled) setError(errorMessage(cause))
       }
     })()
     return () => {
@@ -246,16 +256,13 @@ export function MarkupEditor({
     const onKeyDown = (event: KeyboardEvent) => {
       // Never steal a keystroke from a note the user is typing. The inspector is
       // a text field sitting beside nine single-letter shortcuts, and without
-      // this, writing "box" would change the tool three times.
-      const target = event.target as HTMLElement | null
-      const typing =
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target?.isContentEditable === true
+      // this, writing "box" would change the tool three times. The same rule
+      // guards the canvas's own zoom keys — see `keys.ts`.
+      const typing = isTypingTarget(event.target)
 
       if (event.key === 'Escape') {
         event.preventDefault()
-        if (typing) (target as HTMLElement).blur()
+        if (typing) (event.target as HTMLElement).blur()
         else attemptClose()
         return
       }
@@ -314,44 +321,48 @@ export function MarkupEditor({
   async function save() {
     if (!image || !doc) return
     setSaving(true)
+    setProgress(null)
     setError(null)
 
     try {
       const flattened = await flatten(image, doc, context?.base.mime ?? undefined)
 
-      const body = new FormData()
-      body.append('file', new File([flattened.blob], flattened.filename, { type: flattened.blob.type }))
-      body.append('label', `Marked up · ${doc.shapes.length} mark${doc.shapes.length === 1 ? '' : 's'}`)
-      body.append(
-        'annotation',
-        JSON.stringify({
+      /*
+       * Uploaded through `lib/client/upload.ts` rather than by posting the blob
+       * at `/api/upload` directly.
+       *
+       * This is the call that used to fail. A flattened PNG passes the
+       * platform's 4.5 MB request-body cap for any screenshot worth marking up,
+       * and the cap is enforced before the route runs — so the browser got a
+       * plain-text `Request Entity Too Large` and reported it as a JSON parse
+       * error about a stray `R`. The helper sends anything that size straight to
+       * the bucket instead, and the function only ever sees the key.
+       */
+      const uploaded = await uploadInput(flattened.blob, flattened.filename, {
+        label: `Marked up · ${doc.shapes.length} mark${doc.shapes.length === 1 ? '' : 's'}`,
+        annotation: {
           doc: JSON.parse(serializeDoc(doc)),
           // What the marks were drawn on. When re-editing, that is the ORIGINAL
           // the previous round recorded, never the flattened copy currently in
           // the field — otherwise the chain of originals grows a link per edit.
           sourceAssetId: context?.base.assetId ?? context?.inputAssetId ?? null,
-        }),
-      )
-
-      const response = await fetch('/api/upload', { method: 'POST', body })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data?.error ?? 'That could not be uploaded.')
-      if (typeof data.fileUrl !== 'string' || !data.fileUrl) {
-        throw new Error('The marked-up image was stored but came back without a URL.')
-      }
+        },
+        onProgress: setProgress,
+      })
 
       const cleanUrl = paired && canPair ? await resolveCleanUrl(context, url) : null
 
       onSave({
-        fileUrl: data.fileUrl,
+        fileUrl: uploaded.fileUrl,
         cleanUrl,
         legend,
         note: flattened.note,
       })
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
     } finally {
       setSaving(false)
+      setProgress(null)
     }
   }
 
@@ -468,7 +479,11 @@ export function MarkupEditor({
                   : 'Flatten the marks into a new image and use it in this field'
               }
             >
-              {saving ? 'Saving…' : 'Use marked-up image'}
+              {saving
+                ? progress !== null && progress < 1
+                  ? `Uploading ${Math.round(progress * 100)}%`
+                  : 'Saving…'
+                : 'Use marked-up image'}
             </button>
           </div>
         </footer>
@@ -490,9 +505,10 @@ async function resolveCleanUrl(context: Context | null, fieldUrl: string): Promi
   if (context?.clean.fileUrl) return context.clean.fileUrl
 
   if (context?.clean.assetId) {
-    const response = await fetch(`/api/input-assets/${context.clean.assetId}`, { method: 'POST' })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data?.error ?? 'The original image could not be prepared.')
+    const data = await studioFetch<{ fileUrl?: string }>(
+      `/api/input-assets/${context.clean.assetId}`,
+      { method: 'POST' },
+    )
     return typeof data.fileUrl === 'string' && data.fileUrl ? data.fileUrl : null
   }
 

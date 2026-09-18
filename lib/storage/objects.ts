@@ -81,6 +81,40 @@ export async function putObject(
 }
 
 /**
+ * A time-limited URL the browser can PUT bytes to, straight into the bucket.
+ *
+ * This is the one way a file larger than a few megabytes can reach us at all.
+ * A serverless function's REQUEST body is capped by the platform — 4.5 MB on
+ * Vercel — and the cap is enforced by the edge, before any of our code runs, so
+ * it cannot be raised, caught, or answered with a useful message: the browser
+ * gets a plain-text `Request Entity Too Large` where it expected JSON. A
+ * marked-up screenshot flattened to PNG passes 4.5 MB routinely, and so does
+ * any photograph off a modern phone.
+ *
+ * So those bytes never touch a function. The browser uploads them to Supabase
+ * directly, and the function that follows only reads back what is already
+ * stored. The upload URL is minted against a key we chose, not one the caller
+ * named, which is what keeps the workspace prefix (and therefore the isolation
+ * rule at the top of this file) a server-side decision.
+ *
+ * `upsert` is on for the same reason `putObject` has it on: input keys are
+ * content-addressed, so re-adding a file someone already has lands on the key
+ * that file is already at.
+ */
+export async function createUploadUrl(
+  key: string,
+): Promise<{ uploadUrl: string; key: string }> {
+  const { data, error } = await bucket().createSignedUploadUrl(key, { upsert: true })
+  if (error || !data?.signedUrl) {
+    throw new StorageError(
+      `Could not open an upload slot for ${key}: ${error?.message ?? 'no URL returned'}`,
+      error,
+    )
+  }
+  return { uploadUrl: data.signedUrl, key }
+}
+
+/**
  * A time-limited URL the browser can fetch directly.
  *
  * Direct is the point: the bytes go from Supabase's CDN to the browser without

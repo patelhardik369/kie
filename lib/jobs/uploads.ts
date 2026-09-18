@@ -233,6 +233,46 @@ export async function refreshUpload(
   })
 }
 
+/**
+ * What is already known about a file, from its content hash alone.
+ *
+ * The direct-upload handshake (app/api/upload/ticket) runs before any bytes
+ * move, so the hash is all it has to go on — and the hash is enough for both
+ * questions it needs answered. `storagePath` says where these bytes already
+ * live, so a second copy is never written under a different extension.
+ * `cached` is non-null only when the Kie URL is ALSO still good, which is the
+ * case where nothing has to travel at all: re-marking this morning's photograph
+ * is answered out of the row.
+ *
+ * Null when the workspace has never seen these bytes.
+ */
+export async function findStoredUpload(
+  workspaceId: string,
+  sha256: string,
+): Promise<{ storagePath: string; cached: CachedUpload | null } | null> {
+  const existing = await findBySha(workspaceId, sha256)
+  if (!existing) return null
+
+  const live = existing.kieFileUrl && isLive(existing.expiresAt)
+
+  return {
+    storagePath: existing.storagePath,
+    cached: live
+      ? {
+          id: existing.id,
+          fileUrl: existing.kieFileUrl!,
+          storagePath: existing.storagePath,
+          kind: existing.kind,
+          mime: existing.mime ?? undefined,
+          bytes: existing.bytes ?? 0,
+          sha256,
+          expiresAt: existing.expiresAt!,
+          reused: true,
+        }
+      : null,
+  }
+}
+
 async function findBySha(
   workspaceId: string,
   sha256: string,
@@ -250,7 +290,8 @@ function isLive(expiresAt: number | null): boolean {
   return expiresAt - EXPIRY_MARGIN_MS > Date.now()
 }
 
-function extensionFromName(filename: string | undefined): string | undefined {
+/** The extension a filename implies, or undefined when it does not imply one. */
+export function extensionFromName(filename: string | undefined): string | undefined {
   if (!filename) return undefined
   const dot = filename.lastIndexOf('.')
   if (dot < 0) return undefined

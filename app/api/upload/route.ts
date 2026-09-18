@@ -1,9 +1,12 @@
+import crypto from 'node:crypto'
+
 import { NextResponse } from 'next/server'
 
 import { withStudio } from '@/lib/auth/route.ts'
 import { getEnv } from '@/lib/env'
-import { storeUpload } from '@/lib/jobs/uploads.ts'
+import { findStoredUpload, storeUpload } from '@/lib/jobs/uploads.ts'
 import { URL_UPLOAD_MAX_BYTES } from '@/lib/kie/upload.ts'
+import { getObject, keyBelongsTo, removeObjects } from '@/lib/storage/objects.ts'
 import { checkQuota } from '@/lib/storage/quota.ts'
 
 export const dynamic = 'force-dynamic'
@@ -23,13 +26,19 @@ export const maxDuration = 60
 /**
  * POST /api/upload — a local file becomes a `fileUrl` a model can read.
  *
- * Two request shapes:
- *   - `multipart/form-data` with a `file` field — the normal path, used by the
- *     form's file picker. Streamed up, so no 10 MB base64 ceiling applies.
+ * Three request shapes:
+ *   - `multipart/form-data` with a `file` field — the normal path for a small
+ *     file, and one round trip.
+ *   - `application/json` with `{ storageKey, sha256 }` — the second half of the
+ *     direct upload (app/api/upload/ticket). The bytes are already in the
+ *     bucket; this only reads them back, checks they are what was promised, and
+ *     puts them in front of Kie. **This is the only shape that works for a file
+ *     over ~4.5 MB**, because the platform refuses a request body that large
+ *     before this route is reached — see the ticket route for the whole story.
  *   - `application/json` with `{ dataUrl }` — for pasted or canvas-generated
  *     images, which arrive as a data URI and have nowhere else to come from.
  *
- * Both land in the same place: the bytes are kept in the bucket and the Kie
+ * All three land in the same place: the bytes are kept in the bucket and the Kie
  * upload URL is cached against their hash for 24 hours, so re-using an image
  * across generations costs one round trip, not one per generation.
  *
@@ -43,13 +52,30 @@ export async function POST(request: Request) {
   return withStudio(request, async ({ workspaceId }) => {
     const contentType = request.headers.get('content-type') ?? ''
 
-    const file = contentType.includes('multipart/form-data')
+    const parsed = contentType.includes('multipart/form-data')
       ? await readMultipart(request)
       : await readJson(request)
 
-    if ('error' in file) {
-      return NextResponse.json({ error: file.error }, { status: 400 })
+    if ('error' in parsed) return fail(parsed)
+
+    /*
+     * The direct-upload path can often answer without moving a byte.
+     *
+     * The browser sent the hash, the hash is the key, and a row against it with
+     * a live Kie URL is the same answer `storeUpload` would reach after
+     * downloading the object to work it out. Skipped when there are marks to
+     * record: those change the ROW without changing the pixels, so the hash hits
+     * while the document that has to be written alongside it is new.
+     */
+    if (parsed.kind === 'stored' && !parsed.annotation) {
+      const known = await findStoredUpload(workspaceId, parsed.sha256)
+      if (known?.cached && known.storagePath === parsed.storageKey) {
+        return NextResponse.json(describe(known.cached))
+      }
     }
+
+    const file = parsed.kind === 'stored' ? await collect(parsed, workspaceId) : parsed
+    if ('error' in file) return fail(file)
 
     const size = file.content.byteLength
     const { maxFileBytes } = getEnv()
@@ -70,38 +96,151 @@ export async function POST(request: Request) {
       )
     }
 
-    const quota = await checkQuota(workspaceId, size)
-    if (!quota.ok) {
-      return NextResponse.json({ error: quota.message }, { status: 507 })
+    /*
+     * Not re-checked on the direct path: the ticket route checked it BEFORE the
+     * bytes moved, which is the whole point of that route existing. Refusing
+     * here would refuse an object that is already in the bucket, leaving it
+     * there with no row pointing at it — spending the quota to enforce it.
+     */
+    if (file.kind === 'bytes') {
+      const quota = await checkQuota(workspaceId, size)
+      if (!quota.ok) {
+        return NextResponse.json({ error: quota.message }, { status: 507 })
+      }
     }
 
     // Kie errors are mapped by `withStudio`, so nothing is caught here — one
     // error shape across every route is what lets the form report them all
     // the same way.
-    const stored = await storeUpload({ workspaceId, ...file })
+    const { kind: _kind, ...rest } = file
+    const stored = await storeUpload({ workspaceId, ...rest })
 
-    return NextResponse.json({
-      fileUrl: stored.fileUrl,
-      id: stored.id,
-      kind: stored.kind,
-      mime: stored.mime,
-      bytes: stored.bytes,
-      // Surfaced so the UI can warn before a stale URL reaches a model.
-      expiresAt: stored.expiresAt,
-      reused: stored.reused,
-    })
+    return NextResponse.json(describe(stored))
   })
 }
 
-interface UploadInput {
-  content: Uint8Array
+interface Annotation {
+  docJson: string
+  sourceAssetId: string | null
+}
+
+interface Common {
   filename?: string
   mime?: string
   label?: string
-  annotation?: { docJson: string; sourceAssetId: string | null }
+  annotation?: Annotation
 }
 
-async function readMultipart(request: Request): Promise<UploadInput | { error: string }> {
+/** Bytes in hand — from a multipart body, a data URI, or read back out of the bucket. */
+interface BytesInput extends Common {
+  kind: 'bytes'
+  content: Uint8Array
+  /** Set when those bytes came back out of the bucket and are already stored. */
+  existingKey?: string
+}
+
+/** Bytes already in the bucket, put there by the browser. See the ticket route. */
+interface StoredInput extends Common {
+  kind: 'stored'
+  storageKey: string
+  sha256: string
+}
+
+/** A refusal, carrying the status it should be answered with. */
+interface Failure {
+  error: string
+  detail?: string
+  status?: number
+}
+
+function fail(failure: Failure): Response {
+  return NextResponse.json(
+    { error: failure.error, ...(failure.detail ? { detail: failure.detail } : {}) },
+    { status: failure.status ?? 400 },
+  )
+}
+
+/** The one response shape, whichever path produced it. */
+function describe(stored: {
+  fileUrl: string
+  id: string
+  kind: string
+  mime?: string
+  bytes: number
+  expiresAt: number
+  reused: boolean
+}) {
+  return {
+    fileUrl: stored.fileUrl,
+    id: stored.id,
+    kind: stored.kind,
+    mime: stored.mime,
+    bytes: stored.bytes,
+    // Surfaced so the UI can warn before a stale URL reaches a model.
+    expiresAt: stored.expiresAt,
+    reused: stored.reused,
+  }
+}
+
+/**
+ * Turns a finished direct upload into bytes, refusing anything that does not
+ * add up.
+ *
+ * Two checks, and neither is ceremony. The **prefix** check is the only thing
+ * standing between a caller-supplied key and another workspace's files: the
+ * bucket is opened with a service-role key that can read all of it, so "this
+ * object is mine" is a claim application code has to verify rather than one the
+ * database will refuse (.claude/CLAUDE.md, rule 4). The **hash** check is what
+ * keeps a content-addressed key honest — a key that says one thing while the
+ * bytes under it say another poisons every later dedupe against that hash, and
+ * every generation that reuses the asset gets a file nobody asked for.
+ */
+async function collect(
+  input: StoredInput,
+  workspaceId: string,
+): Promise<BytesInput | Failure> {
+  if (!keyBelongsTo(input.storageKey, workspaceId)) {
+    return { error: 'That upload key does not belong to this workspace.', status: 403 }
+  }
+
+  const content = await getObject(input.storageKey)
+  if (!content) {
+    return {
+      error: 'The upload did not arrive.',
+      detail:
+        'The file was not found in storage. This usually means the direct upload was ' +
+        'interrupted — try again.',
+      status: 409,
+    }
+  }
+
+  const actual = crypto.createHash('sha256').update(content).digest('hex')
+  if (actual !== input.sha256) {
+    // Removed rather than left: it is at a key that describes different bytes,
+    // so nothing will ever look for it again and it would sit in the quota
+    // forever.
+    await removeObjects([input.storageKey]).catch(() => undefined)
+    return {
+      error: 'The uploaded file did not match its checksum, so it was discarded.',
+      detail: 'Try again — this usually means the transfer was truncated.',
+      status: 400,
+    }
+  }
+
+  return {
+    kind: 'bytes',
+    content,
+    filename: input.filename,
+    mime: input.mime,
+    label: input.label,
+    ...(input.annotation ? { annotation: input.annotation } : {}),
+    // The bytes are already at this key, so `storeUpload` must not write them a
+    // second time.
+    existingKey: input.storageKey,
+  }
+}
+
+async function readMultipart(request: Request): Promise<BytesInput | Failure> {
   const form = await request.formData()
   const file = form.get('file')
 
@@ -117,6 +256,7 @@ async function readMultipart(request: Request): Promise<UploadInput | { error: s
   if (annotation && 'error' in annotation) return annotation
 
   return {
+    kind: 'bytes',
     content: new Uint8Array(await file.arrayBuffer()),
     filename: file.name,
     mime: file.type || undefined,
@@ -136,8 +276,8 @@ async function readMultipart(request: Request): Promise<UploadInput | { error: s
  * them in step.
  */
 function readAnnotation(
-  raw: FormDataEntryValue | null,
-): { docJson: string; sourceAssetId: string | null } | { error: string } | undefined {
+  raw: FormDataEntryValue | unknown,
+): Annotation | Failure | undefined {
   if (typeof raw !== 'string' || raw.length === 0) return undefined
 
   let parsed: { doc?: unknown; sourceAssetId?: unknown }
@@ -161,16 +301,50 @@ function readAnnotation(
   }
 }
 
-async function readJson(request: Request): Promise<UploadInput | { error: string }> {
-  let body: { dataUrl?: string; filename?: string; label?: string }
+async function readJson(request: Request): Promise<BytesInput | StoredInput | Failure> {
+  let body: {
+    dataUrl?: string
+    storageKey?: string
+    sha256?: string
+    filename?: string
+    mime?: string
+    label?: string
+    annotation?: unknown
+  }
   try {
     body = await request.json()
   } catch {
     return { error: 'Request body must be multipart/form-data or JSON.' }
   }
 
+  const annotation = readAnnotation(
+    // Sent as a nested object here rather than as the string a multipart field
+    // forces, so it is re-serialized to meet `readAnnotation` where it already
+    // is. One validator, two wire formats.
+    body.annotation === undefined ? null : JSON.stringify(body.annotation),
+  )
+  if (annotation && 'error' in annotation) return annotation
+
+  // The direct-upload path: the bytes are in the bucket already and this only
+  // says where. See app/api/upload/ticket/route.ts.
+  if (typeof body.storageKey === 'string' && body.storageKey) {
+    const sha256 = typeof body.sha256 === 'string' ? body.sha256.toLowerCase() : ''
+    if (!/^[0-9a-f]{64}$/.test(sha256)) {
+      return { error: 'A `storageKey` must be accompanied by the file’s `sha256`.' }
+    }
+    return {
+      kind: 'stored',
+      storageKey: body.storageKey,
+      sha256,
+      filename: body.filename,
+      mime: body.mime,
+      label: body.label,
+      ...(annotation ? { annotation } : {}),
+    }
+  }
+
   if (!body.dataUrl) {
-    return { error: 'Expected `dataUrl` in the JSON body.' }
+    return { error: 'Expected `dataUrl` or `storageKey` in the JSON body.' }
   }
 
   const match = /^data:([^;,]*)(;base64)?,(.*)$/s.exec(body.dataUrl)
@@ -188,10 +362,12 @@ async function readJson(request: Request): Promise<UploadInput | { error: string
   }
 
   return {
+    kind: 'bytes',
     content,
     filename: body.filename,
     mime: mime || undefined,
     label: body.label,
+    ...(annotation ? { annotation } : {}),
   }
 }
 

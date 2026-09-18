@@ -458,3 +458,39 @@ export function Redo({ size, className }: IconProps) {
     </Svg>
   )
 }
+
+/*
+ * Zoom, for the markup canvas.
+ *
+ * Built on the same 4.5-radius lens as `Search` rather than a fresh circle, so
+ * the three of them read as one family in a bar that already holds nine tools.
+ */
+
+export function ZoomIn({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <circle cx="7.25" cy="7.25" r="4.5" />
+      <path d="M7.25 5.25v4M5.25 7.25h4" />
+      <path d="M10.5 10.5l2.75 2.75" />
+    </Svg>
+  )
+}
+
+export function ZoomOut({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <circle cx="7.25" cy="7.25" r="4.5" />
+      <path d="M5.25 7.25h4" />
+      <path d="M10.5 10.5l2.75 2.75" />
+    </Svg>
+  )
+}
+
+/** Fit: four corners closing in on what is between them. */
+export function Fit({ size, className }: IconProps) {
+  return (
+    <Svg size={size} className={className}>
+      <path d="M2.5 5.75v-3.25h3.25M13.5 5.75v-3.25h-3.25M2.5 10.25v3.25h3.25M13.5 10.25v3.25h-3.25" />
+    </Svg>
+  )
+}

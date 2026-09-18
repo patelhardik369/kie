@@ -4,6 +4,8 @@ import { useRef, useState } from 'react'
 
 import { MarkupButton } from '@/components/annotate/MarkupButton.tsx'
 import { Close, Dice, Plus, Upload } from '@/components/shell/icons.tsx'
+import { errorMessage } from '@/lib/client/api.ts'
+import { uploadInput } from '@/lib/client/upload.ts'
 import type { ParamDef } from '@/lib/kie/registry/types.ts'
 import { AssetPicker } from './AssetPicker.tsx'
 
@@ -432,28 +434,32 @@ function UploadButton({
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
+  /** 0-1 while bytes are moving. A large file is seconds of silence otherwise. */
+  const [progress, setProgress] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const upload = async (file: File) => {
     setBusy(true)
+    setProgress(null)
     setError(null)
     try {
-      const body = new FormData()
-      body.append('file', file)
-      const response = await fetch('/api/upload', { method: 'POST', body })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data?.error ?? 'Upload failed.')
-      // A 200 carrying no URL used to be the worst case here: the value went
-      // into the list as `undefined`, was filtered straight back out, and the
-      // file simply vanished with the counter still on 0.
-      if (typeof data.fileUrl !== 'string' || !data.fileUrl) {
-        throw new Error('Kie accepted the file but returned no URL for it.')
-      }
-      onUploaded(data.fileUrl)
+      /*
+       * `uploadInput` rather than a bare POST at `/api/upload`.
+       *
+       * A photograph off a phone is past the platform's 4.5 MB request-body cap
+       * on its own, and that cap is enforced ahead of the route — so the old
+       * code here read a plain-text `Request Entity Too Large` as JSON and
+       * reported a parse error about a stray `R`. The helper routes anything
+       * that size straight to the bucket and only sends the key through a
+       * function. See lib/client/upload.ts.
+       */
+      const uploaded = await uploadInput(file, file.name, { onProgress: setProgress })
+      onUploaded(uploaded.fileUrl)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setError(errorMessage(cause))
     } finally {
       setBusy(false)
+      setProgress(null)
       // Cleared so re-picking the same file fires a change event again.
       if (inputRef.current) inputRef.current.value = ''
     }
@@ -481,7 +487,13 @@ function UploadButton({
         }`}
       >
         <Upload size={12} />
-        {busy ? 'Uploading…' : error ? 'Retry' : 'Upload'}
+        {busy
+          ? progress !== null && progress < 1
+            ? `${Math.round(progress * 100)}%`
+            : 'Uploading…'
+          : error
+            ? 'Retry'
+            : 'Upload'}
       </button>
       {/*
         Spelled out, not left in a tooltip. A failed upload that only recolours a

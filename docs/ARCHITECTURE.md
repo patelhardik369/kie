@@ -348,6 +348,29 @@ data) → `fileUrl` returned to the form. The `input_assets` table caches
 `storage_path → kie_file_url` with `expires_at`, keyed on `(workspace_id, sha256)`; a reuse inside
 24h skips the round trip, and an expired entry re-uploads in place rather than inserting a duplicate.
 
+### The 4.5 MB wall, and why big files never touch a function
+
+A serverless platform caps a function's **request body** — 4.5 MB on Vercel — and enforces it at the
+edge, before the route runs. Nothing in `app/api/upload` ever sees such a request; the browser gets a
+plain-text `Request Entity Too Large` where it expected JSON. There is no server-side fix, because
+there is no server-side code in the failure. A phone photograph clears that cap on its own, and a
+marked-up screenshot flattened to PNG clears it routinely.
+
+So anything over the threshold goes to the bucket directly and only its KEY travels through a
+function. `lib/client/upload.ts` is the only uploader in the browser and picks the path by size.
+
+| size | path |
+|---|---|
+| ≤ 3.5 MB | `POST /api/upload` (multipart) — one round trip, unchanged |
+| > 3.5 MB | `POST /api/upload/ticket` → `PUT` straight to Supabase → `POST /api/upload` with `{ storageKey, sha256 }` |
+
+The ticket route keeps three things on the server that a plain signed URL would give away: the
+**key** (built from the workspace prefix and the content hash, never named by the caller), the
+**ceilings** (refused before 40 MB moves rather than after), and the **quota** (checked before the
+bytes move, which is the rule the whole storage design turns on). The finalize call re-hashes the
+object it reads back — a content-addressed key whose bytes say something else would poison every
+later dedupe against that hash — and answers a live cache hit without reading the object at all.
+
 The dedupe key gained the workspace deliberately: two people uploading the same stock image must not
 share a row, or deleting it on one side breaks the other.
 
@@ -377,7 +400,8 @@ with the geometry in `lib/annotate/doc.ts` and the field gate in `lib/annotate/t
 | Open | `GET /api/annotate/context?url=` says what to draw on, whether marks already exist, and whether a clean original can be paired |
 | Load | `GET /api/annotate/source` streams the bytes **from our own origin** |
 | Draw | Vector shapes in normalized 0–1 coordinates, so one document renders at any scale |
-| Save | Flattened at the image's natural size, `POST /api/upload` with an `annotation` field, which writes `input_assets.annotation_json` |
+| Zoom | The displayed size is the only thing that changes; `renderTo`, `hitTest` and the flatten all already take it as an argument, so there is no second coordinate space to keep in step |
+| Save | Flattened at the image's natural size, uploaded through `lib/client/upload.ts` with an `annotation` field, which writes `input_assets.annotation_json` |
 
 ### Why `/api/annotate/source` proxies where `/api/assets` redirects
 
