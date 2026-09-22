@@ -291,3 +291,24 @@ export async function removeObjects(keys: string[]): Promise<number> {
 function mb(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(0)
 }
+
+/**
+ * The origin every signed URL points at, for a `<link rel="preconnect">`.
+ *
+ * `/api/assets` answers with a 302 to Supabase, so the FIRST thumbnail on a page
+ * pays a DNS lookup and a TLS handshake to an origin the browser has never seen
+ * before it can ask for a single byte. Warming that connection while the HTML is
+ * still parsing takes it off the critical path for every tile that follows.
+ *
+ * Not a secret: it is the host in every redirect the gallery already hands the
+ * browser. Only the signature on the URL is privileged, and that is not here.
+ */
+export function storageOrigin(): string | null {
+  try {
+    return new URL(getEnv().supabaseUrl).origin
+  } catch {
+    // A malformed SUPABASE_URL is a deployment problem the rest of the app will
+    // report properly. A missing preconnect is not worth a blank gallery.
+    return null
+  }
+}

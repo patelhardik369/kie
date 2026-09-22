@@ -9,6 +9,7 @@ import { currentWorkspace } from '@/lib/auth/workspace.ts'
 import { assetToken } from '@/lib/gallery/asset-token.ts'
 import { galleryHref, parseGalleryFilter } from '@/lib/gallery/filters.ts'
 import { getGalleryFacets, listGenerations } from '@/lib/gallery/queries.ts'
+import { storageOrigin } from '@/lib/storage/objects.ts'
 
 export const dynamic = 'force-dynamic'
 
@@ -52,8 +53,15 @@ export default async function GalleryPage({
     getGalleryFacets(workspaceId),
   ])
 
+  const origin = storageOrigin()
+
   return (
     <main className="mx-auto max-w-[1400px] px-4 pt-6 pb-16">
+      {/* React hoists this into <head>. Every tile is a 302 to Supabase, so the
+          handshake to that origin is on the critical path for the first picture
+          unless it happens while the HTML is still parsing. */}
+      {origin && <link rel="preconnect" href={origin} crossOrigin="anonymous" />}
+
       <PageHeader
         title="Gallery"
         description="Everything ever generated, newest first. Filters live in the URL, so a filtered view is a link you can keep."
@@ -73,9 +81,10 @@ export default async function GalleryPage({
         <EmptyState hasAny={facets.total > 0} />
       ) : (
         <ul className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-          {page.items.map(({ generation, thumbnail, assetCount }) => (
+          {page.items.map(({ generation, thumbnail, assetCount }, position) => (
             <li key={generation.id}>
               <GenerationCard
+                position={position}
                 assetCount={assetCount}
                 thumbnail={
                   // Null `storagePath` means the output was too large to store,

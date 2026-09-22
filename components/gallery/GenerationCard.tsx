@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
+import { LazyMedia } from '@/components/gallery/LazyMedia.tsx'
 import { Alert, Film, Image as ImageIcon, Star, Trash, Wave } from '@/components/shell/icons.tsx'
 import {
   assetHref,
@@ -61,10 +62,18 @@ export function GenerationCard({
   generation,
   thumbnail,
   assetCount,
+  position = 0,
 }: {
   generation: CardGeneration
   thumbnail?: CardAsset
   assetCount: number
+  /**
+   * Where this tile sits in the grid, counting from 0.
+   *
+   * Passed in rather than inferred so the fetch order and the reading order are
+   * the same thing — see components/gallery/LazyMedia.tsx.
+   */
+  position?: number
 }) {
   const router = useRouter()
   const [favorite, setFavorite] = useState(generation.favorite)
@@ -142,7 +151,7 @@ export function GenerationCard({
     >
       <div className="relative aspect-square w-full overflow-hidden bg-(--color-bg-deep)">
         {thumbnail ? (
-          <Preview asset={thumbnail} />
+          <Preview asset={thumbnail} position={position} />
         ) : (
           <Placeholder generation={generation} />
         )}
@@ -269,32 +278,22 @@ export function GenerationCard({
  */
 const TILE_WIDTH = 432
 
-function Preview({ asset }: { asset: CardAsset }) {
+/**
+ * How many tiles keep their `src` in the server-rendered markup.
+ *
+ * Six is the first row at the widest breakpoint (`2xl:grid-cols-6`), so on every
+ * layout the tiles that are certainly on screen start downloading while the HTML
+ * is still parsing — before React has hydrated and before the queue exists. The
+ * rest go through `LazyMedia`, which is what stops 48 requests leaving at once.
+ */
+const EAGER_TILES = 6
+
+function Preview({ asset, position }: { asset: CardAsset; position: number }) {
   const src = assetHref(
     asset.storagePath,
     asset.token,
     asset.kind === 'image' ? TILE_WIDTH : undefined,
   )
-
-  if (asset.kind === 'video') {
-    return (
-      // Muted autoplay on hover, per the UX spec. `preload="metadata"` keeps a
-      // grid of 48 videos from fetching 48 whole files.
-      <video
-        src={src}
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        className="h-full w-full object-cover"
-        onMouseEnter={(e) => void e.currentTarget.play().catch(() => undefined)}
-        onMouseLeave={(e) => {
-          e.currentTarget.pause()
-          e.currentTarget.currentTime = 0
-        }}
-      />
-    )
-  }
 
   if (asset.kind === 'audio') {
     return (
@@ -305,11 +304,13 @@ function Preview({ asset }: { asset: CardAsset }) {
   }
 
   return (
-    // A plain <img>: these are local files from our own route. The `w` on the
-    // src asks Storage for a tile-sized render — the ORIGINAL is what the
-    // full-size view and every download still get, because a resized copy of a
-    // generation is no longer the thing the model produced.
-    <img src={src} alt="" loading="lazy" className="h-full w-full object-cover" />
+    <LazyMedia
+      src={src}
+      kind={asset.kind}
+      priority={position}
+      eager={position < EAGER_TILES}
+      onHoverPlay={asset.kind === 'video'}
+    />
   )
 }
 
