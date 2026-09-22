@@ -20,6 +20,7 @@ export const FAMILIES = [
   'wan',
   'google',
   'openai',
+  'qwen',
   'enhance',
 ] as const
 export type Family = (typeof FAMILIES)[number]
@@ -46,7 +47,7 @@ export type Capability = (typeof CAPABILITIES)[number]
  * Which HTTP contract a model speaks.
  *
  * `jobs` is the unified `POST /jobs/createTask` + `GET /jobs/recordInfo` pair
- * that 85 of the 86 models use. `veo` is Veo 3.1, which predates it: a FLAT
+ * that 96 of the 97 models use. `veo` is Veo 3.1, which predates it: a FLAT
  * request body to `/veo/generate` and a numeric `successFlag` from
  * `/veo/record-info` instead of a `state` string.
  *
@@ -212,6 +213,9 @@ export type Constraint =
       /**
        * `keys` take a lower ceiling when `when` holds — Wan 2.7 Image's `n`,
        * which allows 12 in sequential mode but only 4 outside it.
+       *
+       * Reads as a COUNT for a list parameter: Qwen 2.1's `image_urls` normally
+       * takes ten references and exactly one once `mask_url` is supplied.
        */
       kind: 'maxWhen'
       keys: string[]
@@ -248,7 +252,7 @@ export interface ModelDefinition {
   /** The docs.kie.ai page this was transcribed from. */
   docUrl: string
   outputKind: 'video' | 'image' | 'audio' | 'object'
-  /** Omit for `'jobs'`, the unified endpoint 85 of the 86 models use. */
+  /** Omit for `'jobs'`, the unified endpoint 96 of the 97 models use. */
   transport?: Transport
   params: ParamDef[]
   constraints?: Constraint[]

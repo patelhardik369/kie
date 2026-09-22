@@ -7,7 +7,7 @@ import { getModel } from '@/lib/kie/registry/index.ts'
 export const dynamic = 'force-dynamic'
 
 /**
- * Pinned models — the shortlist above the 86.
+ * Pinned models — the shortlist above the 97.
  *
  *   GET    /api/favorite-models              — the pins, in order
  *   POST   /api/favorite-models {slug}       — pin one (idempotent)
@@ -21,7 +21,7 @@ export const dynamic = 'force-dynamic'
  * to save by being clever here.
  *
  * The label and family come from the compiled registry, resolved server-side.
- * That is deliberate: it keeps the 86-model registry — every parameter of every
+ * That is deliberate: it keeps the 97-model registry — every parameter of every
  * model — out of the browser bundle, so a nav popover costs a fetch rather than
  * a few hundred kilobytes of JavaScript.
  */

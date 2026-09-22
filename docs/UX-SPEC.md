@@ -1,6 +1,6 @@
 # UX specification
 
-The design problem is not "make generation pretty." It is: **86 models with overlapping names and
+The design problem is not "make generation pretty." It is: **97 models with overlapping names and
 three incompatible parameter dialects, and none of it may be hidden.** Everything below serves
 legibility under that constraint.
 
@@ -93,7 +93,7 @@ Three panes: **model picker** (left), **parameter form** (center), **preview + q
 
 ### Choosing a model
 
-Progressive narrowing, because a flat list of 86 slugs is unusable:
+Progressive narrowing, because a flat list of 97 slugs is unusable:
 
 ```
 Family          Capability              Model
@@ -168,7 +168,7 @@ it applies to every prompt-driven image model rather than one.
 
 | | |
 |---|---|
-| Where it appears | Any `url` / `url[]` field whose `accept` includes `image`, on a model that has a prompt. 52 of the 86 |
+| Where it appears | Any `url` / `url[]` field whose `accept` includes `image`, on a model that has a prompt. 58 of the 97 |
 | Where it does not | The five image endpoints with no prompt — the two upscalers, the background remover, both Wan animate models. There is no field in which to explain a mark, so the button is absent. Decided by `lib/annotate/targets.ts` from registry data, never by slug |
 | Tools | select/move, freehand, highlighter, arrow, line, box, circle, text label, numbered pin. Keys `V B H A L R O T N`, `Ctrl+Z` / `Ctrl+Shift+Z`, `Del` |
 | Colours | Seven, each with a **name**. The name is what the legend says and therefore what the model reads, so the palette is the set that is unambiguous in words — no eyedropper |

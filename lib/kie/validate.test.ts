@@ -841,3 +841,79 @@ describe('an aspect ratio Kie would silently ignore is disabled, not sent', () =
     assert.match(field.reason!, /shape from the first frame/)
   })
 })
+
+/*
+ * `maxWhen` lowers a ceiling, and a ceiling means "at most this many" for a list
+ * as much as "no higher than this" for a number. The url[] control has always
+ * read a derived `max` as an item ceiling, so before the list branch existed the
+ * form prevented a payload the validator still waved through from a preset or a
+ * re-run.
+ */
+describe('a mask on qwen2-1/image-to-image caps the reference list at one', () => {
+  const qwen21 = requireModel('qwen2-1/image-to-image')
+  const A = 'https://example.com/a.jpg'
+  const B = 'https://example.com/b.jpg'
+  const MASK = 'https://example.com/mask.png'
+
+  it('rejects two references once a mask is supplied', () => {
+    const result = validateInput(qwen21, {
+      prompt: PROMPT,
+      image_urls: [A, B],
+      mask_url: MASK,
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /mask applies to exactly one reference image/)
+  })
+
+  it('accepts the same two references with no mask', () => {
+    const result = validateInput(qwen21, { prompt: PROMPT, image_urls: [A, B] })
+    assert.equal(result.ok, true, messages(result))
+  })
+
+  it('lowers the list ceiling in the derived field state too', () => {
+    const masked = deriveFields(qwen21, {
+      prompt: PROMPT,
+      image_urls: [A],
+      mask_url: MASK,
+    })
+    assert.equal(masked.image_urls!.max, 1)
+    // …and leaves the documented ten in place without one.
+    const plain = deriveFields(qwen21, { prompt: PROMPT, image_urls: [A] })
+    assert.equal(plain.image_urls!.max, undefined)
+  })
+
+  it('still caps a numeric field, which is what maxWhen was built for', () => {
+    // wan/2-7-image's `n`: 12 in sequential mode, 4 outside it.
+    const wan = requireModel('wan/2-7-image')
+    const result = validateInput(wan, { prompt: PROMPT, n: 12 })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /sequential/i)
+  })
+})
+
+describe('qwen2-1 keeps JPEG and a transparent background apart', () => {
+  const qwen21 = requireModel('qwen2-1/text-to-image')
+
+  it('rejects the combination even when the format is only a default', () => {
+    // output_format defaults to png, so this one is legal…
+    assert.equal(
+      validateInput(qwen21, { prompt: PROMPT, background: 'transparent' }).ok,
+      true,
+    )
+    // …and this one is not.
+    const result = validateInput(qwen21, {
+      prompt: PROMPT,
+      background: 'transparent',
+      output_format: 'jpeg',
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /alpha channel/)
+  })
+
+  it('drops JPEG from the options rather than disabling the control', () => {
+    const field = deriveFields(qwen21, { prompt: PROMPT, background: 'transparent' })
+      .output_format!
+    assert.deepEqual(field.options, ['png', 'webp'])
+    assert.equal(field.disabled, false)
+  })
+})

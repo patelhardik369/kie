@@ -1,4 +1,4 @@
-# Model catalog — 86 endpoints
+# Model catalog — 97 endpoints
 
 Index only. **Parameter detail lives in `.claude/skills/kie-models/references/`** so there is exactly
 one source of truth; each family section links there.
@@ -10,8 +10,9 @@ one source of truth; each family section links there.
 | Wan | 18 | 2 | — | 20 |
 | Google (Veo / Gemini Omni / Imagen 4 / Nano Banana) | 5 | 8 | 1 | 14 |
 | OpenAI (GPT Image) | — | 8 | — | 8 |
+| Qwen (Qwen 1 / 2 / 2.1 / 3) | — | 11 | — | 11 |
 | Enhance (upscale / background removal) | 2 | 3 | — | 5 |
-| | **54** | **31** | **1** | **86** |
+| | **54** | **42** | **1** | **97** |
 
 Verify against upstream with `/verify-catalog`. Add one with `/add-model <slug>`.
 
@@ -207,6 +208,38 @@ it does **not** cap `auto` at 1K; its only cap is those four narrow ratios. Both
 
 Sora is not offered by Kie. The legacy 4o Image API (`/api/v1/gpt4o-image/*`) is a separate
 non-unified endpoint and is deliberately out of scope.
+
+---
+
+## Qwen — 11 image models
+→ [`references/qwen.md`](../.claude/skills/kie-models/references/qwen.md)
+
+Four generations that share a name and not much else. Image only — Kie's Qwen chat completions are
+permanently out of scope, and there is no Qwen video endpoint.
+
+| Model slug | Capability | Pick it for |
+|---|---|---|
+| `qwen/text-to-image` | text-to-image | Full sampler control: steps, CFG, acceleration |
+| `qwen/image-to-image` | image-to-image | Reworking a still with a `strength` dial |
+| `qwen/image-edit` | image-to-image | Up to 4 outputs per run; 2000-char prompt |
+| `qwen2/text-to-image` | text-to-image | Fewest knobs in the family; 800-char prompt |
+| `qwen2/image-edit` | image-to-image | Same, from a single image, with eight ratios |
+| `qwen2-1/text-to-image` | text-to-image | Transparent PNG/WebP, 1K/2K, 9:21 |
+| `qwen2-1/image-to-image` | image-to-image | Up to 10 references, or a mask for local edits |
+| `qwen3/text-to-image` | text-to-image | Current gen: `prompt_extend`, 5000-char negative prompt |
+| `qwen3/image-to-image` | image-to-image | Up to 3 references, bmp/gif/tiff accepted |
+| `qwen3/pro-text-to-image` | text-to-image | Pro tier, identical schema |
+| `qwen3/pro-image-to-image` | image-to-image | Pro tier, identical schema |
+
+**Traps:** the Pro doc pages live at `market/qwen3-pro/…` but their slugs read `qwen3/pro-…` — the
+tier is a prefix on the capability, not on the family. `image_size` holds **named sizes** on Qwen 1
+(`square_hd`) and **aspect ratios** on Qwen 2 and Qwen 3, while Qwen 2.1 calls the same idea
+`aspect_ratio`. Prompt ceilings run 5000 → 2000 → 800 → 5000 across the generations.
+`enable_safety_checker` (the model's) and `nsfw_checker` (Kie's) are two different switches.
+
+On `qwen2-1/image-to-image`, `mask_url` is a **mode switch**: it demands exactly one reference image,
+forbids a transparent background, and makes `aspect_ratio` and `enhance_prompt` no-ops that Kie
+reports in an `ignored` field rather than rejecting.
 
 ---
 

@@ -10,7 +10,7 @@ import { hydratePins, usePins } from './pins-store.ts'
  * The pinned shortlist.
  *
  * The whole point of the feature: the four or five models actually in use, above
- * the 86 that are merely available. It is the first thing on the picker and the
+ * the 97 that are merely available. It is the first thing on the picker and the
  * first thing in the home sidebar, so the common case — "the model I used
  * yesterday" — is a click rather than a scroll.
  *

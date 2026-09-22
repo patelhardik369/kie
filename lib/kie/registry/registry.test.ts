@@ -11,6 +11,7 @@ import {
   GOOGLE_MODELS,
   KLING_MODELS,
   OPENAI_MODELS,
+  QWEN_MODELS,
   WAN_MODELS,
   capabilitiesOf,
   flattenParams,
@@ -24,14 +25,22 @@ import {
 } from './index.ts'
 
 describe('catalog completeness', () => {
-  it('holds all 86 in-scope models', () => {
+  it('holds all 97 in-scope models', () => {
     assert.equal(KLING_MODELS.length, 19)
     assert.equal(BYTEDANCE_MODELS.length, 20)
     assert.equal(WAN_MODELS.length, 20)
     assert.equal(GOOGLE_MODELS.length, 14)
     assert.equal(OPENAI_MODELS.length, 8)
+    assert.equal(QWEN_MODELS.length, 11)
     assert.equal(ENHANCE_MODELS.length, 5)
-    assert.equal(ALL_MODELS.length, 86)
+    assert.equal(ALL_MODELS.length, 97)
+  })
+
+  it('makes every Qwen model an image model', () => {
+    // Kie serves Qwen chat completions too; only the image endpoints are here.
+    for (const m of QWEN_MODELS) assert.equal(m.outputKind, 'image', m.slug)
+    assert.equal(QWEN_MODELS.filter((m) => m.capability === 'text-to-image').length, 5)
+    assert.equal(QWEN_MODELS.filter((m) => m.capability === 'image-to-image').length, 6)
   })
 
   it('splits Google 5 video / 8 image / 1 audio', () => {
@@ -78,6 +87,7 @@ describe('catalog completeness', () => {
     for (const m of WAN_MODELS) assert.equal(m.family, 'wan', m.slug)
     for (const m of GOOGLE_MODELS) assert.equal(m.family, 'google', m.slug)
     for (const m of OPENAI_MODELS) assert.equal(m.family, 'openai', m.slug)
+    for (const m of QWEN_MODELS) assert.equal(m.family, 'qwen', m.slug)
     for (const m of ENHANCE_MODELS) assert.equal(m.family, 'enhance', m.slug)
   })
 
@@ -307,6 +317,7 @@ describe('lookups', () => {
     assert.equal(modelsByFamily('wan').length, 20)
     assert.equal(modelsByFamily('google').length, 14)
     assert.equal(modelsByFamily('openai').length, 8)
+    assert.equal(modelsByFamily('qwen').length, 11)
     assert.equal(modelsByFamily('enhance').length, 5)
   })
 
@@ -504,6 +515,101 @@ describe('documented traps are encoded', () => {
     const tts = getModel('google/gemini-3-1-flash-tts')!
     assert.ok(!tts.params.some((p) => p.key === 'prompt'))
     assert.equal(tts.outputKind, 'audio')
+  })
+
+  it('puts the Qwen 3 Pro tier on the capability, not on the family', () => {
+    // Doc pages live at market/qwen3-pro/…, the `model` enum reads qwen3/pro-….
+    assert.ok(getModel('qwen3/pro-text-to-image'))
+    assert.ok(getModel('qwen3/pro-image-to-image'))
+    assert.equal(getModel('qwen3-pro/text-to-image'), undefined)
+    assert.equal(getModel('qwen3-pro/image-to-image'), undefined)
+    // …while the page path is still what docUrl points at.
+    assert.match(getModel('qwen3/pro-text-to-image')!.docUrl, /qwen3-pro\/text-to-image\.md$/)
+  })
+
+  it('keeps Qwen `image_size` a named size on Qwen 1 and a ratio on Qwen 2 and 3', () => {
+    const sizeOf = (slug: string) =>
+      getModel(slug)!.params.find((p) => p.key === 'image_size')!.enum!
+    assert.ok(sizeOf('qwen/text-to-image').includes('square_hd'))
+    assert.ok(sizeOf('qwen2/text-to-image').includes('16:9'))
+    assert.ok(sizeOf('qwen3/text-to-image').includes('16:9'))
+    // 2.1 is the one generation that renames it.
+    const qwen21 = getModel('qwen2-1/text-to-image')!
+    assert.ok(qwen21.params.some((p) => p.key === 'aspect_ratio'))
+    assert.ok(!qwen21.params.some((p) => p.key === 'image_size'))
+  })
+
+  it('gives qwen2/image-edit more ratios than its text-to-image sibling', () => {
+    const sizeOf = (slug: string) =>
+      getModel(slug)!.params.find((p) => p.key === 'image_size')!.enum!
+    assert.equal(sizeOf('qwen2/text-to-image').length, 5)
+    assert.equal(sizeOf('qwen2/image-edit').length, 8)
+  })
+
+  it('keeps every Qwen prompt ceiling as its own page documents it', () => {
+    const maxOf = (slug: string) =>
+      getModel(slug)!.params.find((p) => p.key === 'prompt')!.maxLength
+    assert.equal(maxOf('qwen/text-to-image'), 5000)
+    assert.equal(maxOf('qwen/image-edit'), 2000)
+    assert.equal(maxOf('qwen2/text-to-image'), 800)
+    assert.equal(maxOf('qwen2-1/text-to-image'), 5000)
+    assert.equal(maxOf('qwen3/text-to-image'), 5000)
+  })
+
+  it('records the qwen2/text-to-image model-enum doc conflict', () => {
+    assert.match(getModel('qwen2/text-to-image')!.notes ?? '', /DOC CONFLICT/)
+  })
+
+  it('records both qwen/image-edit doc conflicts and follows the schema', () => {
+    const model = getModel('qwen/image-edit')!
+    assert.match(model.notes ?? '', /DOC CONFLICT/)
+    // Prose said 30; the schema said 25.
+    assert.equal(model.params.find((p) => p.key === 'num_inference_steps')!.default, 25)
+    // Prose listed two options; the enum carries three.
+    assert.deepEqual(model.params.find((p) => p.key === 'acceleration')!.enum, [
+      'none',
+      'regular',
+      'high',
+    ])
+  })
+
+  it('types Qwen image-edit `num_images` as quoted strings', () => {
+    const param = getModel('qwen/image-edit')!.params.find((p) => p.key === 'num_images')!
+    assert.deepEqual(param.enum, ['1', '2', '3', '4'])
+  })
+
+  it('caps Qwen 2.1 references at one once a mask is supplied', () => {
+    const model = getModel('qwen2-1/image-to-image')!
+    const cap = (model.constraints ?? []).find((c) => c.kind === 'maxWhen')!
+    assert.deepEqual(cap.kind === 'maxWhen' ? cap.keys : [], ['image_urls'])
+    assert.equal(cap.kind === 'maxWhen' ? cap.max : undefined, 1)
+    // The unmasked ceiling stays where the doc put it.
+    assert.equal(model.params.find((p) => p.key === 'image_urls')!.maxItems, 10)
+  })
+
+  it('treats the Qwen 2.1 fields a mask ignores as forbidden, not merely documented', () => {
+    const model = getModel('qwen2-1/image-to-image')!
+    const ignored = (model.constraints ?? []).find((c) => c.kind === 'forbiddenWhen')!
+    assert.deepEqual(ignored.kind === 'forbiddenWhen' ? ignored.keys : [], [
+      'aspect_ratio',
+      'enhance_prompt',
+    ])
+  })
+
+  it('keeps JPEG and a transparent background apart on both Qwen 2.1 endpoints', () => {
+    for (const slug of ['qwen2-1/text-to-image', 'qwen2-1/image-to-image']) {
+      const gates = (getModel(slug)!.constraints ?? []).filter(
+        (c) => c.kind === 'allowedValuesWhen',
+      )
+      const byFormat = gates.find(
+        (c) => 'when' in c && c.when.key === 'background' && c.when.equals === 'transparent',
+      )!
+      assert.deepEqual(
+        byFormat.kind === 'allowedValuesWhen' ? byFormat.values : [],
+        ['png', 'webp'],
+        slug,
+      )
+    }
   })
 
   it('types the Gemini Omni id lists as opaque strings, not URLs', () => {

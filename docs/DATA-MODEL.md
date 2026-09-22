@@ -139,7 +139,7 @@ column is always one hop, never a list.
 
 ### `favorite_models`
 
-Models pinned above the 86 in the picker, the home sidebar and the nav.
+Models pinned above the 97 in the picker, the home sidebar and the nav.
 
 | column | type | notes |
 |---|---|---|

@@ -6,7 +6,7 @@
  *
  * ## Why marks are burned into pixels rather than sent as a mask
  *
- * Not one of the 86 in-scope models accepts a mask channel. Checked against the
+ * Not one of the 97 in-scope models accepts a mask channel. Checked against the
  * registry, the reference tables and the live doc pages on 2026-09-13:
  * `gpt-image-2-5-flare-image-to-image`, the endpoint behind the feature this
  * imitates, takes exactly `prompt`, `input_urls`, `aspect_ratio` and `resolution`.

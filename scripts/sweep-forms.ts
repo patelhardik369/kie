@@ -1,7 +1,7 @@
 /**
  * Phase 3 verification: every model's page must render EVERY parameter.
  *
- * Fetches all 86 generate pages against a running server and asserts that each
+ * Fetches all 97 generate pages against a running server and asserts that each
  * top-level parameter key appears in the HTML — which is only true because the
  * advanced section stays mounted when collapsed.
  *

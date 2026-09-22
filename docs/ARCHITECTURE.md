@@ -229,7 +229,7 @@ Schema and the transcription rules: [`.claude/skills/kie-models/SKILL.md`](../.c
 
 ### Transports
 
-85 of the 86 models POST to `/api/v1/jobs/createTask` and poll `/api/v1/jobs/recordInfo`. Veo 3.1
+96 of the 97 models POST to `/api/v1/jobs/createTask` and poll `/api/v1/jobs/recordInfo`. Veo 3.1
 predates that API and never moved onto it: it POSTs a **flat** body to `/api/v1/veo/generate` and
 polls `/api/v1/veo/record-info`, which reports a numeric `successFlag` instead of a `state` string
 and returns `resultUrls` already parsed.
@@ -238,7 +238,7 @@ That difference is registry data, not a code branch. The three Veo models carry 
 everything else omits the field and gets `'jobs'`. The dispatch happens in exactly one place —
 `lib/kie/tasks.ts`, which routes to `lib/kie/veo.ts` and gets back the same `Task` shape everything
 else produces, including a re-encoded `resultJson` **string** so `generations.result_json_raw` holds
-one shape for all 86 models.
+one shape for all 97 models.
 
 **The job engine, the downloader, the gallery and the parameter form never learn Veo exists.** The
 one visible seam is that polling now passes the generation's `model_slug` through to `getTask` —
@@ -528,12 +528,12 @@ an `input_json` holding a dead URL is not reproducible — which is the one thin
 for. It is used only as the fallback for a file past Kie's 100 MB upload ceiling, and that case
 returns a `warning` saying so rather than taking it silently.
 
-**Pins are the shortlist above the catalog.** 86 models is a long scroll and most days you want one
+**Pins are the shortlist above the catalog.** 97 models is a long scroll and most days you want one
 of four. `favorite_models` holds the slugs, `lib/models/favorites.ts` resolves them against the
 registry, and one client store (`components/models/pins-store.ts`) backs every star, the picker's pin
 bar, the home sidebar and the nav popover at once. The API answers every verb with the whole list, so
 a write is a replace rather than a patch four surfaces each have to apply correctly. Labels are
-resolved server-side, which keeps the 86-model registry out of the browser bundle.
+resolved server-side, which keeps the 97-model registry out of the browser bundle.
 
 ## Why polling leads
 

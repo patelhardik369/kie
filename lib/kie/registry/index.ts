@@ -3,6 +3,7 @@ import { ENHANCE_MODELS } from './enhance.ts'
 import { GOOGLE_MODELS } from './google.ts'
 import { KLING_MODELS } from './kling.ts'
 import { OPENAI_MODELS } from './openai.ts'
+import { QWEN_MODELS } from './qwen.ts'
 import {
   capabilitiesOf,
   type Capability,
@@ -14,8 +15,8 @@ import { WAN_MODELS } from './wan.ts'
 export * from './types.ts'
 
 /**
- * All 86 in-scope models: 19 Kling + 20 ByteDance + 20 Wan + 14 Google +
- * 8 OpenAI + 5 Enhance.
+ * All 97 in-scope models: 19 Kling + 20 ByteDance + 20 Wan + 14 Google +
+ * 8 OpenAI + 11 Qwen + 5 Enhance.
  *
  * Order is browse order, not alphabetical: the three original video families
  * first, then the newer generative families, then Enhance — which is the only
@@ -27,6 +28,7 @@ export const ALL_MODELS: ModelDefinition[] = [
   ...WAN_MODELS,
   ...GOOGLE_MODELS,
   ...OPENAI_MODELS,
+  ...QWEN_MODELS,
   ...ENHANCE_MODELS,
 ]
 
@@ -36,6 +38,7 @@ export {
   GOOGLE_MODELS,
   KLING_MODELS,
   OPENAI_MODELS,
+  QWEN_MODELS,
   WAN_MODELS,
 }
 

@@ -19,6 +19,7 @@ export const FAMILY_LABEL: Record<Family, string> = {
   wan: 'Wan',
   google: 'Google',
   openai: 'OpenAI',
+  qwen: 'Qwen',
   enhance: 'Enhance',
 }
 
@@ -29,6 +30,7 @@ export const FAMILY_BLURB: Record<Family, string> = {
   wan: 'Video, image, layer decomposition',
   google: 'Veo, Gemini Omni, Imagen 4, Nano Banana',
   openai: 'GPT Image 1.5, 2 and 2.5',
+  qwen: 'Qwen 1, 2, 2.1 and 3 image',
   // Named for what it does, not who made it — see lib/kie/registry/enhance.ts.
   enhance: 'Upscale and background removal',
 }

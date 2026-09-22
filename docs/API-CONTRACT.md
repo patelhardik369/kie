@@ -159,7 +159,7 @@ own, and the registry declares which with `transport` on the `ModelDefinition`.
 | Failure | `failCode` / `failMsg` | `errorCode` / `errorMessage` |
 
 `lib/kie/veo.ts` normalizes the Veo shape into the same `Task` the rest of the app consumes, and
-re-encodes `resultUrls` into a `resultJson` string so one column holds one shape for all 86 models.
+re-encodes `resultUrls` into a `resultJson` string so one column holds one shape for all 97 models.
 Auth, the envelope, rate limits, webhook signing, uploads and the expiry rules are unchanged.
 
 Two consequences worth knowing before debugging a Veo job:

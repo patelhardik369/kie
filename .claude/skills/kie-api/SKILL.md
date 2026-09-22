@@ -5,7 +5,7 @@ description: The Kie AI API contract — base URLs, auth, the unified createTask
 
 # Kie AI — API Contract
 
-**85 of this project's 86 models go through one endpoint.** Only the `model` string and the shape of
+**96 of this project's 97 models go through one endpoint.** Only the `model` string and the shape of
 `input` change; there is no per-model route. Veo is the single exception — it speaks a different
 contract, described in §2b, and `lib/kie/veo.ts` adapts it so nothing above `lib/kie/` can tell.
 

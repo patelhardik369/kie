@@ -372,7 +372,22 @@ function checkConstraint(
       if (whenHolds(constraint.when, input, params)) {
         for (const key of constraint.keys) {
           const value = input[key]
-          if (typeof value === 'number' && value > constraint.max) {
+          /*
+           * A ceiling reads as "at most this many" for a list and "no higher
+           * than this" for a number, and both shapes occur: Wan 2.7 Image caps
+           * the numeric `n` outside sequential mode, while Qwen 2.1 caps
+           * `image_urls` at ONE entry once a mask is supplied. The url[] control
+           * has always honoured a derived `max` as an item ceiling
+           * (components/param-form/controls.tsx), so without this branch the
+           * form prevented a payload the validator would still have let through
+           * from a preset or a re-run.
+           */
+          const size = Array.isArray(value)
+            ? value.length
+            : typeof value === 'number'
+              ? value
+              : undefined
+          if (size !== undefined && size > constraint.max) {
             issues.push({ key, code: 'constraint', message: constraint.message })
           }
         }
