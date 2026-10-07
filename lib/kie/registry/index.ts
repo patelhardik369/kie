@@ -15,7 +15,7 @@ import { WAN_MODELS } from './wan.ts'
 export * from './types.ts'
 
 /**
- * All 97 in-scope models: 19 Kling + 20 ByteDance + 20 Wan + 14 Google +
+ * All 99 in-scope models: 19 Kling + 21 ByteDance + 20 Wan + 15 Google +
  * 8 OpenAI + 11 Qwen + 5 Enhance.
  *
  * Order is browse order, not alphabetical: the three original video families

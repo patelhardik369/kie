@@ -127,7 +127,7 @@ describe('pendingRequirements', () => {
 })
 
 describe('every model derives cleanly', () => {
-  it('produces state for every parameter of all 97 models', () => {
+  it('produces state for every parameter of all 99 models', () => {
     for (const model of ALL_MODELS) {
       const fields = deriveFields(model, {})
       for (const param of model.params) {

@@ -1,4 +1,4 @@
-# Model catalog — 97 endpoints
+# Model catalog — 99 endpoints
 
 Index only. **Parameter detail lives in `.claude/skills/kie-models/references/`** so there is exactly
 one source of truth; each family section links there.
@@ -6,13 +6,13 @@ one source of truth; each family section links there.
 | Family | Video | Image | Audio | Total |
 |---|---|---|---|---|
 | Kling | 19 | — | — | 19 |
-| ByteDance (Seedance / Seedream) | 10 | 10 | — | 20 |
+| ByteDance (Seedance / Seedream) | 10 | 11 | — | 21 |
 | Wan | 18 | 2 | — | 20 |
-| Google (Veo / Gemini Omni / Imagen 4 / Nano Banana) | 5 | 8 | 1 | 14 |
+| Google (Veo / Gemini Omni / Imagen 4 / Nano Banana) | 5 | 9 | 1 | 15 |
 | OpenAI (GPT Image) | — | 8 | — | 8 |
 | Qwen (Qwen 1 / 2 / 2.1 / 3) | — | 11 | — | 11 |
 | Enhance (upscale / background removal) | 2 | 3 | — | 5 |
-| | **54** | **42** | **1** | **97** |
+| | **54** | **44** | **1** | **99** |
 
 Verify against upstream with `/verify-catalog`. Add one with `/add-model <slug>`.
 
@@ -49,7 +49,7 @@ carry a `kling-2.6/` prefix, not `kling/`.
 
 ---
 
-## ByteDance — 20 models
+## ByteDance — 21 models
 → [`references/bytedance.md`](../.claude/skills/kie-models/references/bytedance.md)
 
 ### Seedance — 10 video models
@@ -70,7 +70,7 @@ carry a `kling-2.6/` prefix, not `kling/`.
 **Trap:** Seedance 2.x enforces three mutually exclusive input modes — first frame, first+last frame,
 or multimodal reference. `duration` is an integer on 2.x but a string on V1.
 
-### Seedream — 10 image models
+### Seedream — 11 image models
 
 | Model slug | Capability | Pick it for |
 |---|---|---|
@@ -79,6 +79,7 @@ or multimodal reference. `duration` is an integer on 2.x but a string on V1.
 | `seedream/5-pro-layer-decomposition` | layer-decomposition | Splitting an image into named z-ordered layers |
 | `seedream/5-lite-text-to-image` | text-to-image | Lite, but `ultra` quality reaches 4K |
 | `seedream/5-lite-image-to-image` | image-to-image | Lite editing, up to 14 inputs |
+| `seedream/5-flash-text-to-image` | text-to-image | Flash tier; resolution via optional `size` (1K / 1.5K / 2K), not `quality` |
 | `seedream/4.5-text-to-image` | text-to-image | 4.5, 2K/4K via `quality` |
 | `seedream/4.5-edit` | image-to-image | 4.5 editing, up to 14 inputs |
 | `bytedance/seedream-v4-text-to-image` | text-to-image | 4.0. Only tier with `max_images` batch (1–6) |
@@ -131,10 +132,10 @@ Animate models cap source video at **10 MB**.
 
 ---
 
-## Google — 14 models
+## Google — 15 models
 → [`references/google.md`](../.claude/skills/kie-models/references/google.md)
 
-### Image — 8
+### Image — 9
 
 | Model slug | Capability | Pick it for |
 |---|---|---|
@@ -144,6 +145,7 @@ Animate models cap source video at **10 MB**.
 | `google/nano-banana` | text-to-image | Nano Banana 1, with a content-filter switch |
 | `google/nano-banana-edit` | image-to-image | Nano Banana 1 editing, up to 10 inputs |
 | `nano-banana-2` | text/image-to-image | 20k prompts, 14 reference images, 15 aspect ratios, 4K |
+| `nano-banana-2-1` | text/image-to-image | NB 2.1 — same fields as NB2: 14 references, 15 aspect ratios, 1K–4K |
 | `nano-banana-2-lite` | text/image-to-image | Cheapest NB2; no resolution or format control |
 | `nano-banana-pro` | image-to-image / text-to-image | NB2 quality tier; 8 inputs, 10k prompts |
 

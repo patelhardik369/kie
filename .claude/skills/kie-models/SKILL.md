@@ -1,11 +1,11 @@
 ---
 name: kie-models
-description: The Kie Studio model registry — the ModelDefinition/ParamDef schema every model is described with, the rule that parameters are transcribed from docs.kie.ai and never invented, the constraint system for mutually-exclusive inputs, the transport field that lets Veo live beside the unified endpoint, and the family reference index covering all 97 in-scope Kling / ByteDance / Wan / Google / OpenAI / Qwen / Enhance endpoints. Load this before adding, editing, or auditing any model in lib/kie/registry, before building or changing the parameter form, or whenever you need a model's exact fields, enums, defaults, or limits.
+description: The Kie Studio model registry — the ModelDefinition/ParamDef schema every model is described with, the rule that parameters are transcribed from docs.kie.ai and never invented, the constraint system for mutually-exclusive inputs, the transport field that lets Veo live beside the unified endpoint, and the family reference index covering all 99 in-scope Kling / ByteDance / Wan / Google / OpenAI / Qwen / Enhance endpoints. Load this before adding, editing, or auditing any model in lib/kie/registry, before building or changing the parameter form, or whenever you need a model's exact fields, enums, defaults, or limits.
 ---
 
 # Kie Studio — Model Registry
 
-97 generation endpoints across seven families. Every one is described as **data** — a
+99 generation endpoints across seven families. Every one is described as **data** — a
 `ModelDefinition` — never as a bespoke form or route. The parameter UI is generated from these
 definitions, so a correct definition is the whole feature.
 
@@ -148,7 +148,7 @@ character-for-character from the doc's `model` enum, which outranks any prose on
 ### Transports
 
 `transport` names which HTTP contract a model speaks. Omit it and the model uses `'jobs'`, the unified
-`POST /api/v1/jobs/createTask` + `GET /api/v1/jobs/recordInfo` pair that 96 of the 97 models use.
+`POST /api/v1/jobs/createTask` + `GET /api/v1/jobs/recordInfo` pair that 98 of the 99 models use.
 
 `transport: 'veo'` marks the three Veo models, which post a **flat** body to `/api/v1/veo/generate` —
 no `input` wrapper — and poll `/api/v1/veo/record-info`, which reports a numeric `successFlag` instead

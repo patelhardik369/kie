@@ -1,6 +1,6 @@
-# Google — 14 models (5 video + 8 image + 1 audio)
+# Google — 15 models (5 video + 9 image + 1 audio)
 
-Transcribed from `docs.kie.ai`. **13 of the 14 POST to `https://api.kie.ai/api/v1/jobs/createTask`
+Transcribed from `docs.kie.ai`. **14 of the 15 POST to `https://api.kie.ai/api/v1/jobs/createTask`
 with the model-specific fields nested under `input`. Veo does not** — see the Veo section.
 
 > **Slug prefixes are inconsistent and must be copied exactly.** Imagen 4, Nano Banana 1, Gemini Omni
@@ -27,6 +27,7 @@ with the model-specific fields nested under `input`. Veo does not** — see the 
 | 12 | `veo3` | text-to-video / image-to-video | video | `veo3-api/generate-veo-3-video.md` |
 | 13 | `veo3_fast` | text/image/reference-to-video | video | `veo3-api/generate-veo-3-video.md` |
 | 14 | `veo3_lite` | text/image/reference-to-video | video | `veo3-api/generate-veo-3-video.md` |
+| 15 | `nano-banana-2-1` | text-to-image / image-to-image | image | `market/google/nanobanana-2-1.md` |
 
 ---
 
@@ -120,6 +121,18 @@ No `nsfw_checker` on the edit endpoint.
 | `image_urls` | string[] | | ≤ 10 items | `[]` | Uses `image_urls`, **not** `image_input`, unlike 2 and Pro |
 
 No `resolution` and no `output_format` — Lite is the only Nano Banana 2 variant without them.
+
+### 15. `nano-banana-2-1`
+
+Source: https://docs.kie.ai/market/google/nanobanana-2-1.md — field set identical to #6.
+
+| field | type | req | enum / range | default | notes |
+|---|---|---|---|---|---|
+| `prompt` | string | ✓ | ≤ 20000 chars | — | |
+| `image_input` | string[] | | ≤ **14** items | — | Max 30.0MB each; jpeg/png/webp. The prose says "up to 10"; the schema `maxItems` is 14 |
+| `aspect_ratio` | string | | `1:1` `2:3` `3:2` `1:4` `4:1` `3:4` `4:3` `4:5` `5:4` `1:8` `8:1` `9:16` `16:9` `21:9` `auto` | `auto` | |
+| `resolution` | string | | `1K` `2K` `4K` | `1K` | |
+| `output_format` | string | | `png` `jpg` | `jpg` | |
 
 ### 8. `nano-banana-pro`
 

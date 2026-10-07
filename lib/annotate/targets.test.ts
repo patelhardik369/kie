@@ -20,11 +20,11 @@ describe('which models offer markup', () => {
           (param.accept ?? []).includes('image'),
       ),
     )
-    // 63 take an image; 5 of them have no prompt to name a mark in.
+    // 64 take an image; 5 of them have no prompt to name a mark in.
     // Qwen contributed 6 — its six image-to-image endpoints, every one of which
     // has a prompt, so the excluded list below is unchanged.
-    assert.equal(withImage.length, 63)
-    assert.equal(supported.length, 58)
+    assert.equal(withImage.length, 64)
+    assert.equal(supported.length, 59)
   })
 
   it('excludes exactly the prompt-less image endpoints, by their own data', () => {

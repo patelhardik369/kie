@@ -1,4 +1,4 @@
-# ByteDance — 20 models (10 Seedance video + 10 Seedream image)
+# ByteDance — 21 models (10 Seedance video + 11 Seedream image)
 
 Transcribed from `docs.kie.ai`. All models POST to `https://api.kie.ai/api/v1/jobs/createTask`.
 
@@ -29,6 +29,7 @@ Transcribed from `docs.kie.ai`. All models POST to `https://api.kie.ai/api/v1/jo
 | 18 | `seedream/5-pro-text-to-image` | text-to-image | `market/seedream/5-pro-text-to-image.md` |
 | 19 | `seedream/5-pro-image-to-image` | image-to-image | `market/seedream/5-pro-image-to-image.md` |
 | 20 | `seedream/5-pro-layer-decomposition` | layer-decomposition | `market/seedream/5-pro-layer-decomposition.md` |
+| 21 | `seedream/5-flash-text-to-image` | text-to-image | `market/seedream/5-flash-text-to-image.md` |
 
 ---
 
@@ -297,3 +298,15 @@ alongside `resultUrls`.
 
 The asset downloader must walk `layers_data[].url` and persist `z_index`, `name`, and `bounding_box`
 per layer — `resultUrls` alone loses the layer ordering and labels that make this model useful.
+
+### 21. `seedream/5-flash-text-to-image`
+
+Source: https://docs.kie.ai/market/seedream/5-flash-text-to-image.md
+
+| field | type | req | enum / range | default | notes |
+|---|---|---|---|---|---|
+| `prompt` | string | ✓ | 3–5000 chars | — | |
+| `aspect_ratio` | string | ✓ | `'1:1'` `'4:3'` `'3:4'` `'16:9'` `'9:16'` `'2:3'` `'3:2'` `'21:9'` | `'1:1'` | |
+| `size` | string | | `'1K'` `'1.5K'` `'2K'` | `'1K'` | Flash uses `size`, not the `quality` tier of Lite/Pro |
+| `output_format` | string | | `'png'` `'jpeg'` | `'png'` | |
+| `nsfw_checker` | boolean | | — | `false` | |

@@ -25,15 +25,15 @@ import {
 } from './index.ts'
 
 describe('catalog completeness', () => {
-  it('holds all 97 in-scope models', () => {
+  it('holds all 99 in-scope models', () => {
     assert.equal(KLING_MODELS.length, 19)
-    assert.equal(BYTEDANCE_MODELS.length, 20)
+    assert.equal(BYTEDANCE_MODELS.length, 21)
     assert.equal(WAN_MODELS.length, 20)
-    assert.equal(GOOGLE_MODELS.length, 14)
+    assert.equal(GOOGLE_MODELS.length, 15)
     assert.equal(OPENAI_MODELS.length, 8)
     assert.equal(QWEN_MODELS.length, 11)
     assert.equal(ENHANCE_MODELS.length, 5)
-    assert.equal(ALL_MODELS.length, 97)
+    assert.equal(ALL_MODELS.length, 99)
   })
 
   it('makes every Qwen model an image model', () => {
@@ -43,9 +43,9 @@ describe('catalog completeness', () => {
     assert.equal(QWEN_MODELS.filter((m) => m.capability === 'image-to-image').length, 6)
   })
 
-  it('splits Google 5 video / 8 image / 1 audio', () => {
+  it('splits Google 5 video / 9 image / 1 audio', () => {
     assert.equal(GOOGLE_MODELS.filter((m) => m.outputKind === 'video').length, 5)
-    assert.equal(GOOGLE_MODELS.filter((m) => m.outputKind === 'image').length, 8)
+    assert.equal(GOOGLE_MODELS.filter((m) => m.outputKind === 'image').length, 9)
     assert.equal(GOOGLE_MODELS.filter((m) => m.outputKind === 'audio').length, 1)
   })
 
@@ -64,11 +64,11 @@ describe('catalog completeness', () => {
     assert.deepEqual([...DB_FAMILIES], [...FAMILIES])
   })
 
-  it('has 20 ByteDance models split 10 video / 10 image', () => {
+  it('has 21 ByteDance models split 10 video / 11 image', () => {
     const video = BYTEDANCE_MODELS.filter((m) => m.outputKind === 'video')
     const image = BYTEDANCE_MODELS.filter((m) => m.outputKind === 'image')
     assert.equal(video.length, 10)
-    assert.equal(image.length, 10)
+    assert.equal(image.length, 11)
   })
 
   it('has 20 Wan models split 18 video / 2 image', () => {
@@ -313,9 +313,9 @@ describe('lookups', () => {
 
   it('filters by family', () => {
     assert.equal(modelsByFamily('kling').length, 19)
-    assert.equal(modelsByFamily('bytedance').length, 20)
+    assert.equal(modelsByFamily('bytedance').length, 21)
     assert.equal(modelsByFamily('wan').length, 20)
-    assert.equal(modelsByFamily('google').length, 14)
+    assert.equal(modelsByFamily('google').length, 15)
     assert.equal(modelsByFamily('openai').length, 8)
     assert.equal(modelsByFamily('qwen').length, 11)
     assert.equal(modelsByFamily('enhance').length, 5)

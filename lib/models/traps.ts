@@ -5,7 +5,7 @@ import type { ModelDefinition, ParamDef } from '../kie/registry/types.ts'
  *
  * Pure module — reads the registry, computes, returns. No env, no DB.
  *
- * WHY THIS EXISTS: 97 models across seven families share parameter names but not
+ * WHY THIS EXISTS: 99 models across seven families share parameter names but not
  * parameter meanings. `duration` is a string on most Kling models and an integer
  * on Kling Omni. Wan 2.7 text-to-video calls its framing parameter `ratio` while
  * everything else calls it `aspect_ratio`. `google/imagen4` types `seed` as a
