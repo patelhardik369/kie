@@ -9,8 +9,9 @@ import { docUrl, type Constraint, type ModelDefinition, type ParamDef } from './
  *    `flux-2/pro-text-to-image`, `flux-3/klein-text-to-image`. Not `flux/…`.
  *  - The two generations share almost nothing. FLUX.2 Pro marks aspect_ratio
  *    and resolution REQUIRED and stops at 2K with seven ratios; FLUX.3 Klein
- *    makes both optional, reaches 4K, adds `auto`, 21:9 and 9:21, and adds
- *    explicit width/height, a seed, a batch count and a prompt rewriter.
+ *    makes both optional, reaches 4K, adds 21:9 and 9:21, and adds explicit
+ *    width/height, a seed, a batch count and a prompt rewriter. Neither has
+ *    an `auto` ratio.
  *  - Klein's width/height OVERRIDE aspect_ratio and resolution — Kie ignores
  *    both once a pixel size is passed. Encoded as `forbiddenWhen`, because an
  *    ignored field is a silently wrong result, not a 422.
@@ -19,19 +20,19 @@ import { docUrl, type Constraint, type ModelDefinition, type ParamDef } from './
 // --------------------------------------------------------------- shared
 
 /**
- * Kie's own content filter. Both pages describe it only as "A configurable
- * parameter. Defaults to true in the Playground." — a statement about the
- * Playground, not the API. The Qwen pages, which expose the shared schema,
- * document the API default as false. No default is recorded here, so nothing is
- * sent unless the user chooses.
+ * Kie's own content filter. Klein declares it inline and FLUX.2 Pro by `$ref`
+ * to the shared schema; both say "Defaults to false. When false, no additional
+ * content filtering is applied". The kie.ai playground turns it on — the API
+ * default is what the registry records.
  */
 const nsfwChecker: ParamDef = {
   key: 'nsfw_checker',
   type: 'boolean',
   label: 'Kie content filter',
   describe:
-    "Kie's own filter. The Playground turns it on; leave it unset to use the API's own default.",
+    "Kie's own filter. Off by default over the API — results come straight from the model. The Playground turns it on.",
   group: 'advanced',
+  default: false,
 }
 
 // ------------------------------------------------------------ FLUX.3 Klein
@@ -87,7 +88,7 @@ export const FLUX_MODELS: ModelDefinition[] = [
         key: 'aspect_ratio',
         type: 'enum',
         label: 'Aspect ratio',
-        describe: 'Aspect ratio for the generated image.',
+        describe: 'Aspect ratio for the generated image. Seven shapes, no auto.',
         group: 'framing',
         required: true,
         enum: ['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3'],
@@ -106,10 +107,11 @@ export const FLUX_MODELS: ModelDefinition[] = [
       nsfwChecker,
     ],
     notes:
-      'aspect_ratio and resolution are both REQUIRED, with documented defaults, so a request always carries them. ' +
-      "Seven ratios and no 4K. The field's description mentions an 'auto' option that matches the first input " +
-      'image, but `auto` is NOT in the enum and this endpoint takes no image — it is not offered. ' +
-      'docUrl page path is inferred: transcribed from the page text supplied by the user while docs.kie.ai was unreachable — run /verify-catalog.',
+      'aspect_ratio and resolution are both REQUIRED. The OpenAPI block gives them only `examples` (1:1, 1K), ' +
+      'not `default`; kie.ai/flux-2 states 1:1 and 1K as defaults and its request example sends them, so those ' +
+      'are recorded (the GPT Image 2.5 precedent) and a request always carries both. Seven ratios, no auto, no 4K. ' +
+      'The prompt minimum of 3 characters is stated in prose only. Output format is not selectable and not fixed: ' +
+      'results may come back PNG or JPEG.',
   },
   {
     slug: 'flux-3/klein-text-to-image',
@@ -126,6 +128,7 @@ export const FLUX_MODELS: ModelDefinition[] = [
         describe: 'Describe the image to generate, in any language.',
         group: 'core',
         required: true,
+        minLength: 1,
         maxLength: 5000,
       },
       {
@@ -134,7 +137,7 @@ export const FLUX_MODELS: ModelDefinition[] = [
         label: 'Aspect ratio',
         describe: 'Output aspect ratio. Ignored once width and height are set.',
         group: 'framing',
-        enum: ['1:1', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16', '21:9', '9:21', 'auto'],
+        enum: ['1:1', '4:3', '3:4', '3:2', '2:3', '16:9', '9:16', '21:9', '9:21'],
         default: '1:1',
       },
       {
@@ -203,7 +206,7 @@ export const FLUX_MODELS: ModelDefinition[] = [
         type: 'boolean',
         label: 'Enhance prompt',
         describe:
-          'Rewrites the prompt into a fuller description first. Turn off when the prompt must be followed literally, or when latency matters.',
+          'Rewrites the prompt into a fuller description first — on even when omitted. Turn off when the prompt must be followed literally, or when latency matters.',
         group: 'advanced',
         default: true,
       },
@@ -211,11 +214,10 @@ export const FLUX_MODELS: ModelDefinition[] = [
     ],
     constraints: KLEIN_CONSTRAINTS,
     notes:
-      'width and height go together and, once passed, make Kie IGNORE aspect_ratio and resolution — the form greys ' +
-      'those out rather than letting a request ask for one shape and get another. The page shows width 256 / height ' +
-      '640 and seed 1 as "default values"; they are its example, not API defaults (sending them would override the ' +
-      'chosen ratio, and the seed doc says to omit it for a random result), so none is recorded. The 1:2.5-2.5:1 ' +
-      'shape limit on width/height is not machine-checked. ' +
-      'docUrl page path is inferred: transcribed from the page text supplied by the user while docs.kie.ai was unreachable — run /verify-catalog.',
+      'width and height are a schema `dependencies` pair and, once passed, make Kie IGNORE aspect_ratio and ' +
+      'resolution — the form greys those out rather than letting a request ask for one shape and get another. ' +
+      'Nine ratios, no auto. The schema declares no default on width, height or seed (the kie.ai playground ' +
+      'pre-fills 256 / 640 / 1 as examples); seed image i uses seed + i. The 1:2.5-2.5:1 shape limit on ' +
+      'width/height is not machine-checked.',
   },
 ]

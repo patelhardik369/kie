@@ -46,7 +46,15 @@ export function isPresent(value: unknown): boolean {
   if (value === undefined || value === null) return false
   if (typeof value === 'string') return value.trim().length > 0
   if (Array.isArray(value)) return value.length > 0
+  // A single nested object (`object` params, e.g. GPT Image 2.6's `svg`) counts
+  // only once one of its own fields holds something: `{}` and `{ model: '' }`
+  // are an untouched group, not a choice to send.
+  if (isPlainObject(value)) return Object.values(value).some(isPresent)
   return true
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /** The effective value, falling back to the documented default. */
@@ -82,10 +90,9 @@ function typeOk(param: ParamDef, value: unknown): boolean {
     case 'bbox[][]':
       return Array.isArray(value) && value.every((image) => Array.isArray(image) && image.every(isBox))
     case 'object[]':
-      return (
-        Array.isArray(value) &&
-        value.every((v) => typeof v === 'object' && v !== null && !Array.isArray(v))
-      )
+      return Array.isArray(value) && value.every(isPlainObject)
+    case 'object':
+      return isPlainObject(value)
   }
 }
 
@@ -181,6 +188,24 @@ function checkParam(
         code: 'length',
         message: `${param.label} must be at most ${param.maxLength} characters (currently ${value.length}).`,
       })
+    }
+  }
+
+  if (param.type === 'object' && param.fields) {
+    const row = value as unknown as Record<string, unknown>
+    for (const field of param.fields) {
+      const fieldValue = row[field.key]
+      if (!isPresent(fieldValue)) {
+        if (field.required) {
+          issues.push({
+            key: `${key}.${field.key}`,
+            code: 'required',
+            message: `${param.label}: ${field.label} is required.`,
+          })
+        }
+        continue
+      }
+      checkParam(field, fieldValue, issues, `${key}.`)
     }
   }
 
@@ -291,6 +316,8 @@ function describeType(param: ParamDef): string {
       return 'one list of [x1, y1, x2, y2] boxes per input image'
     case 'object[]':
       return 'an array of objects'
+    case 'object':
+      return 'an object'
     default:
       return 'a string'
   }

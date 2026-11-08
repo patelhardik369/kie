@@ -91,6 +91,7 @@ describe('the schema layer covers every parameter in the registry', () => {
     'string[]',
     'seed',
     'object[]',
+    'object',
     'color[]',
     'bbox[][]',
   ]

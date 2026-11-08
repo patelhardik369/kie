@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { GenerationStatus } from '@/components/queue/GenerationStatus.tsx'
 import { insertLegend } from '@/lib/annotate/doc.ts'
 import { canMarkUp, promptKeyOf } from '@/lib/annotate/targets.ts'
-import { deriveFields, pendingRequirements } from '@/lib/kie/constraints.ts'
+import { activeValues as dropDisabled, deriveFields, pendingRequirements } from '@/lib/kie/constraints.ts'
 import type { ModelDefinition, ParamDef, ParamGroup } from '@/lib/kie/registry/types.ts'
 import { buildRequestInput } from '@/lib/kie/request.ts'
 import { openingValues, studioDefaults } from '@/lib/kie/studio-defaults.ts'
@@ -181,13 +181,7 @@ export function ParamForm({ model }: { model: ModelDefinition }) {
 
   // A disabled field's value must not reach the payload — otherwise clearing a
   // conflict in the UI would still submit the excluded field.
-  const activeValues = useMemo(() => {
-    const active: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(values)) {
-      if (!derived[key]?.disabled) active[key] = value
-    }
-    return active
-  }, [values, derived])
+  const activeValues = useMemo(() => dropDisabled(derived, values), [values, derived])
 
   const payload = useMemo(
     () => buildRequestInput(model, activeValues),

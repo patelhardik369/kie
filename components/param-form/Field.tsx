@@ -66,6 +66,8 @@ function Control(props: ControlProps) {
       return <BboxListControl {...props} />
     case 'object[]':
       return <ObjectListControl {...props} />
+    case 'object':
+      return <ObjectControl {...props} />
   }
 }
 
@@ -126,6 +128,38 @@ export function Field({ reason, required, errors, studioDefault, ...rest }: Fiel
         <p key={error} className="mt-1.5 text-[11px] text-(--color-bad-ink)">
           {error}
         </p>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * One nested group — GPT Image 2.6's `svg`.
+ *
+ * The same recursion through `Field` as the repeating group, without the rows:
+ * the wire shape is a single object. Clearing every sub-field sends nothing,
+ * rather than an empty `{}` Kie would read as a choice.
+ */
+function ObjectControl({ param, value, onChange, disabled }: ControlProps) {
+  const current =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {}
+
+  return (
+    <div className="space-y-4 rounded-lg border border-(--color-border) bg-(--color-surface) p-3">
+      {(param.fields ?? []).map((field) => (
+        <Field
+          key={field.key}
+          param={field}
+          value={current[field.key]}
+          disabled={disabled}
+          onChange={(fieldValue) => {
+            const next: Record<string, unknown> = { ...current, [field.key]: fieldValue }
+            if (fieldValue === undefined) delete next[field.key]
+            onChange(Object.keys(next).length > 0 ? next : undefined)
+          }}
+        />
       ))}
     </div>
   )

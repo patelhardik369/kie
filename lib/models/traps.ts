@@ -87,6 +87,8 @@ function wireType(param: ParamDef): string {
       return 'number[4][][]'
     case 'object[]':
       return 'object[]'
+    case 'object':
+      return 'object'
     default:
       return param.type
   }

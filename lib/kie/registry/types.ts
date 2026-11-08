@@ -87,6 +87,14 @@ export type ParamType =
   /** Repeating group — multi_prompt, kling_elements, elements. */
   | 'object[]'
   /**
+   * ONE nested object with its own `fields` — GPT Image 2.6's `svg`, which is
+   * `{ model }`, not a list of them.
+   *
+   * Separate from `object[]` because the wire shape differs: Kie validates
+   * `svg` as an object and rejects an array. Left empty, it is not sent.
+   */
+  | 'object'
+  /**
    * Ordered colour theme — Wan 2.7 Image's `color_palette`.
    *
    * Items are `{ hex, ratio }`, NOT bare strings: Kie wants each colour paired
@@ -131,7 +139,7 @@ export interface ParamDef {
   maxItems?: number
   /** For `url` / `url[]`. */
   accept?: AssetKind[]
-  /** For `object[]`. */
+  /** For `object[]` and `object`. */
   fields?: ParamDef[]
   /**
    * The doc marks this field superseded.

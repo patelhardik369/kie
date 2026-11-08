@@ -31,8 +31,8 @@ where it is an **integer** (`5`). Sending the wrong JSON type returns `422`.
 | 17 | `kling-3.0-omni/image-to-video` | image-to-video | `market/kling/v3-omni-image-to-video.md` |
 | 18 | `kling-3.0-omni/reference-to-video` | reference-to-video | `market/kling/v3-omni-reference-to-video.md` |
 | 19 | `kling-3.0-omni/transformation` | video-to-video | `market/kling/v3-omni-transformation.md` |
-| 20 | `kling-4.0/flash-keyframe-to-video` | image-to-video / text-to-video | `market/kling/kling-4-0-flash-keyframe-to-video.md` (inferred) |
-| 21 | `kling-4.0/reference-to-video` | reference-to-video | `market/kling/kling-4-0-reference-to-video.md` (inferred) |
+| 20 | `kling-4.0/flash-keyframe-to-video` | image-to-video / text-to-video | `market/kling/v4-flash-keyframe-to-video.md` |
+| 21 | `kling-4.0/reference-to-video` | reference-to-video / text-to-video | `market/kling/v4-reference-to-video.md` |
 
 ---
 
@@ -296,35 +296,62 @@ reference images."
 
 ## Kling 4.0 — models 20–21
 
-> **Source.** Transcribed from the doc page text the user supplied on 2026-11-08; `docs.kie.ai` was unreachable from the session, so the doc-page path below is **inferred** and must be confirmed with `/verify-catalog`.
+Transcribed from the OpenAPI blocks at `docs.kie.ai/market/kling/v4-*.md` (2026-11-08). Slug prefix is
+`kling-4.0/` (with a dot). `duration` is an **integer**, as on Omni, with its own ranges: 3–20 on
+Flash Keyframe, 3–30 on Reference. Both default to 5.
 
-Slug prefix is `kling-4.0/` (with a dot). `duration` is an **integer**, as on Omni, but with its own
-ranges: 3–20 on Flash Keyframe, 3–30 on Reference.
+Kie also documents `kling-4.0/keyframe-to-video` (first, middle and last frames) and
+`kling-4.0/flash-reference-to-video` (no standalone `voices`); they are not in the registry.
 
 ### 20. `kling-4.0/flash-keyframe-to-video`
 
 | field | type | req | enum / range | default | notes |
 |---|---|---|---|---|---|
-| `prompt` | string | ✓ | ≤ 8000 chars | — | Doc "default" is an example prompt |
-| `first_frame_url` | string (url) | | image/jpeg, png, webp; ≤ 10MB | — | Optional — prompt-only also valid |
-| `duration` | number | | 3 – 20, step 1 | `10` | Integer seconds |
+| `prompt` | string | ✓ | 1 – 8000 chars | — | Mention the frame as `@first_frame` |
+| `first_frame_url` | string (uri) | | `^https?://` | — | Optional — without it, plain text-to-video. Output follows the frame's ratio |
+| `duration` | integer | | 3 – 20 | `5` | |
 | `resolution` | string | | `720p` | `720p` | Only tier |
-| `aspect_ratio` | string | | `16:9` `9:16` `1:1` `21:9` | `16:9` | Doc: "Only effects when the first frame is active." Ambiguous; recorded, not enforced |
+| `aspect_ratio` | string | | `16:9` `9:16` `1:1` `21:9` | — | No `auto`. Used only without a first frame; prose says 16:9 when omitted |
+
+`keyframes` and `last_frame` are **rejected** on Flash.
+
+| Doc says | Encoded as |
+|---|---|
+| "`aspect_ratio` is only used when no first frame is sent" | `forbiddenWhen` `aspect_ratio` while `first_frame_url` present — ignored, not rejected |
 
 ### 21. `kling-4.0/reference-to-video`
 
 | field | type | req | enum / range | default | notes |
 |---|---|---|---|---|---|
-| `prompt` | string | ✓ | ≤ 8000 chars | — | Refers to inputs as `@image_1`, `@video_1` |
-| `image_urls` | string[] | | image/jpeg, png, webp; ≤ 10MB each | — | Multiple |
-| `video_urls` | string[] | | ≤ 5 clips, 2–30 s each, 30 s combined incl. video elements; mp4/mov/mkv/avi/webm, ≤ 10MB | — | |
-| `keep_original_sound` | boolean | | | `false` | Keep the reference video's audio |
-| `duration` | number | | 3 – 30, step 1 | `5` | Integer seconds |
+| `prompt` | string | ✓ | 1 – 8000 chars | — | `@image_N`, `@video_N`, `@name`; an undeclared mention is rejected |
+| `duration` | integer | | 3 – 30 | `5` | |
 | `resolution` | string | | `720p` `1080p` | `720p` | |
-| `aspect_ratio` | string | | `auto` `16:9` `9:16` `1:1` `21:9` | `auto` | |
-| `elements` | array | | — | — | **Not transcribed.** Doc says only "complex structure — see the Run with API example" |
-| `voices` | array | | — | — | **Not transcribed.** "Sound reference", same "complex structure" placeholder |
+| `aspect_ratio` | string | | `auto` `16:9` `9:16` `1:1` `21:9` | — | Omitted: `auto` with any reference, `16:9` with none |
+| `image_urls` | string[] | | ≤ 10 | `[]` | Each side 300–65536 px, aspect 0.40–2.5 |
+| `video_urls` | string[] | | ≤ 5, 2–30 s each | `[]` | Plus video elements ≤ 5 |
+| `keep_original_sound` | boolean | | | `false` | Only takes effect with `video_urls` |
+| `elements` | object[] | | ≤ 7, ≤ 3 video subjects | `[]` | Item shape below |
+| `voices` | object[] | | ≤ 3 | `[]` | Item shape below |
 
-`elements` and `voices` are left out of the registry until their item shape is read from the live
-page — inventing it would ship a 422.
+`elements[]` item:
 
+| field | type | req | enum / range | notes |
+|---|---|---|---|---|
+| `name` | string | ✓ | `^[一-龥A-Za-z0-9_]{1,20}$` | Unique across elements and voices; not `image_N` `video_N` `keyframe_N` `object_N` `audio_N` `first_frame` `last_frame` |
+| `image_urls` | string[] | | 2 – 4 | Image subject; first is the primary view. Excludes `video_url` |
+| `video_url` | string (uri) | | | 3–8 s single shot, shortest side ≥ 700 px. Excludes `image_urls` |
+| `tag` | string | | `character` `animal` `prop` `costume` `scene` `effect` `others` | Video subjects are always `character` |
+| `description` | string | | ≤ 100 chars | |
+| `voice_url` | string (uri) | | | Character subjects only; does not count toward `voices` |
+
+`voices[]` item:
+
+| field | type | req | notes |
+|---|---|---|---|
+| `name` | string | ✓ | Same pattern and reserved names as elements |
+| `audio_url` | string (uri) | ✓ | Task fails if no usable voice is detected |
+
+| Doc says | Encoded as |
+|---|---|
+| `keep_original_sound` "Only takes effect when `video_urls` is provided" | `forbiddenWhen` while `video_urls` absent |
+| All materials ≤ 15; videos + video elements ≤ 5; ≤ 3 video elements; per-element image/video exclusivity | Cross-field counts — not machine-checked, stated in `notes` |

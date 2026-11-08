@@ -944,19 +944,101 @@ describe('flux-3/klein-text-to-image: a pixel size overrides ratio and resolutio
   })
 })
 
-describe('gpt-image-2-6/flare-text-to-image: background is 1K only', () => {
+describe('gpt-image-2-6/flare-text-to-image switches field sets on output_format', () => {
   const flare26 = requireModel('gpt-image-2-6/flare-text-to-image')
 
-  it('accepts a background at 1K', () => {
-    const result = validateInput(flare26, { prompt: PROMPT, resolution: '1K', background: 'opaque' })
+  it('rejects GIF frame fields on the default PNG output', () => {
+    const result = validateInput(flare26, { prompt: PROMPT, frame_count: 9 })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /GIF output only/)
+  })
+
+  it('accepts GIF frame fields with GIF output', () => {
+    const result = validateInput(flare26, {
+      prompt: PROMPT,
+      output_format: 'gif',
+      size: '512x512',
+      frame_count: 9,
+      frame_duration_ms: 200,
+    })
     assert.equal(result.ok, true, messages(result))
   })
 
-  it('rejects a background at 2K and 4K', () => {
-    for (const resolution of ['2K', '4K']) {
-      const result = validateInput(flare26, { prompt: PROMPT, resolution, background: 'opaque' })
-      assert.equal(result.ok, false, resolution)
-      assert.match(messages(result), /1K only/)
+  it('takes svg as a single object, only with SVG output', () => {
+    assert.equal(
+      validateInput(flare26, { prompt: PROMPT, output_format: 'svg', svg: { model: 'gpt-5.6-luna' } }).ok,
+      true,
+    )
+    const wrongFormat = validateInput(flare26, { prompt: PROMPT, svg: { model: 'gpt-5.6-luna' } })
+    assert.equal(wrongFormat.ok, false)
+    const asArray = validateInput(flare26, {
+      prompt: PROMPT,
+      output_format: 'svg',
+      svg: [{ model: 'gpt-5.6-luna' }],
+    })
+    assert.equal(asArray.ok, false)
+    const badModel = validateInput(flare26, {
+      prompt: PROMPT,
+      output_format: 'svg',
+      svg: { model: 'gpt-5.4-mini' },
+    })
+    assert.equal(badModel.ok, false)
+  })
+
+  it('keeps compression to JPEG and WebP', () => {
+    assert.equal(validateInput(flare26, { prompt: PROMPT, output_format: 'webp', output_compression: 80 }).ok, true)
+    assert.equal(validateInput(flare26, { prompt: PROMPT, output_compression: 80 }).ok, false)
+  })
+
+  it('drops transparency from the options for JPEG', () => {
+    const field = deriveFields(flare26, { prompt: PROMPT, output_format: 'jpeg' }).background!
+    assert.deepEqual(field.options, ['opaque', 'auto'])
+  })
+
+  it('opens with the GIF and SVG groups greyed out', () => {
+    const fields = deriveFields(flare26, { prompt: PROMPT })
+    for (const key of ['size', 'frame_count', 'frame_duration_ms', 'svg', 'output_compression']) {
+      assert.equal(fields[key]!.disabled, true, key)
     }
+  })
+})
+
+describe('kling-4.0 references', () => {
+  const flash = requireModel('kling-4.0/flash-keyframe-to-video')
+  const reference = requireModel('kling-4.0/reference-to-video')
+
+  it('greys out the Flash aspect ratio once a first frame is supplied', () => {
+    assert.equal(deriveFields(flash, { prompt: PROMPT }).aspect_ratio!.disabled, false)
+    assert.equal(
+      deriveFields(flash, { prompt: PROMPT, first_frame_url: 'https://x/first.png' }).aspect_ratio!.disabled,
+      true,
+    )
+  })
+
+  it('validates element and voice rows', () => {
+    const ok = validateInput(reference, {
+      prompt: '@Hero greets using @Narrator',
+      elements: [{ name: 'Hero', image_urls: ['https://x/a.png', 'https://x/b.png'], tag: 'character' }],
+      voices: [{ name: 'Narrator', audio_url: 'https://x/v.mp3' }],
+    })
+    assert.equal(ok.ok, true, messages(ok))
+
+    const missingAudio = validateInput(reference, {
+      prompt: '@Narrator',
+      voices: [{ name: 'Narrator' }],
+    })
+    assert.equal(missingAudio.ok, false)
+  })
+
+  it('only allows keep_original_sound with a reference video', () => {
+    assert.equal(validateInput(reference, { prompt: PROMPT, keep_original_sound: true }).ok, false)
+    assert.equal(
+      validateInput(reference, {
+        prompt: PROMPT,
+        video_urls: ['https://x/v.mp4'],
+        keep_original_sound: true,
+      }).ok,
+      true,
+    )
   })
 })

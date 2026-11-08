@@ -173,3 +173,24 @@ export function pendingRequirements(
 
   return messages
 }
+
+/**
+ * The values that actually reach the payload: everything except fields a
+ * constraint currently disables.
+ *
+ * A disabled field's value must not be sent — otherwise clearing a conflict in
+ * the UI would still submit the excluded field. It matters most where a field
+ * has a documented default but is forbidden in the opening state, like GPT Image
+ * 2.6's GIF frame controls under the default PNG output: the default is shown,
+ * and is sent only once GIF is chosen.
+ */
+export function activeValues(
+  derived: DerivedFields,
+  values: Record<string, unknown>,
+): Record<string, unknown> {
+  const active: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(values)) {
+    if (!derived[key]?.disabled) active[key] = value
+  }
+  return active
+}

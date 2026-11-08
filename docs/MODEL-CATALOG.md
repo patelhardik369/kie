@@ -33,8 +33,8 @@ Verify against upstream with `/verify-catalog`. Add one with `/add-model <slug>`
 | `kling-3.0-omni/image-to-video` | image-to-video | Omni from a first frame, or first+last |
 | `kling-3.0-omni/reference-to-video` | reference-to-video | Character consistency from up to 7 reference images |
 | `kling-3.0-omni/transformation` | video-to-video | Restyling an existing clip |
-| `kling-4.0/flash-keyframe-to-video` | image/text-to-video | Kling 4.0 Flash: optional first frame, 3–20s, 720p, 8000-char prompts |
-| `kling-4.0/reference-to-video` | reference-to-video | Kling 4.0: images + up to 5 reference clips, 3–30s, 1080p, keep original sound |
+| `kling-4.0/flash-keyframe-to-video` | image/text-to-video | Kling 4.0 Flash: optional `@first_frame`, 3–20s, 720p only |
+| `kling-4.0/reference-to-video` | reference/text-to-video | Kling 4.0: 10 images, 5 clips, 7 elements, 3 voices, 3–30s, 1080p |
 | `kling-2.6/motion-control` | motion-control | Driving a still portrait with a 3–30s video |
 | `kling-3.0/motion-control` | motion-control | Same, with background-source control |
 | `kling/ai-avatar-standard` | avatar | Talking head from image + audio, up to 5 min |
@@ -49,7 +49,7 @@ Verify against upstream with `/verify-catalog`. Add one with `/add-model <slug>`
 **Traps:** `duration` is a quoted string everywhere except Kling 3.0 Omni, where it's an integer.
 Page slugs differ from model slugs (`v25-...` in the URL, `v2-5-...` in the API). Kling 2.6 models
 carry a `kling-2.6/` prefix, not `kling/`. Kling 4.0 is `kling-4.0/` with an integer `duration`;
-its `elements` and `voices` arrays are not yet transcribed (the doc gives no item shape).
+all four material types (images, videos, elements, voices) are mentioned in the prompt by `@` name.
 
 ---
 
@@ -199,7 +199,7 @@ task, so they belong in the asset library rather than the registry.
 | `gpt-image-2-5-flare-image-to-image` | image-to-image | 2.5 fast tier editing, up to 16 inputs |
 | `gpt-image-2-5-sunburst-text-to-image` | text-to-image | 2.5 premium tier; same schema as Flare |
 | `gpt-image-2-5-sunburst-image-to-image` | image-to-image | 2.5 premium tier editing, up to 16 inputs |
-| `gpt-image-2-6/flare-text-to-image` | text-to-image | 2.6: animated GIF / SVG output, 6 quality tiers, 32k prompts, 1K-only background |
+| `gpt-image-2-6/flare-text-to-image` | text-to-image | 2.6: PNG/JPEG/WebP plus animated GIF and SVG output, 6 quality tiers, 32k prompts |
 
 **Traps:** GPT Image 1.5 keeps a `gpt-image/` prefix **and** a dot (`1.5`); GPT Image 2 and 2.5 have
 neither, despite living under `market/gpt/` — and 2.5 spells its version `2-5`. 1.5 marks three fields
@@ -214,8 +214,8 @@ it does **not** cap `auto` at 1K; its only cap is those four narrow ratios. Both
 2.5's four are identical.
 
 GPT Image 2.6 changes the slug shape again: `gpt-image-2-6/flare-text-to-image` has a prefix and a
-slash. It defaults to GIF output, `frame_count` is a quoted string, and its `svg` array is not yet
-transcribed (the doc gives no item shape).
+slash. `output_format` switches field sets — GIF frame controls, the `svg` object, and JPEG/WebP
+compression are each sent only with their own format.
 
 Sora is not offered by Kie. The legacy 4o Image API (`/api/v1/gpt4o-image/*`) is a separate
 non-unified endpoint and is deliberately out of scope.
@@ -260,7 +260,7 @@ reports in an `ignored` field rather than rejecting.
 | Model slug | Capability | Pick it for |
 |---|---|---|
 | `flux-2/pro-text-to-image` | text-to-image | Small strict schema: 7 ratios, 1K/2K, ratio and resolution required |
-| `flux-3/klein-text-to-image` | text-to-image | Exact pixel sizes, 4K, up to 4 images, seed, prompt enhancer |
+| `flux-3/klein-text-to-image` | text-to-image | Exact pixel sizes, 9 ratios, 4K, up to 4 images, seed, prompt enhancer |
 
 **Traps:** the version is the prefix (`flux-2/`, `flux-3/`), never `flux/`. On Klein, `width` and
 `height` go together and make Kie **ignore** `aspect_ratio` and `resolution`.

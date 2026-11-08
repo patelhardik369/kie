@@ -1043,23 +1043,26 @@ export const KLING_MODELS: ModelDefinition[] = [
     capability: 'image-to-video',
     alsoSupports: ['text-to-video'],
     label: 'Kling 4.0 Flash — Keyframe to Video',
-    docUrl: docUrl('kling/kling-4-0-flash-keyframe-to-video'),
+    docUrl: docUrl('kling/v4-flash-keyframe-to-video'),
     outputKind: 'video',
     params: [
       {
         key: 'prompt',
         type: 'text',
         label: 'Prompt',
-        describe: 'Video description.',
+        describe:
+          'Video description. With a first frame, mention it as @first_frame. Middle frames and a last frame are not supported on Flash.',
         group: 'core',
         required: true,
+        minLength: 1,
         maxLength: 8000,
       },
       {
         key: 'first_frame_url',
         type: 'url',
         label: 'First frame',
-        describe: 'Optional opening frame. JPEG, PNG or WEBP, up to 10MB.',
+        describe:
+          'Optional opening frame — mention it as @first_frame. Without it the request is plain text-to-video. The output follows this image\'s aspect ratio.',
         group: 'core',
         accept: ['image'],
       },
@@ -1067,18 +1070,18 @@ export const KLING_MODELS: ModelDefinition[] = [
         key: 'duration',
         type: 'number',
         label: 'Duration',
-        describe: 'Output video length in seconds. An integer, 3-20.',
+        describe: 'Output length in seconds. An integer, 3-20.',
         group: 'framing',
         min: 3,
         max: 20,
         step: 1,
-        default: 10,
+        default: 5,
       },
       {
         key: 'resolution',
         type: 'enum',
         label: 'Resolution',
-        describe: 'Output resolution. 720p is the only tier.',
+        describe: 'Kling 4.0 Flash only supports 720p.',
         group: 'framing',
         enum: ['720p'],
         default: '720p',
@@ -1087,66 +1090,53 @@ export const KLING_MODELS: ModelDefinition[] = [
         key: 'aspect_ratio',
         type: 'enum',
         label: 'Aspect ratio',
-        describe: 'Output video aspect ratio. The doc says it only takes effect when the first frame is active.',
+        describe:
+          'Used only without a first frame (text-to-video); Kie falls back to 16:9 when omitted. There is no auto.',
         group: 'framing',
         enum: ['16:9', '9:16', '1:1', '21:9'],
-        default: '16:9',
+      },
+    ],
+    constraints: [
+      {
+        kind: 'forbiddenWhen',
+        keys: ['aspect_ratio'],
+        when: { key: 'first_frame_url', present: true },
+        message:
+          'With a first frame the video follows that image\'s shape — Kie ignores the aspect ratio.',
       },
     ],
     notes:
-      'Kling 4.0 slugs carry a `kling-4.0/` prefix with a dot. `duration` is an integer (3-20), not a quoted string. ' +
-      'first_frame_url is optional, so the endpoint also runs prompt-only. The doc describes aspect_ratio as ' +
-      '"Only effects when the first frame is active" — ambiguous wording, recorded rather than enforced. ' +
-      'docUrl page path is inferred: transcribed from the page text supplied by the user while docs.kie.ai was unreachable — run /verify-catalog.',
+      'Slug carries a `kling-4.0/` prefix with a dot; `duration` is an integer (3-20, default 5). Flash takes a ' +
+      'first frame only: `keyframes` and `last_frame` are rejected — the non-Flash Kling 4.0 Keyframe endpoint is ' +
+      'the one with middle and last frames. Output is always 720p. aspect_ratio applies only without a first frame ' +
+      '(the schema declares no default; the description says 16:9), so it is greyed out once a frame is supplied ' +
+      'instead of being sent and silently ignored.',
   },
   {
     slug: 'kling-4.0/reference-to-video',
     family: 'kling',
     capability: 'reference-to-video',
+    alsoSupports: ['text-to-video'],
     label: 'Kling 4.0 — Reference to Video',
-    docUrl: docUrl('kling/kling-4-0-reference-to-video'),
+    docUrl: docUrl('kling/v4-reference-to-video'),
     outputKind: 'video',
     params: [
       {
         key: 'prompt',
         type: 'text',
         label: 'Prompt',
-        describe: 'Video description. Refer to inputs as @image_1, @image_2, @video_1 …',
+        describe:
+          'Video description. Mention materials as @image_1, @video_1, or an element / voice @name. Every mention must match something in this request.',
         group: 'core',
         required: true,
+        minLength: 1,
         maxLength: 8000,
-      },
-      {
-        key: 'image_urls',
-        type: 'url[]',
-        label: 'Reference images',
-        describe: 'JPEG, PNG or WEBP, up to 10MB each.',
-        group: 'core',
-        accept: ['image'],
-      },
-      {
-        key: 'video_urls',
-        type: 'url[]',
-        label: 'Reference videos',
-        describe:
-          'Up to 5 clips, 2-30s each, 30s combined (including video elements). mp4/mov/mkv/avi/webm, up to 10MB each.',
-        group: 'core',
-        maxItems: 5,
-        accept: ['video'],
-      },
-      {
-        key: 'keep_original_sound',
-        type: 'boolean',
-        label: 'Keep original sound',
-        describe: 'Keep the original sound of the reference video.',
-        group: 'audio',
-        default: false,
       },
       {
         key: 'duration',
         type: 'number',
         label: 'Duration',
-        describe: 'Output video length in seconds. An integer, 3-30.',
+        describe: 'Output length in seconds. An integer, 3-30.',
         group: 'framing',
         min: 3,
         max: 30,
@@ -1166,17 +1156,159 @@ export const KLING_MODELS: ModelDefinition[] = [
         key: 'aspect_ratio',
         type: 'enum',
         label: 'Aspect ratio',
-        describe: 'Frame shape of the generated video.',
+        describe:
+          'Omitted, Kie uses auto when any reference is supplied and 16:9 when none is.',
         group: 'framing',
         enum: ['auto', '16:9', '9:16', '1:1', '21:9'],
-        default: 'auto',
+      },
+      {
+        key: 'image_urls',
+        type: 'url[]',
+        label: 'Reference images',
+        describe:
+          'Up to 10, mentioned as @image_1, @image_2 … in order. Each side 300-65536px; aspect 0.40-2.5.',
+        group: 'core',
+        maxItems: 10,
+        accept: ['image'],
+        default: [],
+      },
+      {
+        key: 'video_urls',
+        type: 'url[]',
+        label: 'Reference videos',
+        describe:
+          'Up to 5 clips, 2-30s each, mentioned as @video_1 … Reference videos plus video elements cannot exceed 5.',
+        group: 'core',
+        maxItems: 5,
+        accept: ['video'],
+        default: [],
+      },
+      {
+        key: 'keep_original_sound',
+        type: 'boolean',
+        label: 'Keep original sound',
+        describe:
+          'Keep the reference videos\' audio. Without a reference video, native audio is always generated.',
+        group: 'audio',
+        default: false,
+      },
+      {
+        key: 'elements',
+        type: 'object[]',
+        label: 'Elements',
+        describe:
+          'Subjects for this task only, mentioned as @name. Up to 7, at most 3 of them video subjects.',
+        group: 'advanced',
+        maxItems: 7,
+        default: [],
+        fields: [
+          {
+            key: 'name',
+            type: 'string',
+            label: 'Name',
+            describe:
+              '1-20 characters: Chinese, letters, digits, underscore. Unique across elements and voices (case-insensitive). Not image_N, video_N, keyframe_N, object_N, audio_N, first_frame or last_frame.',
+            group: 'core',
+            required: true,
+            minLength: 1,
+            maxLength: 20,
+          },
+          {
+            key: 'image_urls',
+            type: 'url[]',
+            label: 'Subject images',
+            describe:
+              '2-4 images for an image subject; the first is the primary view. Not together with a subject video.',
+            group: 'core',
+            minItems: 2,
+            maxItems: 4,
+            accept: ['image'],
+          },
+          {
+            key: 'video_url',
+            type: 'url',
+            label: 'Subject video',
+            describe:
+              'One 3-8s single-shot character video, shortest side at least 700px. Not together with subject images.',
+            group: 'core',
+            accept: ['video'],
+          },
+          {
+            key: 'tag',
+            type: 'enum',
+            label: 'Category',
+            describe:
+              'Optional for image subjects (inferred from the primary image). Video subjects are always character.',
+            group: 'core',
+            enum: ['character', 'animal', 'prop', 'costume', 'scene', 'effect', 'others'],
+          },
+          {
+            key: 'description',
+            type: 'string',
+            label: 'Description',
+            describe: 'Optional, up to 100 characters.',
+            group: 'core',
+            maxLength: 100,
+          },
+          {
+            key: 'voice_url',
+            type: 'url',
+            label: 'Bound voice',
+            describe:
+              'Optional reference audio for a character subject. Cannot be @-mentioned on its own and does not count toward Voices.',
+            group: 'audio',
+            accept: ['audio'],
+          },
+        ],
+      },
+      {
+        key: 'voices',
+        type: 'object[]',
+        label: 'Voices',
+        describe: 'Standalone voice references for this task, mentioned as @name. Up to 3.',
+        group: 'audio',
+        maxItems: 3,
+        default: [],
+        fields: [
+          {
+            key: 'name',
+            type: 'string',
+            label: 'Name',
+            describe:
+              '1-20 characters: Chinese, letters, digits, underscore. Unique across elements and voices (case-insensitive). Same reserved names as elements.',
+            group: 'core',
+            required: true,
+            minLength: 1,
+            maxLength: 20,
+          },
+          {
+            key: 'audio_url',
+            type: 'url',
+            label: 'Reference audio',
+            describe: 'Publicly accessible audio. The task fails if no usable voice is detected.',
+            group: 'core',
+            required: true,
+            accept: ['audio'],
+          },
+        ],
+      },
+    ],
+    constraints: [
+      {
+        kind: 'forbiddenWhen',
+        keys: ['keep_original_sound'],
+        when: { key: 'video_urls', present: false },
+        message:
+          'Keep original sound only applies to reference videos — without one, native audio is always generated.',
       },
     ],
     notes:
-      'Kling 4.0 slugs carry a `kling-4.0/` prefix with a dot. `duration` is an integer (3-30), not a quoted string. ' +
-      'NOT YET REACHABLE: the doc lists `elements` (array) and `voices` (array, "Sound reference") only as ' +
-      '"complex structure — see the Run with API example", with no field-level schema. Their item shape is not ' +
-      'transcribed, so they are left out rather than invented; add them once the shape is read from the live page. ' +
-      'docUrl page path is inferred: transcribed from the page text supplied by the user while docs.kie.ai was unreachable — run /verify-catalog.',
+      'Slug carries a `kling-4.0/` prefix with a dot; `duration` is an integer (3-30, default 5). All four material ' +
+      'types are optional — with none, it runs as plain text-to-video. Limits the form cannot count across fields: ' +
+      'image_urls + video_urls + elements + voices together at most 15; reference videos plus video elements at most 5; ' +
+      'at most 3 video elements. Within one element, `image_urls` and `video_url` are mutually exclusive, and only a ' +
+      'character subject may bind `voice_url`. Element/voice names must match ^[一-龥A-Za-z0-9_]{1,20}$. ' +
+      'An @-mention of anything undeclared is rejected and the task is not created. The Flash sibling ' +
+      '(kling-4.0/flash-reference-to-video) has no standalone `voices`.',
   },
 ]

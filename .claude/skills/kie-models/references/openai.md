@@ -18,7 +18,7 @@ Transcribed from `docs.kie.ai`. All nine POST to `https://api.kie.ai/api/v1/jobs
 | 6 | `gpt-image-2-5-flare-image-to-image` | image-to-image | image | `market/gpt/gpt-image-2-5-flare-image-to-image.md` |
 | 7 | `gpt-image-2-5-sunburst-text-to-image` | text-to-image | image | `market/gpt/gpt-image-2-5-sunburst-text-to-image.md` |
 | 8 | `gpt-image-2-5-sunburst-image-to-image` | image-to-image | image | `market/gpt/gpt-image-2-5-sunburst-image-to-image.md` |
-| 9 | `gpt-image-2-6/flare-text-to-image` | text-to-image | image | `market/gpt/gpt-image-2-6-flare-text-to-image.md` (inferred) |
+| 9 | `gpt-image-2-6/flare-text-to-image` | text-to-image | image | `market/gpt/gpt-image-2-6-flare-text-to-image.md` |
 
 GPT Image 2.5 (models 5–8) is **four endpoints, not one**: two quality tiers — `flare` and
 `sunburst` — each in a text-to-image and an image-to-image form. All four take the same schema; only
@@ -189,7 +189,9 @@ Same for both tiers. High-tier top-ups (+10% bonus) bring the effective rate dow
 
 # GPT Image 2.6 (model 9)
 
-> **Source.** Transcribed from the doc page text the user supplied on 2026-11-08; `docs.kie.ai` was unreachable from the session, so the doc-page path below is **inferred** and must be confirmed with `/verify-catalog`.
+Transcribed from the OpenAPI block at `docs.kie.ai/market/gpt/gpt-image-2-6-flare-text-to-image.md`
+(2026-11-08). Kie also documents Flare image-to-image, Sunburst ×2 and Economy ×2 under 2.6; they are
+not in the registry.
 
 **The slug shape changes again.** 2.6 is `gpt-image-2-6/flare-text-to-image` — a `gpt-image-2-6/`
 **prefix and a slash**, where 2.5 is one hyphenated string (`gpt-image-2-5-flare-text-to-image`).
@@ -198,23 +200,41 @@ Same for both tiers. High-tier top-ups (+10% bonus) bring the effective rate dow
 
 | field | type | req | enum / range | default | notes |
 |---|---|---|---|---|---|
-| `prompt` | string | ✓ | ≤ 32000 chars | — | Doc "default" is an example prompt |
-| `aspect_ratio` | string | | `auto` `1:1` `3:2` `2:3` `4:3` `3:4` `5:4` `4:5` `16:9` `9:16` `2:1` `1:2` `21:9` `9:21` `3:1` `1:3` | `1:1` | GPT Image 2's sixteen (different order), not 2.5's thirteen |
-| `resolution` | string | | `1K` `2K` `4K` | `1K` | |
+| `prompt` | string | ✓ | 1 – 32000 chars | — | |
+| `aspect_ratio` | string | | `auto` `1:1` `3:2` `2:3` `4:3` `3:4` `5:4` `4:5` `16:9` `9:16` `2:1` `1:2` `21:9` `9:21` `3:1` `1:3` | `auto` | Static images only. GPT Image 2's sixteen, not 2.5's thirteen; no tier caps |
+| `resolution` | string | | `1K` `2K` `4K` | `1K` | Static images only (pixel table on the page) |
 | `quality` | string | | `low` `medium` `high` `xhigh` `max` `auto` | `medium` | |
-| `background` | string | | `transparent` `opaque` `auto` | `auto` | "Only available when resolution is 1K" |
-| `output_format` | string | | `png` `jpeg` `webp` `gif` `svg` | `gif` | Defaults to an animation |
-| `svg` | array | | — | — | **Not transcribed.** "complex structure — see the Run with API example" |
+| `background` | string | | `transparent` `opaque` `auto` | `auto` | Transparent needs png / webp (see conflict) |
+| `output_format` | string | | `png` `jpeg` `webp` `gif` `svg` | `png` | `jpg` is accepted as `jpeg` |
 | `complexity` | string | | `low` `medium` `high` | `high` | Planning complexity |
-| `moderation` | string | | `auto` `low` | `low` | Audit intensity |
-| `output_compression` | number | | 0 – 100, step 1 | `50` | JPEG / WEBP compression ratio |
-| `frame_count` | string | | `"2"` … `"16"` | `"16"` | **Quoted string**, not an integer |
-| `frame_duration_ms` | number | | 20 – 2000, step 10 | `120` | Per frame |
+| `moderation` | string | | `auto` `low` | `low` | |
+| `output_compression` | integer | | 0 – 100 | — | jpeg / webp only |
+| `size` | string | | `WxH`, multiples of 16, or `auto` | `auto` | GIF per-frame size; `auto` = 512×512 |
+| `frame_count` | integer | | 2 – 16 | `9` | GIF only |
+| `frame_duration_ms` | integer | | 20 – 2000, multipleOf 10 | `200` | GIF only |
+| `svg` | **object** | | `{ model }` | — | SVG only. Single object, not an array |
+| `svg.model` | string | | `gpt-6-sol` `gpt-5.6-luna` `gpt-5.6-terra` | `gpt-5.6-luna` | SVG author model, billed separately |
 
-### Restriction
+GIF frames are packed into a sprite sheet (2–8 → 4×2, 9 → 3×3, 10–12 → 4×3, 13–16 → 4×4) that must be
+≤ 3840 px per side, ≤ 8,294,400 px total and ≤ 3:1, else 400. `512x512` fits 2–16 frames, `768x768` at
+most 12, `1024x1024` never.
 
-> "Image background output mode. Only available when resolution is 1K."
+### Restrictions
 
-Encoded as two `forbiddenWhen` constraints on `background` (resolution `2K`, `4K`) — the same shape as
-GPT Image 2.
+| Doc says | Encoded as |
+|---|---|
+| GIF fields "Send only when `output_format=gif`" | `forbiddenWhen` on `size` `frame_count` `frame_duration_ms` for each other format |
+| `svg` "only when `output_format=svg`" | `forbiddenWhen` on `svg` for each other format |
+| `output_compression` "only when `output_format` is `jpeg` or `webp`" | `forbiddenWhen` for png / gif / svg |
+| Transparent background needs png / webp | `allowedValuesWhen` `background` → `opaque` `auto` for jpeg and svg |
 
+> **DOC CONFLICT — transparency and GIF.** `background` reads "only supported with `png` / `webp` /
+> `gif`" in its summary and "`output_format` must be `png` or `webp`" in its bullet. jpeg and svg are
+> excluded by both and are narrowed; gif is left to the server.
+
+> **EXAMPLE-ONLY VALUE.** The SVG request example sends `svg.model: gpt-5.4-mini`, which is not in the
+> enum. It is not offered.
+
+> **Superseded transcription.** An earlier pass worked from a playground-generated page that typed
+> `frame_count` as a string enum defaulting to `"16"`, defaulted `output_format` to `gif`, omitted
+> `size`, typed `svg` as an array, and restricted `background` to 1K. None of that is in the schema.

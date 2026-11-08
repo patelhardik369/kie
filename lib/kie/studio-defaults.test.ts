@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 
+import { activeValues, deriveFields } from './constraints.ts'
 import { ALL_MODELS, requireModel } from './registry/index.ts'
 import { openingValues, studioDefault, studioDefaults } from './studio-defaults.ts'
 import { validateInput } from './validate.ts'
@@ -82,7 +83,10 @@ describe('studio preferences', () => {
 
   it('leaves every model’s opening form valid', () => {
     for (const model of ALL_MODELS) {
-      const opening = openingValues(model)
+      // What the form actually submits: a default on a field the opening state
+      // disables (GPT Image 2.6's GIF controls under PNG) is shown, not sent.
+      const all = openingValues(model)
+      const opening = activeValues(deriveFields(model, all), all)
       const issues = validateInput(model, opening).issues.filter(
         // A blank form is legitimately missing its prompt and input assets;
         // what must not appear is an issue about a value we put there.

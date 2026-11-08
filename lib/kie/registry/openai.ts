@@ -299,8 +299,8 @@ const gpt25InputUrls: ParamDef = {
 // ------------------------------------------------------------ GPT Image 2.6
 
 /**
- * Sixteen ratios — GPT Image 2's sixteen, in a different order, NOT 2.5's
- * thirteen. 2.6 has no 27:16 / 16:27 / 9:8 / 8:9.
+ * Sixteen ratios — GPT Image 2's set (with 21:9 / 9:21 ahead of 3:1 / 1:3),
+ * NOT 2.5's thirteen. There is no 27:16 / 16:27 / 9:8 / 8:9 on 2.6.
  */
 const GPT26_ASPECT = [
   'auto',
@@ -321,20 +321,62 @@ const GPT26_ASPECT = [
   '1:3',
 ]
 
-/** "Image background output mode. Only available when resolution is 1K." */
+const GPT26_FORMATS = ['png', 'jpeg', 'webp', 'gif', 'svg'] as const
+
+/** Every format other than `keep`, for "send only when output_format=…" rules. */
+function otherFormats(...keep: string[]): string[] {
+  return GPT26_FORMATS.filter((f) => !keep.includes(f))
+}
+
+/**
+ * 2.6 switches field sets on `output_format`, and the doc is blunt about it:
+ * GIF fields "Send only when output_format=gif … Do not send for non-gif";
+ * `svg` "only when output_format=svg"; `output_compression` "only when
+ * output_format is jpeg or webp. Do not include this field for other formats."
+ *
+ * ConstraintWhen tests equality, so "not gif" is spelled as one rule per other
+ * format. `output_format` defaults to png, and an omitted field resolves to its
+ * default, so the GIF and SVG groups open greyed out — and a disabled field
+ * never reaches the payload.
+ *
+ * Transparency: "`output_format` must be `png` or `webp`" on `background`, and
+ * the same field's summary line adds gif. jpeg and svg are excluded by both
+ * sentences, so they are what is narrowed; gif is left to the server.
+ */
 const GPT26_CONSTRAINTS: Constraint[] = [
-  {
-    kind: 'forbiddenWhen',
-    keys: ['background'],
-    when: { key: 'resolution', equals: '2K' },
-    message: 'Background mode is available at 1K only — clear it to render at 2K.',
-  },
-  {
-    kind: 'forbiddenWhen',
-    keys: ['background'],
-    when: { key: 'resolution', equals: '4K' },
-    message: 'Background mode is available at 1K only — clear it to render at 4K.',
-  },
+  ...otherFormats('gif').map(
+    (format): Constraint => ({
+      kind: 'forbiddenWhen',
+      keys: ['size', 'frame_count', 'frame_duration_ms'],
+      when: { key: 'output_format', equals: format },
+      message: 'Frame size, count and duration apply to GIF output only.',
+    }),
+  ),
+  ...otherFormats('svg').map(
+    (format): Constraint => ({
+      kind: 'forbiddenWhen',
+      keys: ['svg'],
+      when: { key: 'output_format', equals: format },
+      message: 'SVG options apply to SVG output only.',
+    }),
+  ),
+  ...otherFormats('jpeg', 'webp').map(
+    (format): Constraint => ({
+      kind: 'forbiddenWhen',
+      keys: ['output_compression'],
+      when: { key: 'output_format', equals: format },
+      message: 'Compression applies to JPEG and WebP output only.',
+    }),
+  ),
+  ...['jpeg', 'svg'].map(
+    (format): Constraint => ({
+      kind: 'allowedValuesWhen',
+      keys: ['background'],
+      when: { key: 'output_format', equals: format },
+      values: ['opaque', 'auto'],
+      message: 'A transparent background needs PNG or WebP output.',
+    }),
+  ),
 ]
 
 /**
@@ -546,25 +588,29 @@ export const OPENAI_MODELS: ModelDefinition[] = [
         key: 'prompt',
         type: 'text',
         label: 'Prompt',
-        describe: 'Describes the generated image — or animation, with GIF output.',
+        describe:
+          'Subject, setting, composition, lighting and style. Put any text that should appear in the image in quotes.',
         group: 'core',
         required: true,
+        minLength: 1,
         maxLength: 32000,
       },
       {
         key: 'aspect_ratio',
         type: 'enum',
         label: 'Aspect ratio',
-        describe: 'Aspect ratio of the generated image. auto lets the model choose.',
+        describe:
+          'Shape of a static image (png / jpeg / webp / svg), mapped to pixels with the resolution. GIF frames use Frame size instead.',
         group: 'framing',
         enum: GPT26_ASPECT,
-        default: '1:1',
+        default: 'auto',
       },
       {
         key: 'resolution',
         type: 'enum',
         label: 'Resolution',
-        describe: 'Image resolution. Background mode needs 1K.',
+        describe:
+          'Static-image tier: 1:1 is 1024 / 2048 / 2880px square; 16:9 is 1536×864 / 2048×1152 / 3840×2160. Not used for GIF frames.',
         group: 'framing',
         enum: ['1K', '2K', '4K'],
         default: '1K',
@@ -573,7 +619,7 @@ export const OPENAI_MODELS: ModelDefinition[] = [
         key: 'quality',
         type: 'enum',
         label: 'Quality',
-        describe: 'Image quality.',
+        describe: 'Rendering quality.',
         group: 'framing',
         enum: ['low', 'medium', 'high', 'xhigh', 'max', 'auto'],
         default: 'medium',
@@ -582,7 +628,8 @@ export const OPENAI_MODELS: ModelDefinition[] = [
         key: 'background',
         type: 'enum',
         label: 'Background',
-        describe: 'Background output mode. Only available at 1K.',
+        describe:
+          'transparent for cut-outs, icons and stickers (PNG or WebP); opaque is always solid; auto lets the model decide.',
         group: 'framing',
         enum: ['transparent', 'opaque', 'auto'],
         default: 'auto',
@@ -591,10 +638,11 @@ export const OPENAI_MODELS: ModelDefinition[] = [
         key: 'output_format',
         type: 'enum',
         label: 'Output format',
-        describe: 'File format of the result. gif produces an animation.',
-        group: 'advanced',
-        enum: ['png', 'jpeg', 'webp', 'gif', 'svg'],
-        default: 'gif',
+        describe:
+          'gif unlocks the frame controls; svg unlocks the SVG author model. jpg is accepted as jpeg.',
+        group: 'framing',
+        enum: [...GPT26_FORMATS],
+        default: 'png',
       },
       {
         key: 'complexity',
@@ -609,7 +657,7 @@ export const OPENAI_MODELS: ModelDefinition[] = [
         key: 'moderation',
         type: 'enum',
         label: 'Moderation',
-        describe: 'Audit intensity.',
+        describe: 'Moderation strength.',
         group: 'advanced',
         enum: ['auto', 'low'],
         default: 'low',
@@ -618,43 +666,74 @@ export const OPENAI_MODELS: ModelDefinition[] = [
         key: 'output_compression',
         type: 'number',
         label: 'Compression',
-        describe: 'JPEG / WEBP compression ratio, 0-100.',
+        describe: 'JPEG / WebP compression, 0-100. Sent only with those two formats.',
         group: 'advanced',
         min: 0,
         max: 100,
         step: 1,
-        default: 50,
+      },
+      {
+        key: 'size',
+        type: 'string',
+        label: 'Frame size',
+        describe:
+          'GIF per-frame pixels as WIDTHxHEIGHT, both multiples of 16 — not a ratio like 1:1. auto is 512x512. 512x512 works for 2-16 frames; 768x768 for at most 12; 1024x1024 never fits.',
+        group: 'motion',
+        default: 'auto',
       },
       {
         key: 'frame_count',
-        type: 'enum',
+        type: 'number',
         label: 'Frame count',
-        describe: 'Number of frames. Sent as a quoted string.',
+        describe: 'GIF frames, an integer 2-16.',
         group: 'motion',
-        enum: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16'],
-        default: '16',
+        min: 2,
+        max: 16,
+        step: 1,
+        default: 9,
       },
       {
         key: 'frame_duration_ms',
         type: 'number',
         label: 'Frame duration (ms)',
-        describe: 'Duration of each frame in milliseconds, 20-2000 in steps of 10.',
+        describe: 'Per GIF frame, integer milliseconds, 20-2000 in steps of 10.',
         group: 'motion',
         min: 20,
         max: 2000,
         step: 10,
-        default: 120,
+        default: 200,
+      },
+      {
+        key: 'svg',
+        type: 'object',
+        label: 'SVG',
+        describe: 'SVG output only. Left empty, Kie uses gpt-5.6-luna.',
+        group: 'advanced',
+        fields: [
+          {
+            key: 'model',
+            type: 'enum',
+            label: 'Author model',
+            describe:
+              'Text model that writes the SVG. Billed as image tokens plus this model\'s input/output tokens.',
+            group: 'core',
+            enum: ['gpt-6-sol', 'gpt-5.6-luna', 'gpt-5.6-terra'],
+            default: 'gpt-5.6-luna',
+          },
+        ],
       },
     ],
     constraints: GPT26_CONSTRAINTS,
     notes:
-      'Slug is `gpt-image-2-6/flare-text-to-image` — a `gpt-image-2-6/` PREFIX and a slash, unlike 2.5, whose slugs ' +
-      'are one hyphenated string (`gpt-image-2-5-flare-text-to-image`). Defaults to GIF output (an animated image), ' +
-      'shaped by frame_count (a quoted string, 2-16) and frame_duration_ms. Sixteen aspect ratios — the same set as ' +
-      "GPT Image 2, not 2.5's thirteen — and `background` returns, restricted to 1K. `output_compression` is " +
-      'documented as a JPEG / WEBP ratio; the doc does not say whether other formats ignore or reject it. ' +
-      'NOT YET REACHABLE: `svg` (array) is documented only as "complex structure — see the Run with API example", ' +
-      'with no item schema, so it is left out rather than invented. ' +
-      'docUrl page path is inferred: transcribed from the page text supplied by the user while docs.kie.ai was unreachable — run /verify-catalog.',
+      'Slug is `gpt-image-2-6/flare-text-to-image` — a `gpt-image-2-6/` PREFIX and a slash, unlike 2.5 ' +
+      '(`gpt-image-2-5-flare-text-to-image`, one hyphenated string). Sixteen ratios, GPT Image 2\'s set rather ' +
+      'than 2.5\'s, and no ratio is capped to a tier. Output format switches field sets: GIF uses size / ' +
+      'frame_count / frame_duration_ms, SVG uses `svg.model`, compression is JPEG/WebP only — each is greyed ' +
+      'out for the other formats because the doc says not to send it. GIF frames are packed into a sprite sheet ' +
+      '(2-8 frames 4×2, 9 → 3×3, 10-12 → 4×3, 13-16 → 4×4) that must stay ≤ 3840 per side, ≤ 8,294,400 pixels ' +
+      'and ≤ 3:1, or Kie returns 400 — the form does not compute that, so trust the size guidance. ' +
+      'DOC CONFLICT: `background` says transparency needs png or webp, while its summary also lists gif; jpeg ' +
+      'and svg are blocked, gif is left to the server. The SVG request example uses `gpt-5.4-mini`, which is not ' +
+      'in the enum and is not offered.',
   },
 ]
