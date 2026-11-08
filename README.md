@@ -10,11 +10,11 @@ key**.
 | ByteDance (Seedance / Seedream) | 10 | 11 | — | 21 |
 | Wan | 18 | 2 | — | 20 |
 | Google (Veo / Gemini Omni / Imagen 4 / Nano Banana / Gemini TTS) | 5 | 9 | 1 | 15 |
-| OpenAI (GPT Image) | — | 9 | — | 9 |
+| OpenAI (GPT Image) | — | 10 | — | 10 |
 | Qwen (image) | — | 11 | — | 11 |
 | Flux (FLUX.2 Pro / FLUX.3 Klein) | — | 2 | — | 2 |
 | Enhance (upscale / background removal) | 2 | 3 | — | 5 |
-| | **56** | **47** | **1** | **104** |
+| | **56** | **48** | **1** | **105** |
 
 > **Status: built and deployable.** Runs on Vercel with Supabase for Postgres and Storage.
 > See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) to put it online.
@@ -40,7 +40,7 @@ Three promises:
 |---|---|
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | **Env vars, Supabase setup, scheduling, migrating from local** |
 | [`docs/PRD.md`](docs/PRD.md) | Goals, features, acceptance criteria |
-| [`docs/MODEL-CATALOG.md`](docs/MODEL-CATALOG.md) | All 104 models — what each is for |
+| [`docs/MODEL-CATALOG.md`](docs/MODEL-CATALOG.md) | All 105 models — what each is for |
 | [`docs/API-CONTRACT.md`](docs/API-CONTRACT.md) | Lifecycle, polling, retries, error mapping |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Route map, registry, job engine, storage |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Drizzle schema |

@@ -14,7 +14,7 @@ import { UrlThumb } from './UrlThumb.tsx'
  * Leaf controls, one per ParamType.
  *
  * Nothing here knows about a model. Every control is chosen by `param.type` and
- * configured by the ParamDef, which is what lets 104 models share one form.
+ * configured by the ParamDef, which is what lets 105 models share one form.
  */
 
 export interface ControlProps<T = unknown> {

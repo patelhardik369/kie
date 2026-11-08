@@ -26,16 +26,16 @@ import {
 } from './index.ts'
 
 describe('catalog completeness', () => {
-  it('holds all 104 in-scope models', () => {
+  it('holds all 105 in-scope models', () => {
     assert.equal(KLING_MODELS.length, 21)
     assert.equal(BYTEDANCE_MODELS.length, 21)
     assert.equal(WAN_MODELS.length, 20)
     assert.equal(GOOGLE_MODELS.length, 15)
-    assert.equal(OPENAI_MODELS.length, 9)
+    assert.equal(OPENAI_MODELS.length, 10)
     assert.equal(QWEN_MODELS.length, 11)
     assert.equal(FLUX_MODELS.length, 2)
     assert.equal(ENHANCE_MODELS.length, 5)
-    assert.equal(ALL_MODELS.length, 104)
+    assert.equal(ALL_MODELS.length, 105)
   })
 
   it('makes every Qwen model an image model', () => {
@@ -159,6 +159,7 @@ describe('slugs are verbatim', () => {
     assert.ok(getModel('kling-4.0/flash-keyframe-to-video'))
     assert.ok(getModel('kling-4.0/reference-to-video'))
     assert.ok(getModel('gpt-image-2-6/flare-text-to-image'))
+    assert.ok(getModel('gpt-image-2-6/flare-image-to-image'))
     assert.ok(getModel('flux-2/pro-text-to-image'))
     assert.ok(getModel('flux-3/klein-text-to-image'))
     assert.equal(getModel('google/nano-banana-2'), undefined)
@@ -329,7 +330,7 @@ describe('lookups', () => {
     assert.equal(modelsByFamily('bytedance').length, 21)
     assert.equal(modelsByFamily('wan').length, 20)
     assert.equal(modelsByFamily('google').length, 15)
-    assert.equal(modelsByFamily('openai').length, 9)
+    assert.equal(modelsByFamily('openai').length, 10)
     assert.equal(modelsByFamily('qwen').length, 11)
     assert.equal(modelsByFamily('flux').length, 2)
     assert.equal(modelsByFamily('enhance').length, 5)

@@ -14,11 +14,11 @@ layer *on top of* full manual control, never a replacement for it.
 | **ByteDance** (Seedance video / Seedream image) | 10 | 11 | — | 21 |
 | **Wan** | 18 | 2 | — | 20 |
 | **Google** (Veo, Gemini Omni, Imagen 4, Nano Banana, Gemini TTS) | 5 | 9 | 1 | 15 |
-| **OpenAI** (GPT Image 1.5 / 2 / 2.5 / 2.6) | — | 9 | — | 9 |
+| **OpenAI** (GPT Image 1.5 / 2 / 2.5 / 2.6) | — | 10 | — | 10 |
 | **Qwen** (Qwen 1, 2, 2.1, 3 image) | — | 11 | — | 11 |
 | **Flux** (FLUX.2 Pro, FLUX.3 Klein image) | — | 2 | — | 2 |
 | **Enhance** (Topaz, Recraft, Grok Imagine upscale) | 2 | 3 | — | 5 |
-| | **56** | **47** | **1** | **104** |
+| | **56** | **48** | **1** | **105** |
 
 `enhance` is a capability family, not a vendor: it holds every upscaler and background remover
 regardless of who makes it. That is why `grok-imagine/upscale` lives there while the rest of Grok
@@ -92,7 +92,7 @@ Neither storage limit is raisable on Supabase Free. Treat both as facts, not set
 7. **The registry is data, not code branches.** Adding a model means adding a `ModelDefinition`, not
    writing a new form or a new route. If a model forces you to special-case the UI, the schema layer is
    missing a field type — extend the schema layer instead.
-8. **A transport is registry data too.** 103 of the 104 models POST to `/api/v1/jobs/createTask`; Veo
+8. **A transport is registry data too.** 104 of the 105 models POST to `/api/v1/jobs/createTask`; Veo
    posts to `/api/v1/veo/generate` and polls `/api/v1/veo/record-info` with a different response
    shape. That difference is declared as `transport: 'veo'` on the `ModelDefinition` and absorbed by
    an adapter in `lib/kie/veo.ts` that returns the same `Task` shape. **The job engine, the gallery,

@@ -1,6 +1,6 @@
-# OpenAI — 9 models (9 image)
+# OpenAI — 10 models (10 image)
 
-Transcribed from `docs.kie.ai`. All nine POST to `https://api.kie.ai/api/v1/jobs/createTask`.
+Transcribed from `docs.kie.ai`. All ten POST to `https://api.kie.ai/api/v1/jobs/createTask`.
 
 > **Slug prefixes are inconsistent and must be copied exactly.** GPT Image 1.5 carries a
 > `gpt-image/` prefix **and a dot** in its version (`gpt-image/1.5-text-to-image`). GPT Image 2 and 2.5
@@ -19,6 +19,7 @@ Transcribed from `docs.kie.ai`. All nine POST to `https://api.kie.ai/api/v1/jobs
 | 7 | `gpt-image-2-5-sunburst-text-to-image` | text-to-image | image | `market/gpt/gpt-image-2-5-sunburst-text-to-image.md` |
 | 8 | `gpt-image-2-5-sunburst-image-to-image` | image-to-image | image | `market/gpt/gpt-image-2-5-sunburst-image-to-image.md` |
 | 9 | `gpt-image-2-6/flare-text-to-image` | text-to-image | image | `market/gpt/gpt-image-2-6-flare-text-to-image.md` |
+| 10 | `gpt-image-2-6/flare-image-to-image` | image-to-image | image | `market/gpt/gpt-image-2-6-flare-image-to-image.md` |
 
 GPT Image 2.5 (models 5–8) is **four endpoints, not one**: two quality tiers — `flare` and
 `sunburst` — each in a text-to-image and an image-to-image form. All four take the same schema; only
@@ -187,11 +188,10 @@ Same for both tiers. High-tier top-ups (+10% bonus) bring the effective rate dow
 
 ---
 
-# GPT Image 2.6 (model 9)
+# GPT Image 2.6 (models 9, 10)
 
 Transcribed from the OpenAPI block at `docs.kie.ai/market/gpt/gpt-image-2-6-flare-text-to-image.md`
-(2026-11-08). Kie also documents Flare image-to-image, Sunburst ×2 and Economy ×2 under 2.6; they are
-not in the registry.
+(2026-11-08). Kie also documents Sunburst ×2 and Economy ×2 under 2.6; they are not in the registry.
 
 **The slug shape changes again.** 2.6 is `gpt-image-2-6/flare-text-to-image` — a `gpt-image-2-6/`
 **prefix and a slash**, where 2.5 is one hyphenated string (`gpt-image-2-5-flare-text-to-image`).
@@ -238,3 +238,27 @@ most 12, `1024x1024` never.
 > **Superseded transcription.** An earlier pass worked from a playground-generated page that typed
 > `frame_count` as a string enum defaulting to `"16"`, defaulted `output_format` to `gif`, omitted
 > `size`, typed `svg` as an array, and restricted `background` to 1K. None of that is in the schema.
+
+### 10. `gpt-image-2-6/flare-image-to-image`
+
+From `docs.kie.ai/market/gpt/gpt-image-2-6-flare-image-to-image.md`. Same as model 9 for
+`aspect_ratio`, `resolution`, `quality`, `complexity`, `moderation` and `output_compression`; the
+differences:
+
+| field | type | req | enum / range | default | notes |
+|---|---|---|---|---|---|
+| `prompt` | string | ✓ | 1 – 32000 chars | — | Say what stays and what changes |
+| `input_urls` | string[] | ✓ | ≤ 16 | — | jpeg / png / webp |
+| `mask_url` | string (uri) | | | — | Inpaint mask. Not with `markup` |
+| `markup` | string (uri) | | | — | Transparent PNG overlaid on the **first** input image. Not with `mask_url` |
+| `background` | string | | `transparent` `opaque` `auto` | `auto` | Transparent needs png / webp — no gif mention here |
+| `output_format` | string | | `png` `jpeg` `webp` | `png` | No `gif`, no `svg` |
+
+No `size`, `frame_count`, `frame_duration_ms` or `svg` — GIF and SVG output are text-to-image only.
+
+| Doc says | Encoded as |
+|---|---|
+| `mask_url` / `markup` "Cannot be used together" | `mutuallyExclusive` |
+| `output_compression` only for jpeg / webp | `forbiddenWhen` output_format `png` |
+| Transparent background only with png / webp | `allowedValuesWhen` `background` → `opaque` `auto` for jpeg |
+

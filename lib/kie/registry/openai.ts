@@ -1,8 +1,8 @@
 import { docUrl, type Constraint, type ModelDefinition, type ParamDef } from './types.ts'
 
 /**
- * OpenAI — 9 image models (GPT Image 1.5 x2, GPT Image 2 x2, GPT Image 2.5 x4,
- * GPT Image 2.6 x1).
+ * OpenAI — 10 image models (GPT Image 1.5 x2, GPT Image 2 x2, GPT Image 2.5 x4,
+ * GPT Image 2.6 x2).
  * Transcribed from .claude/skills/kie-models/references/openai.md.
  *
  * Family-wide traps encoded below:
@@ -379,6 +379,58 @@ const GPT26_CONSTRAINTS: Constraint[] = [
   ),
 ]
 
+const gpt26Resolution: ParamDef = {
+  key: 'resolution',
+  type: 'enum',
+  label: 'Resolution',
+  describe:
+    'Static-image tier: 1:1 is 1024 / 2048 / 2880px square; 16:9 is 1536×864 / 2048×1152 / 3840×2160.',
+  group: 'framing',
+  enum: ['1K', '2K', '4K'],
+  default: '1K',
+}
+
+const gpt26Quality: ParamDef = {
+  key: 'quality',
+  type: 'enum',
+  label: 'Quality',
+  describe: 'Rendering quality.',
+  group: 'framing',
+  enum: ['low', 'medium', 'high', 'xhigh', 'max', 'auto'],
+  default: 'medium',
+}
+
+const gpt26Complexity: ParamDef = {
+  key: 'complexity',
+  type: 'enum',
+  label: 'Planning complexity',
+  describe: 'How much planning the model does before rendering.',
+  group: 'advanced',
+  enum: ['low', 'medium', 'high'],
+  default: 'high',
+}
+
+const gpt26Moderation: ParamDef = {
+  key: 'moderation',
+  type: 'enum',
+  label: 'Moderation',
+  describe: 'Moderation strength.',
+  group: 'advanced',
+  enum: ['auto', 'low'],
+  default: 'low',
+}
+
+const gpt26Compression: ParamDef = {
+  key: 'output_compression',
+  type: 'number',
+  label: 'Compression',
+  describe: 'JPEG / WebP compression, 0-100. Sent only with those two formats.',
+  group: 'advanced',
+  min: 0,
+  max: 100,
+  step: 1,
+}
+
 /**
  * The paragraph every 2.5 entry needs, plus whatever is true of just that one.
  *
@@ -605,25 +657,8 @@ export const OPENAI_MODELS: ModelDefinition[] = [
         enum: GPT26_ASPECT,
         default: 'auto',
       },
-      {
-        key: 'resolution',
-        type: 'enum',
-        label: 'Resolution',
-        describe:
-          'Static-image tier: 1:1 is 1024 / 2048 / 2880px square; 16:9 is 1536×864 / 2048×1152 / 3840×2160. Not used for GIF frames.',
-        group: 'framing',
-        enum: ['1K', '2K', '4K'],
-        default: '1K',
-      },
-      {
-        key: 'quality',
-        type: 'enum',
-        label: 'Quality',
-        describe: 'Rendering quality.',
-        group: 'framing',
-        enum: ['low', 'medium', 'high', 'xhigh', 'max', 'auto'],
-        default: 'medium',
-      },
+      gpt26Resolution,
+      gpt26Quality,
       {
         key: 'background',
         type: 'enum',
@@ -644,34 +679,9 @@ export const OPENAI_MODELS: ModelDefinition[] = [
         enum: [...GPT26_FORMATS],
         default: 'png',
       },
-      {
-        key: 'complexity',
-        type: 'enum',
-        label: 'Planning complexity',
-        describe: 'How much planning the model does before rendering.',
-        group: 'advanced',
-        enum: ['low', 'medium', 'high'],
-        default: 'high',
-      },
-      {
-        key: 'moderation',
-        type: 'enum',
-        label: 'Moderation',
-        describe: 'Moderation strength.',
-        group: 'advanced',
-        enum: ['auto', 'low'],
-        default: 'low',
-      },
-      {
-        key: 'output_compression',
-        type: 'number',
-        label: 'Compression',
-        describe: 'JPEG / WebP compression, 0-100. Sent only with those two formats.',
-        group: 'advanced',
-        min: 0,
-        max: 100,
-        step: 1,
-      },
+      gpt26Complexity,
+      gpt26Moderation,
+      gpt26Compression,
       {
         key: 'size',
         type: 'string',
@@ -735,5 +745,112 @@ export const OPENAI_MODELS: ModelDefinition[] = [
       'DOC CONFLICT: `background` says transparency needs png or webp, while its summary also lists gif; jpeg ' +
       'and svg are blocked, gif is left to the server. The SVG request example uses `gpt-5.4-mini`, which is not ' +
       'in the enum and is not offered.',
+  },
+  {
+    slug: 'gpt-image-2-6/flare-image-to-image',
+    family: 'openai',
+    capability: 'image-to-image',
+    label: 'GPT Image 2.6 Flare — Image to Image',
+    docUrl: docUrl('gpt/gpt-image-2-6-flare-image-to-image'),
+    outputKind: 'image',
+    params: [
+      {
+        key: 'prompt',
+        type: 'text',
+        label: 'Prompt',
+        describe:
+          'How to edit or combine the input images. Say what should stay the same and what should change; put any text that should appear in quotes.',
+        group: 'core',
+        required: true,
+        minLength: 1,
+        maxLength: 32000,
+      },
+      {
+        key: 'input_urls',
+        type: 'url[]',
+        label: 'Input images',
+        describe: 'Up to 16 reference images, JPEG / PNG / WebP.',
+        group: 'core',
+        required: true,
+        maxItems: 16,
+        accept: ['image'],
+      },
+      {
+        key: 'mask_url',
+        type: 'url',
+        label: 'Inpaint mask',
+        describe: 'Optional mask for a local edit. Not together with a markup overlay.',
+        group: 'core',
+        accept: ['image'],
+      },
+      {
+        key: 'markup',
+        type: 'url',
+        label: 'Markup overlay',
+        describe:
+          'Optional transparent PNG drawn over the FIRST input image to show the edit. Not together with a mask.',
+        group: 'core',
+        accept: ['image'],
+      },
+      {
+        key: 'aspect_ratio',
+        type: 'enum',
+        label: 'Aspect ratio',
+        describe: 'Mapped to pixels with the resolution.',
+        group: 'framing',
+        enum: GPT26_ASPECT,
+        default: 'auto',
+      },
+      gpt26Resolution,
+      gpt26Quality,
+      {
+        key: 'background',
+        type: 'enum',
+        label: 'Background',
+        describe:
+          'transparent for cut-outs, icons and stickers (PNG or WebP only); opaque is always solid; auto lets the model decide.',
+        group: 'framing',
+        enum: ['transparent', 'opaque', 'auto'],
+        default: 'auto',
+      },
+      {
+        key: 'output_format',
+        type: 'enum',
+        label: 'Output format',
+        describe: 'Static formats only — GIF and SVG are text-to-image features. jpg is accepted as jpeg.',
+        group: 'framing',
+        enum: ['png', 'jpeg', 'webp'],
+        default: 'png',
+      },
+      gpt26Complexity,
+      gpt26Moderation,
+      gpt26Compression,
+    ],
+    constraints: [
+      {
+        kind: 'mutuallyExclusive',
+        keys: ['mask_url', 'markup'],
+        message: 'Use an inpaint mask or a markup overlay, not both.',
+      },
+      {
+        kind: 'forbiddenWhen',
+        keys: ['output_compression'],
+        when: { key: 'output_format', equals: 'png' },
+        message: 'Compression applies to JPEG and WebP output only.',
+      },
+      {
+        kind: 'allowedValuesWhen',
+        keys: ['background'],
+        when: { key: 'output_format', equals: 'jpeg' },
+        values: ['opaque', 'auto'],
+        message: 'A transparent background needs PNG or WebP output.',
+      },
+    ],
+    notes:
+      'Slug is `gpt-image-2-6/flare-image-to-image` — prefix and slash, like its text-to-image sibling. Same ' +
+      'sixteen ratios, quality, complexity and moderation, but output is png / jpeg / webp only: no GIF frame ' +
+      'controls and no `svg`. Adds `mask_url` (inpaint) and `markup` (a transparent PNG overlaid on the first ' +
+      'input image), which cannot be combined. Unlike the text-to-image page, this one states transparency as ' +
+      'png / webp with no mention of gif.',
   },
 ]

@@ -1042,3 +1042,25 @@ describe('kling-4.0 references', () => {
     )
   })
 })
+
+describe('gpt-image-2-6/flare-image-to-image', () => {
+  const edit26 = requireModel('gpt-image-2-6/flare-image-to-image')
+  const A = 'https://x/a.png'
+
+  it('takes a mask or a markup overlay, not both', () => {
+    assert.equal(validateInput(edit26, { prompt: PROMPT, input_urls: [A], mask_url: 'https://x/m.png' }).ok, true)
+    assert.equal(validateInput(edit26, { prompt: PROMPT, input_urls: [A], markup: 'https://x/k.png' }).ok, true)
+    const both = validateInput(edit26, {
+      prompt: PROMPT,
+      input_urls: [A],
+      mask_url: 'https://x/m.png',
+      markup: 'https://x/k.png',
+    })
+    assert.equal(both.ok, false)
+    assert.match(messages(both), /mask or a markup/)
+  })
+
+  it('offers no GIF or SVG output', () => {
+    assert.equal(validateInput(edit26, { prompt: PROMPT, input_urls: [A], output_format: 'gif' }).ok, false)
+  })
+})

@@ -6,11 +6,14 @@
  *
  * ## Why marks are burned into pixels rather than sent as a mask
  *
- * Not one of the 104 in-scope models accepts a mask channel. Checked against the
- * registry, the reference tables and the live doc pages on 2026-09-13:
- * `gpt-image-2-5-flare-image-to-image`, the endpoint behind the feature this
- * imitates, takes exactly `prompt`, `input_urls`, `aspect_ratio` and `resolution`.
- * Inventing a `mask_url` would break the first rule in .claude/CLAUDE.md.
+ * When this was written (checked 2026-09-13) no in-scope model accepted a mask
+ * channel: `gpt-image-2-5-flare-image-to-image`, the endpoint behind the feature
+ * this imitates, takes exactly `prompt`, `input_urls`, `aspect_ratio` and
+ * `resolution`. Two have since arrived — `qwen2-1/image-to-image` (`mask_url`)
+ * and `gpt-image-2-6/flare-image-to-image` (`mask_url`, or a `markup` overlay
+ * PNG) — and both take theirs as an ordinary URL parameter in the form. Burning
+ * marks into pixels remains the one approach that works on every prompt-driven
+ * image model rather than two.
  *
  * So a mark is a coloured shape drawn ONTO a copy of the image, and the prompt
  * names it. That is the technique Nano Banana Pro's own prompting guide
