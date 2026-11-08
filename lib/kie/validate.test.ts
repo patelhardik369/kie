@@ -1064,3 +1064,34 @@ describe('gpt-image-2-6/flare-image-to-image', () => {
     assert.equal(validateInput(edit26, { prompt: PROMPT, input_urls: [A], output_format: 'gif' }).ok, false)
   })
 })
+
+describe('gpt-image-2-6 Economy is its own schema', () => {
+  const ecoT2i = requireModel('gpt-image-2-6/economy-text-to-image')
+  const ecoI2i = requireModel('gpt-image-2-6/economy-image-to-image')
+
+  it('takes frame_count as a quoted string, GIF only', () => {
+    assert.equal(validateInput(ecoT2i, { prompt: PROMPT, output_format: 'gif', frame_count: '64' }).ok, true)
+    assert.equal(validateInput(ecoT2i, { prompt: PROMPT, output_format: 'gif', frame_count: 9 }).ok, false)
+    assert.equal(validateInput(ecoT2i, { prompt: PROMPT, frame_count: '9' }).ok, false)
+  })
+
+  it('rejects the ratios only Flare and Sunburst offer', () => {
+    assert.equal(validateInput(ecoT2i, { prompt: PROMPT, aspect_ratio: '5:4' }).ok, false)
+  })
+
+  it('runs image-to-image without input images, PNG only', () => {
+    assert.equal(validateInput(ecoI2i, { prompt: PROMPT }).ok, true)
+    assert.equal(validateInput(ecoI2i, { prompt: PROMPT, output_format: 'gif' }).ok, false)
+  })
+})
+
+describe('gpt-image-2-6 Sunburst mirrors Flare', () => {
+  it('has the same parameters per direction', () => {
+    for (const kind of ['text-to-image', 'image-to-image']) {
+      const flare = requireModel(`gpt-image-2-6/flare-${kind}`)
+      const sunburst = requireModel(`gpt-image-2-6/sunburst-${kind}`)
+      assert.deepEqual(sunburst.params, flare.params, kind)
+      assert.deepEqual(sunburst.constraints, flare.constraints, kind)
+    }
+  })
+})

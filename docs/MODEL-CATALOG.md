@@ -1,4 +1,4 @@
-# Model catalog — 105 endpoints
+# Model catalog — 109 endpoints
 
 Index only. **Parameter detail lives in `.claude/skills/kie-models/references/`** so there is exactly
 one source of truth; each family section links there.
@@ -9,11 +9,11 @@ one source of truth; each family section links there.
 | ByteDance (Seedance / Seedream) | 10 | 11 | — | 21 |
 | Wan | 18 | 2 | — | 20 |
 | Google (Veo / Gemini Omni / Imagen 4 / Nano Banana) | 5 | 9 | 1 | 15 |
-| OpenAI (GPT Image) | — | 10 | — | 10 |
+| OpenAI (GPT Image) | — | 14 | — | 14 |
 | Qwen (Qwen 1 / 2 / 2.1 / 3) | — | 11 | — | 11 |
 | Flux (FLUX.2 Pro / FLUX.3 Klein) | — | 2 | — | 2 |
 | Enhance (upscale / background removal) | 2 | 3 | — | 5 |
-| | **56** | **48** | **1** | **105** |
+| | **56** | **52** | **1** | **109** |
 
 Verify against upstream with `/verify-catalog`. Add one with `/add-model <slug>`.
 
@@ -186,7 +186,7 @@ task, so they belong in the asset library rather than the registry.
 
 ---
 
-## OpenAI — 10 image models
+## OpenAI — 14 image models
 → [`references/openai.md`](../.claude/skills/kie-models/references/openai.md)
 
 | Model slug | Capability | Pick it for |
@@ -201,6 +201,10 @@ task, so they belong in the asset library rather than the registry.
 | `gpt-image-2-5-sunburst-image-to-image` | image-to-image | 2.5 premium tier editing, up to 16 inputs |
 | `gpt-image-2-6/flare-text-to-image` | text-to-image | 2.6: PNG/JPEG/WebP plus animated GIF and SVG output, 6 quality tiers, 32k prompts |
 | `gpt-image-2-6/flare-image-to-image` | image-to-image | 2.6 editing: 16 inputs, inpaint mask or markup overlay; static formats only |
+| `gpt-image-2-6/sunburst-text-to-image` | text-to-image | 2.6 refined tier; same schema as Flare |
+| `gpt-image-2-6/sunburst-image-to-image` | image-to-image | 2.6 refined tier editing; same schema as Flare |
+| `gpt-image-2-6/economy-text-to-image` | text-to-image | 2.6 Economy: 8 ratios, PNG or GIF (up to 64 frames), no resolution/quality knobs |
+| `gpt-image-2-6/economy-image-to-image` | image-to-image | 2.6 Economy editing: optional inputs, PNG only |
 
 **Traps:** GPT Image 1.5 keeps a `gpt-image/` prefix **and** a dot (`1.5`); GPT Image 2 and 2.5 have
 neither, despite living under `market/gpt/` — and 2.5 spells its version `2-5`. 1.5 marks three fields

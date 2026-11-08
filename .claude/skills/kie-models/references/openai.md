@@ -1,6 +1,6 @@
-# OpenAI — 10 models (10 image)
+# OpenAI — 14 models (14 image)
 
-Transcribed from `docs.kie.ai`. All ten POST to `https://api.kie.ai/api/v1/jobs/createTask`.
+Transcribed from `docs.kie.ai`. All fourteen POST to `https://api.kie.ai/api/v1/jobs/createTask`.
 
 > **Slug prefixes are inconsistent and must be copied exactly.** GPT Image 1.5 carries a
 > `gpt-image/` prefix **and a dot** in its version (`gpt-image/1.5-text-to-image`). GPT Image 2 and 2.5
@@ -20,6 +20,10 @@ Transcribed from `docs.kie.ai`. All ten POST to `https://api.kie.ai/api/v1/jobs/
 | 8 | `gpt-image-2-5-sunburst-image-to-image` | image-to-image | image | `market/gpt/gpt-image-2-5-sunburst-image-to-image.md` |
 | 9 | `gpt-image-2-6/flare-text-to-image` | text-to-image | image | `market/gpt/gpt-image-2-6-flare-text-to-image.md` |
 | 10 | `gpt-image-2-6/flare-image-to-image` | image-to-image | image | `market/gpt/gpt-image-2-6-flare-image-to-image.md` |
+| 11 | `gpt-image-2-6/sunburst-text-to-image` | text-to-image | image | `market/gpt/gpt-image-2-6-sunburst-text-to-image.md` |
+| 12 | `gpt-image-2-6/sunburst-image-to-image` | image-to-image | image | `market/gpt/gpt-image-2-6-sunburst-image-to-image.md` |
+| 13 | `gpt-image-2-6/economy-text-to-image` | text-to-image | image | `market/gpt/gpt-image-2-6-economy-text-to-image.md` |
+| 14 | `gpt-image-2-6/economy-image-to-image` | image-to-image | image | `market/gpt/gpt-image-2-6-economy-image-to-image.md` |
 
 GPT Image 2.5 (models 5–8) is **four endpoints, not one**: two quality tiers — `flare` and
 `sunburst` — each in a text-to-image and an image-to-image form. All four take the same schema; only
@@ -188,10 +192,11 @@ Same for both tiers. High-tier top-ups (+10% bonus) bring the effective rate dow
 
 ---
 
-# GPT Image 2.6 (models 9, 10)
+# GPT Image 2.6 (models 9–14)
 
 Transcribed from the OpenAPI block at `docs.kie.ai/market/gpt/gpt-image-2-6-flare-text-to-image.md`
-(2026-11-08). Kie also documents Sunburst ×2 and Economy ×2 under 2.6; they are not in the registry.
+(2026-11-08). Three tiers — Flare (fast), Sunburst (refined), Economy — each with a text-to-image and an
+image-to-image endpoint. Flare and Sunburst share one schema per direction; Economy has its own.
 
 **The slug shape changes again.** 2.6 is `gpt-image-2-6/flare-text-to-image` — a `gpt-image-2-6/`
 **prefix and a slash**, where 2.5 is one hyphenated string (`gpt-image-2-5-flare-text-to-image`).
@@ -261,4 +266,39 @@ No `size`, `frame_count`, `frame_duration_ms` or `svg` — GIF and SVG output ar
 | `mask_url` / `markup` "Cannot be used together" | `mutuallyExclusive` |
 | `output_compression` only for jpeg / webp | `forbiddenWhen` output_format `png` |
 | Transparent background only with png / webp | `allowedValuesWhen` `background` → `opaque` `auto` for jpeg |
+
+### 11, 12. `gpt-image-2-6/sunburst-text-to-image` / `gpt-image-2-6/sunburst-image-to-image`
+
+Field-for-field identical to models 9 and 10 — the four OpenAPI blocks were diffed and differ only in
+whitespace inside the `background` description. The registry builds Flare and Sunburst from one
+function per direction; only the slug, label, doc page and positioning line vary.
+
+### 13. `gpt-image-2-6/economy-text-to-image`
+
+| field | type | req | enum / range | default | notes |
+|---|---|---|---|---|---|
+| `prompt` | string | ✓ | 1 – 20000 chars | — | 20k, not 32k |
+| `aspect_ratio` | string | | `auto` `1:1` `16:9` `9:16` `3:2` `2:3` `21:9` `4:3` | `auto` | Eight only |
+| `background` | string | | `transparent` `opaque` `auto` | `auto` | No format restriction stated |
+| `output_format` | string | | `png` `gif` | `png` | |
+| `frame_count` | **string** | | `auto` `4` `9` `16` `25` `36` `64` | `auto` | GIF only. Quoted, unlike Flare's integer 2–16 |
+| `frame_duration_ms` | number | | 20 – 2000, rounded to 10 | — | GIF only. See conflict |
+
+No `resolution`, `quality`, `complexity`, `moderation`, `output_compression`, `size` or `svg`.
+
+> **DOC CONFLICT — `frame_duration_ms`.** Typed `number` with no `default`; the description calls
+> `auto` the default and the request example sends the string `"auto"`. The registry follows the type
+> and leaves the field empty for auto.
+
+### 14. `gpt-image-2-6/economy-image-to-image`
+
+| field | type | req | enum / range | default | notes |
+|---|---|---|---|---|---|
+| `prompt` | string | ✓ | 1 – 20000 chars | — | |
+| `input_urls` | string[] | | ≤ 16 | — | **Optional** here; JPEG / PNG / WebP ≤ 30 MB |
+| `aspect_ratio` | string | | same eight as model 13 | `auto` | |
+| `background` | string | | `transparent` `opaque` `auto` | `auto` | |
+| `output_format` | string | | `png` | `png` | PNG only |
+
+No mask, no markup, no GIF.
 

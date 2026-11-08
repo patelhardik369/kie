@@ -31,7 +31,7 @@ is expected to find something.
    - **Transport risk** — any new page whose OpenAPI `paths:` is not `/api/v1/jobs/createTask`. These
      cannot be added as plain registry entries; call them out separately.
    - **Count check** — reference-file totals against the expected baseline of 21 Kling / 21 ByteDance /
-     20 Wan / 15 Google / 10 OpenAI / 11 Qwen / 2 Flux / 5 Enhance = 105.
+     20 Wan / 15 Google / 14 OpenAI / 11 Qwen / 2 Flux / 5 Enhance = 109.
 5. For anything new, spot-check the `model` enum against the page path — these routinely diverge
    (`.../kling/v25-turbo-text-to-video-pro.md` serves `kling/v2-5-turbo-text-to-video-pro`;
    `.../google/nanobanana2.md` serves `nano-banana-2`; `.../google/pro-image-to-image.md` serves

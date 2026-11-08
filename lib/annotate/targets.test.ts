@@ -20,13 +20,13 @@ describe('which models offer markup', () => {
           (param.accept ?? []).includes('image'),
       ),
     )
-    // 67 take an image; 5 of them have no prompt to name a mark in.
+    // 69 take an image; 5 of them have no prompt to name a mark in.
     // Qwen contributed 6 — its six image-to-image endpoints, every one of which
     // has a prompt, so the excluded list below is unchanged. Kling 4.0 added 2
     // (first_frame_url, image_urls), both with a prompt, and GPT Image 2.6
-    // Flare image-to-image 1.
-    assert.equal(withImage.length, 67)
-    assert.equal(supported.length, 62)
+    // image-to-image 3 (Flare, Sunburst, Economy).
+    assert.equal(withImage.length, 69)
+    assert.equal(supported.length, 64)
   })
 
   it('excludes exactly the prompt-less image endpoints, by their own data', () => {
