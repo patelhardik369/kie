@@ -342,9 +342,14 @@ function otherFormats(...keep: string[]): string[] {
  * default, so the GIF and SVG groups open greyed out — and a disabled field
  * never reaches the payload.
  *
- * Transparency: "`output_format` must be `png` or `webp`" on `background`, and
- * the same field's summary line adds gif. jpeg and svg are excluded by both
- * sentences, so they are what is narrowed; gif is left to the server.
+ * Transparency: the schema's `background` text says "png / webp / gif" in one
+ * line and "png or webp" in the next. kie.ai's own playground settles it with a
+ * linkage rule — a transparent background disables `jpeg` and `svg` and leaves
+ * `gif` available — so jpeg and svg are what is narrowed here.
+ *
+ * Every other rule above mirrors one of that playground's linkage rules
+ * exactly: GIF fields hidden unless gif, `svg` hidden unless svg, compression
+ * hidden unless jpeg / webp.
  */
 const GPT26_CONSTRAINTS: Constraint[] = [
   ...otherFormats('gif').map(
@@ -493,7 +498,7 @@ function gpt26TextToImage(tier: Gpt26FullTier): ModelDefinition {
         type: 'enum',
         label: 'Background',
         describe:
-          'transparent for cut-outs, icons and stickers (PNG or WebP); opaque is always solid; auto lets the model decide.',
+          'transparent for cut-outs, icons and stickers (PNG, WebP or GIF); opaque is always solid; auto lets the model decide. Kie\'s playground notes this is only available at 1K.',
         group: 'framing',
         enum: ['transparent', 'opaque', 'auto'],
         default: 'auto',
@@ -572,9 +577,12 @@ function gpt26TextToImage(tier: Gpt26FullTier): ModelDefinition {
       'out for the other formats because the doc says not to send it. GIF frames are packed into a sprite sheet ' +
       '(2-8 frames 4×2, 9 → 3×3, 10-12 → 4×3, 13-16 → 4×4) that must stay ≤ 3840 per side, ≤ 8,294,400 pixels ' +
       'and ≤ 3:1, or Kie returns 400 — the form does not compute that, so trust the size guidance. ' +
-      'DOC CONFLICT: `background` says transparency needs png or webp, while its summary also lists gif; jpeg ' +
-      'and svg are blocked, gif is left to the server. The SVG request example uses `gpt-5.4-mini`, which is not ' +
-      'in the enum and is not offered.',
+      'Transparency works with png, webp and gif — the schema text is split on gif, and kie.ai\'s playground ' +
+      'rule (transparent disables jpeg and svg only) settles it. UNVERIFIED 1K NOTE: kie.ai\'s playground labels ' +
+      '`background` "Only available when resolution is 1K", but neither the API schema nor the playground\'s own ' +
+      'linkage rules enforce it, so 2K/4K stay selectable and the note is shown on the control. If Kie rejects a ' +
+      'background at 2K/4K, encode it as forbiddenWhen like GPT Image 2. The SVG request example uses ' +
+      '`gpt-5.4-mini`, which is not in the enum and is not offered.',
   }
 }
 
@@ -641,7 +649,7 @@ function gpt26ImageToImage(tier: Gpt26FullTier): ModelDefinition {
         type: 'enum',
         label: 'Background',
         describe:
-          'transparent for cut-outs, icons and stickers (PNG or WebP only); opaque is always solid; auto lets the model decide.',
+          'transparent for cut-outs, icons and stickers (PNG or WebP only); opaque is always solid; auto lets the model decide. Kie\'s playground notes this is only available at 1K.',
         group: 'framing',
         enum: ['transparent', 'opaque', 'auto'],
         default: 'auto',
@@ -684,8 +692,8 @@ function gpt26ImageToImage(tier: Gpt26FullTier): ModelDefinition {
       'Slug is `gpt-image-2-6/flare-image-to-image` — prefix and slash, like its text-to-image sibling. Same ' +
       'sixteen ratios, quality, complexity and moderation, but output is png / jpeg / webp only: no GIF frame ' +
       'controls and no `svg`. Adds `mask_url` (inpaint) and `markup` (a transparent PNG overlaid on the first ' +
-      'input image), which cannot be combined. Unlike the text-to-image page, this one states transparency as ' +
-      'png / webp with no mention of gif.',
+      'input image), which cannot be combined. Transparency needs png or webp (kie.ai\'s playground disables ' +
+      'jpeg for it). Same unverified "only at 1K" playground note on `background` as text-to-image.',
   }
 }
 

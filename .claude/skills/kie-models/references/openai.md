@@ -233,9 +233,29 @@ most 12, `1024x1024` never.
 | `output_compression` "only when `output_format` is `jpeg` or `webp`" | `forbiddenWhen` for png / gif / svg |
 | Transparent background needs png / webp | `allowedValuesWhen` `background` → `opaque` `auto` for jpeg and svg |
 
-> **DOC CONFLICT — transparency and GIF.** `background` reads "only supported with `png` / `webp` /
-> `gif`" in its summary and "`output_format` must be `png` or `webp`" in its bullet. jpeg and svg are
-> excluded by both and are narrowed; gif is left to the server.
+> **RESOLVED — transparency and GIF.** `background` reads "only supported with `png` / `webp` /
+> `gif`" in its summary and "`output_format` must be `png` or `webp`" in its bullet. kie.ai's own
+> playground (`kie.ai/gpt-image-2-6`) settles it with a linkage rule: a transparent background disables
+> `jpeg` and `svg` only, so gif is allowed.
+
+> **UNVERIFIED — background at 1K only.** The kie.ai playground labels `background` "Only available
+> when resolution is 1K" on all four Flare / Sunburst forms. The API schema does not say so, and the
+> playground's linkage rules do not enforce it. The registry shows the note on the control and does not
+> block 2K / 4K; if Kie rejects it, add `forbiddenWhen` as on GPT Image 2.
+
+### kie.ai playground linkage rules (2026-11-08)
+
+| Form | Rule | Registry |
+|---|---|---|
+| Flare / Sunburst t2i | `output_format ≠ gif` → hide `frame_count`, `frame_duration_ms` | `forbiddenWhen` (also `size`) |
+| Flare / Sunburst t2i | `background = transparent` → disable `jpeg`, `svg` | `allowedValuesWhen` on `background` for jpeg / svg |
+| Flare / Sunburst t2i + i2i | `output_format ∉ {jpeg, webp}` → hide `output_compression` | `forbiddenWhen` |
+| Flare / Sunburst t2i | `output_format ≠ svg` → hide `svg` | `forbiddenWhen` |
+| Flare / Sunburst i2i | `background = transparent` → disable `jpeg` | `allowedValuesWhen` for jpeg |
+| Economy t2i | `output_format ≠ gif` → hide `frame_count`, `frame_duration_ms` | `forbiddenWhen` |
+
+The playground's DEFAULTS differ from the API's and are not used: it opens text-to-image on `gif`,
+`1:1`, `frame_count "16"`, `frame_duration_ms 120`; the API defaults are `png`, `auto`, `9`, `200`.
 
 > **EXAMPLE-ONLY VALUE.** The SVG request example sends `svg.model: gpt-5.4-mini`, which is not in the
 > enum. It is not offered.
