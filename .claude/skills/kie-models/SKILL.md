@@ -1,11 +1,11 @@
 ---
 name: kie-models
-description: The Kie Studio model registry — the ModelDefinition/ParamDef schema every model is described with, the rule that parameters are transcribed from docs.kie.ai and never invented, the constraint system for mutually-exclusive inputs, the transport field that lets Veo live beside the unified endpoint, and the family reference index covering all 99 in-scope Kling / ByteDance / Wan / Google / OpenAI / Qwen / Enhance endpoints. Load this before adding, editing, or auditing any model in lib/kie/registry, before building or changing the parameter form, or whenever you need a model's exact fields, enums, defaults, or limits.
+description: The Kie Studio model registry — the ModelDefinition/ParamDef schema every model is described with, the rule that parameters are transcribed from docs.kie.ai and never invented, the constraint system for mutually-exclusive inputs, the transport field that lets Veo live beside the unified endpoint, and the family reference index covering all 104 in-scope Kling / ByteDance / Wan / Google / OpenAI / Qwen / Flux / Enhance endpoints. Load this before adding, editing, or auditing any model in lib/kie/registry, before building or changing the parameter form, or whenever you need a model's exact fields, enums, defaults, or limits.
 ---
 
 # Kie Studio — Model Registry
 
-99 generation endpoints across seven families. Every one is described as **data** — a
+104 generation endpoints across eight families. Every one is described as **data** — a
 `ModelDefinition` — never as a bespoke form or route. The parameter UI is generated from these
 definitions, so a correct definition is the whole feature.
 
@@ -34,17 +34,18 @@ Use the `kie-model-scout` agent (`.claude/agents/kie-model-scout.md`) to transcr
 
 | File | Endpoints |
 |---|---|
-| `references/kling.md` | 19 Kling video models |
+| `references/kling.md` | 21 Kling video models |
 | `references/bytedance.md` | 10 Seedance video + 10 Seedream image |
 | `references/wan.md` | 18 Wan video + 2 Wan image |
 | `references/google.md` | 5 video (Veo ×3, Gemini Omni ×2) + 8 image (Imagen 4 ×3, Nano Banana ×5) + 1 audio (Gemini TTS) |
-| `references/openai.md` | 8 GPT Image models (1.5 ×2, 2 ×2, 2.5 ×4) |
+| `references/openai.md` | 9 GPT Image models (1.5 ×2, 2 ×2, 2.5 ×4, 2.6 ×1) |
 | `references/qwen.md` | 11 Qwen image models (Qwen 1 ×3, 2 ×2, 2.1 ×2, 3 ×2, 3 Pro ×2) |
+| `references/flux.md` | 2 Flux image models (FLUX.2 Pro, FLUX.3 Klein) |
 | `references/enhance.md` | 3 image + 2 video upscale / background-removal models |
 | `references/utility.md` | Uploads, credits, download-URL, webhook verification |
 
 `docs/MODEL-CATALOG.md` is a human-readable index that links here. It carries **no parameter detail** —
-these eight files are the single source of truth, so a change lands in exactly one place.
+these nine files are the single source of truth, so a change lands in exactly one place.
 
 `enhance` is a **capability family, not a vendor**: every upscaler and background remover lives there
 whoever built it. This is why `grok-imagine/upscale` is in scope while the rest of Grok Imagine is not.
@@ -54,7 +55,7 @@ whoever built it. This is why `grok-imagine/upscale` is in scope while the rest 
 ## Schema
 
 ```ts
-export type Family = 'kling' | 'bytedance' | 'wan' | 'google' | 'openai' | 'qwen' | 'enhance'
+export type Family = 'kling' | 'bytedance' | 'wan' | 'google' | 'openai' | 'qwen' | 'flux' | 'enhance'
 
 export type Capability =
   | 'text-to-video' | 'image-to-video' | 'reference-to-video'
@@ -148,7 +149,7 @@ character-for-character from the doc's `model` enum, which outranks any prose on
 ### Transports
 
 `transport` names which HTTP contract a model speaks. Omit it and the model uses `'jobs'`, the unified
-`POST /api/v1/jobs/createTask` + `GET /api/v1/jobs/recordInfo` pair that 98 of the 99 models use.
+`POST /api/v1/jobs/createTask` + `GET /api/v1/jobs/recordInfo` pair that 103 of the 104 models use.
 
 `transport: 'veo'` marks the three Veo models, which post a **flat** body to `/api/v1/veo/generate` —
 no `input` wrapper — and poll `/api/v1/veo/record-info`, which reports a numeric `successFlag` instead
@@ -232,12 +233,12 @@ authoritative list of what exists.
 
 ## Scope reminder
 
-Seven families only: `kling`, `bytedance`, `wan`, `google`, `openai`, `qwen`, `enhance`.
+Eight families only: `kling`, `bytedance`, `wan`, `google`, `openai`, `qwen`, `flux`, `enhance`.
 
-Kie also serves Runway, Hailuo, PixVerse, MiniMax, Flux, Ideogram, Midjourney, Suno, ElevenLabs,
+Kie also serves Runway, Hailuo, PixVerse, MiniMax, Ideogram, Midjourney, Suno, ElevenLabs,
 OmniHuman, InfiniteTalk, HappyHorse, Z-Image, and the non-upscale half of Grok Imagine — all
 deliberately out of scope. Do not add them without asking. Qwen's **image** endpoints came in scope as
-the seventh family; its chat completions did not.
+the seventh family; its chat completions did not. Flux came in as the eighth.
 
 **Chat and text models are permanently out of scope**, including Gemini 2.5/3.x, GPT-5.x, Codex, Qwen,
 and Claude. The Google and OpenAI families here cover image, video, and audio generation only; a text

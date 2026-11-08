@@ -917,3 +917,46 @@ describe('qwen2-1 keeps JPEG and a transparent background apart', () => {
     assert.equal(field.disabled, false)
   })
 })
+
+describe('flux-3/klein-text-to-image: a pixel size overrides ratio and resolution', () => {
+  const klein = requireModel('flux-3/klein-text-to-image')
+
+  it('accepts width and height on their own', () => {
+    const result = validateInput(klein, { prompt: PROMPT, width: 1024, height: 768 })
+    assert.equal(result.ok, true, messages(result))
+  })
+
+  it('rejects width without height', () => {
+    const result = validateInput(klein, { prompt: PROMPT, width: 1024 })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /passed together/)
+  })
+
+  it('rejects an aspect ratio alongside a pixel size, which Kie would ignore', () => {
+    const result = validateInput(klein, {
+      prompt: PROMPT,
+      width: 1024,
+      height: 768,
+      aspect_ratio: '16:9',
+    })
+    assert.equal(result.ok, false)
+    assert.match(messages(result), /override the aspect ratio/)
+  })
+})
+
+describe('gpt-image-2-6/flare-text-to-image: background is 1K only', () => {
+  const flare26 = requireModel('gpt-image-2-6/flare-text-to-image')
+
+  it('accepts a background at 1K', () => {
+    const result = validateInput(flare26, { prompt: PROMPT, resolution: '1K', background: 'opaque' })
+    assert.equal(result.ok, true, messages(result))
+  })
+
+  it('rejects a background at 2K and 4K', () => {
+    for (const resolution of ['2K', '4K']) {
+      const result = validateInput(flare26, { prompt: PROMPT, resolution, background: 'opaque' })
+      assert.equal(result.ok, false, resolution)
+      assert.match(messages(result), /1K only/)
+    }
+  })
+})

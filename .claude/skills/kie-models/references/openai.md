@@ -1,6 +1,6 @@
-# OpenAI — 8 models (8 image)
+# OpenAI — 9 models (9 image)
 
-Transcribed from `docs.kie.ai`. All eight POST to `https://api.kie.ai/api/v1/jobs/createTask`.
+Transcribed from `docs.kie.ai`. All nine POST to `https://api.kie.ai/api/v1/jobs/createTask`.
 
 > **Slug prefixes are inconsistent and must be copied exactly.** GPT Image 1.5 carries a
 > `gpt-image/` prefix **and a dot** in its version (`gpt-image/1.5-text-to-image`). GPT Image 2 and 2.5
@@ -18,6 +18,7 @@ Transcribed from `docs.kie.ai`. All eight POST to `https://api.kie.ai/api/v1/job
 | 6 | `gpt-image-2-5-flare-image-to-image` | image-to-image | image | `market/gpt/gpt-image-2-5-flare-image-to-image.md` |
 | 7 | `gpt-image-2-5-sunburst-text-to-image` | text-to-image | image | `market/gpt/gpt-image-2-5-sunburst-text-to-image.md` |
 | 8 | `gpt-image-2-5-sunburst-image-to-image` | image-to-image | image | `market/gpt/gpt-image-2-5-sunburst-image-to-image.md` |
+| 9 | `gpt-image-2-6/flare-text-to-image` | text-to-image | image | `market/gpt/gpt-image-2-6-flare-text-to-image.md` (inferred) |
 
 GPT Image 2.5 (models 5–8) is **four endpoints, not one**: two quality tiers — `flare` and
 `sunburst` — each in a text-to-image and an image-to-image form. All four take the same schema; only
@@ -183,3 +184,37 @@ Same for both tiers. High-tier top-ups (+10% bonus) bring the effective rate dow
 > annotation is display metadata left over from the page it was copied from. `references` and the
 > registry transcribe the `enum`. The `kie.ai` playground for all four endpoints shows the same
 > thirteen, which confirms it.
+
+---
+
+# GPT Image 2.6 (model 9)
+
+> **Source.** Transcribed from the doc page text the user supplied on 2026-11-08; `docs.kie.ai` was unreachable from the session, so the doc-page path below is **inferred** and must be confirmed with `/verify-catalog`.
+
+**The slug shape changes again.** 2.6 is `gpt-image-2-6/flare-text-to-image` — a `gpt-image-2-6/`
+**prefix and a slash**, where 2.5 is one hyphenated string (`gpt-image-2-5-flare-text-to-image`).
+
+### 9. `gpt-image-2-6/flare-text-to-image`
+
+| field | type | req | enum / range | default | notes |
+|---|---|---|---|---|---|
+| `prompt` | string | ✓ | ≤ 32000 chars | — | Doc "default" is an example prompt |
+| `aspect_ratio` | string | | `auto` `1:1` `3:2` `2:3` `4:3` `3:4` `5:4` `4:5` `16:9` `9:16` `2:1` `1:2` `21:9` `9:21` `3:1` `1:3` | `1:1` | GPT Image 2's sixteen (different order), not 2.5's thirteen |
+| `resolution` | string | | `1K` `2K` `4K` | `1K` | |
+| `quality` | string | | `low` `medium` `high` `xhigh` `max` `auto` | `medium` | |
+| `background` | string | | `transparent` `opaque` `auto` | `auto` | "Only available when resolution is 1K" |
+| `output_format` | string | | `png` `jpeg` `webp` `gif` `svg` | `gif` | Defaults to an animation |
+| `svg` | array | | — | — | **Not transcribed.** "complex structure — see the Run with API example" |
+| `complexity` | string | | `low` `medium` `high` | `high` | Planning complexity |
+| `moderation` | string | | `auto` `low` | `low` | Audit intensity |
+| `output_compression` | number | | 0 – 100, step 1 | `50` | JPEG / WEBP compression ratio |
+| `frame_count` | string | | `"2"` … `"16"` | `"16"` | **Quoted string**, not an integer |
+| `frame_duration_ms` | number | | 20 – 2000, step 10 | `120` | Per frame |
+
+### Restriction
+
+> "Image background output mode. Only available when resolution is 1K."
+
+Encoded as two `forbiddenWhen` constraints on `background` (resolution `2K`, `4K`) — the same shape as
+GPT Image 2.
+

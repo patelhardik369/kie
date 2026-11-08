@@ -1,5 +1,6 @@
 import { BYTEDANCE_MODELS } from './bytedance.ts'
 import { ENHANCE_MODELS } from './enhance.ts'
+import { FLUX_MODELS } from './flux.ts'
 import { GOOGLE_MODELS } from './google.ts'
 import { KLING_MODELS } from './kling.ts'
 import { OPENAI_MODELS } from './openai.ts'
@@ -15,8 +16,8 @@ import { WAN_MODELS } from './wan.ts'
 export * from './types.ts'
 
 /**
- * All 99 in-scope models: 19 Kling + 21 ByteDance + 20 Wan + 15 Google +
- * 8 OpenAI + 11 Qwen + 5 Enhance.
+ * All 104 in-scope models: 21 Kling + 21 ByteDance + 20 Wan + 15 Google +
+ * 9 OpenAI + 11 Qwen + 2 Flux + 5 Enhance.
  *
  * Order is browse order, not alphabetical: the three original video families
  * first, then the newer generative families, then Enhance — which is the only
@@ -29,12 +30,14 @@ export const ALL_MODELS: ModelDefinition[] = [
   ...GOOGLE_MODELS,
   ...OPENAI_MODELS,
   ...QWEN_MODELS,
+  ...FLUX_MODELS,
   ...ENHANCE_MODELS,
 ]
 
 export {
   BYTEDANCE_MODELS,
   ENHANCE_MODELS,
+  FLUX_MODELS,
   GOOGLE_MODELS,
   KLING_MODELS,
   OPENAI_MODELS,

@@ -1,7 +1,7 @@
 import { docUrl, type Constraint, type ModelDefinition, type ParamDef } from './types.ts'
 
 /**
- * Kling — 19 video models.
+ * Kling — 21 video models.
  * Transcribed from .claude/skills/kie-models/references/kling.md.
  *
  * Family-wide traps encoded below:
@@ -9,6 +9,8 @@ import { docUrl, type Constraint, type ModelDefinition, type ParamDef } from './
  *    an INTEGER. Sending the wrong JSON type is a 422.
  *  - Page slugs differ from model slugs (`v25-...` in the URL, `v2-5-...` in the API).
  *  - Kling 2.6 models use a `kling-2.6/` prefix, not `kling/`.
+ *  - Kling 4.0 (`kling-4.0/…`) types `duration` as an INTEGER, like Omni, but
+ *    with its own ranges: 3-20 on Flash Keyframe, 3-30 on Reference.
  */
 
 // ---------------------------------------------------------------- shared params
@@ -1033,5 +1035,148 @@ export const KLING_MODELS: ModelDefinition[] = [
     ],
     notes:
       'Video character subjects cannot be used together with multi-image subjects or reference images.',
+  },
+  // ------------------------------------------------------------ Kling 4.0
+  {
+    slug: 'kling-4.0/flash-keyframe-to-video',
+    family: 'kling',
+    capability: 'image-to-video',
+    alsoSupports: ['text-to-video'],
+    label: 'Kling 4.0 Flash — Keyframe to Video',
+    docUrl: docUrl('kling/kling-4-0-flash-keyframe-to-video'),
+    outputKind: 'video',
+    params: [
+      {
+        key: 'prompt',
+        type: 'text',
+        label: 'Prompt',
+        describe: 'Video description.',
+        group: 'core',
+        required: true,
+        maxLength: 8000,
+      },
+      {
+        key: 'first_frame_url',
+        type: 'url',
+        label: 'First frame',
+        describe: 'Optional opening frame. JPEG, PNG or WEBP, up to 10MB.',
+        group: 'core',
+        accept: ['image'],
+      },
+      {
+        key: 'duration',
+        type: 'number',
+        label: 'Duration',
+        describe: 'Output video length in seconds. An integer, 3-20.',
+        group: 'framing',
+        min: 3,
+        max: 20,
+        step: 1,
+        default: 10,
+      },
+      {
+        key: 'resolution',
+        type: 'enum',
+        label: 'Resolution',
+        describe: 'Output resolution. 720p is the only tier.',
+        group: 'framing',
+        enum: ['720p'],
+        default: '720p',
+      },
+      {
+        key: 'aspect_ratio',
+        type: 'enum',
+        label: 'Aspect ratio',
+        describe: 'Output video aspect ratio. The doc says it only takes effect when the first frame is active.',
+        group: 'framing',
+        enum: ['16:9', '9:16', '1:1', '21:9'],
+        default: '16:9',
+      },
+    ],
+    notes:
+      'Kling 4.0 slugs carry a `kling-4.0/` prefix with a dot. `duration` is an integer (3-20), not a quoted string. ' +
+      'first_frame_url is optional, so the endpoint also runs prompt-only. The doc describes aspect_ratio as ' +
+      '"Only effects when the first frame is active" — ambiguous wording, recorded rather than enforced. ' +
+      'docUrl page path is inferred: transcribed from the page text supplied by the user while docs.kie.ai was unreachable — run /verify-catalog.',
+  },
+  {
+    slug: 'kling-4.0/reference-to-video',
+    family: 'kling',
+    capability: 'reference-to-video',
+    label: 'Kling 4.0 — Reference to Video',
+    docUrl: docUrl('kling/kling-4-0-reference-to-video'),
+    outputKind: 'video',
+    params: [
+      {
+        key: 'prompt',
+        type: 'text',
+        label: 'Prompt',
+        describe: 'Video description. Refer to inputs as @image_1, @image_2, @video_1 …',
+        group: 'core',
+        required: true,
+        maxLength: 8000,
+      },
+      {
+        key: 'image_urls',
+        type: 'url[]',
+        label: 'Reference images',
+        describe: 'JPEG, PNG or WEBP, up to 10MB each.',
+        group: 'core',
+        accept: ['image'],
+      },
+      {
+        key: 'video_urls',
+        type: 'url[]',
+        label: 'Reference videos',
+        describe:
+          'Up to 5 clips, 2-30s each, 30s combined (including video elements). mp4/mov/mkv/avi/webm, up to 10MB each.',
+        group: 'core',
+        maxItems: 5,
+        accept: ['video'],
+      },
+      {
+        key: 'keep_original_sound',
+        type: 'boolean',
+        label: 'Keep original sound',
+        describe: 'Keep the original sound of the reference video.',
+        group: 'audio',
+        default: false,
+      },
+      {
+        key: 'duration',
+        type: 'number',
+        label: 'Duration',
+        describe: 'Output video length in seconds. An integer, 3-30.',
+        group: 'framing',
+        min: 3,
+        max: 30,
+        step: 1,
+        default: 5,
+      },
+      {
+        key: 'resolution',
+        type: 'enum',
+        label: 'Resolution',
+        describe: 'Output resolution tier.',
+        group: 'framing',
+        enum: ['720p', '1080p'],
+        default: '720p',
+      },
+      {
+        key: 'aspect_ratio',
+        type: 'enum',
+        label: 'Aspect ratio',
+        describe: 'Frame shape of the generated video.',
+        group: 'framing',
+        enum: ['auto', '16:9', '9:16', '1:1', '21:9'],
+        default: 'auto',
+      },
+    ],
+    notes:
+      'Kling 4.0 slugs carry a `kling-4.0/` prefix with a dot. `duration` is an integer (3-30), not a quoted string. ' +
+      'NOT YET REACHABLE: the doc lists `elements` (array) and `voices` (array, "Sound reference") only as ' +
+      '"complex structure — see the Run with API example", with no field-level schema. Their item shape is not ' +
+      'transcribed, so they are left out rather than invented; add them once the shape is read from the live page. ' +
+      'docUrl page path is inferred: transcribed from the page text supplied by the user while docs.kie.ai was unreachable — run /verify-catalog.',
   },
 ]

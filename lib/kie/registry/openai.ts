@@ -1,7 +1,8 @@
 import { docUrl, type Constraint, type ModelDefinition, type ParamDef } from './types.ts'
 
 /**
- * OpenAI — 8 image models (GPT Image 1.5 x2, GPT Image 2 x2, GPT Image 2.5 x4).
+ * OpenAI — 9 image models (GPT Image 1.5 x2, GPT Image 2 x2, GPT Image 2.5 x4,
+ * GPT Image 2.6 x1).
  * Transcribed from .claude/skills/kie-models/references/openai.md.
  *
  * Family-wide traps encoded below:
@@ -295,6 +296,47 @@ const gpt25InputUrls: ParamDef = {
   accept: ['image'],
 }
 
+// ------------------------------------------------------------ GPT Image 2.6
+
+/**
+ * Sixteen ratios — GPT Image 2's sixteen, in a different order, NOT 2.5's
+ * thirteen. 2.6 has no 27:16 / 16:27 / 9:8 / 8:9.
+ */
+const GPT26_ASPECT = [
+  'auto',
+  '1:1',
+  '3:2',
+  '2:3',
+  '4:3',
+  '3:4',
+  '5:4',
+  '4:5',
+  '16:9',
+  '9:16',
+  '2:1',
+  '1:2',
+  '21:9',
+  '9:21',
+  '3:1',
+  '1:3',
+]
+
+/** "Image background output mode. Only available when resolution is 1K." */
+const GPT26_CONSTRAINTS: Constraint[] = [
+  {
+    kind: 'forbiddenWhen',
+    keys: ['background'],
+    when: { key: 'resolution', equals: '2K' },
+    message: 'Background mode is available at 1K only — clear it to render at 2K.',
+  },
+  {
+    kind: 'forbiddenWhen',
+    keys: ['background'],
+    when: { key: 'resolution', equals: '4K' },
+    message: 'Background mode is available at 1K only — clear it to render at 4K.',
+  },
+]
+
 /**
  * The paragraph every 2.5 entry needs, plus whatever is true of just that one.
  *
@@ -489,5 +531,130 @@ export const OPENAI_MODELS: ModelDefinition[] = [
       "Parameter-for-parameter identical to the Flare sibling. STALE DOC: its x-apidog-enum annotation still lists GPT Image 2's ratios; " +
         'the `enum` the server validates against is the same thirteen used throughout 2.5.',
     ),
+  },
+  // ---------------------------------------------------------- GPT Image 2.6
+
+  {
+    slug: 'gpt-image-2-6/flare-text-to-image',
+    family: 'openai',
+    capability: 'text-to-image',
+    label: 'GPT Image 2.6 Flare — Text to Image',
+    docUrl: docUrl('gpt/gpt-image-2-6-flare-text-to-image'),
+    outputKind: 'image',
+    params: [
+      {
+        key: 'prompt',
+        type: 'text',
+        label: 'Prompt',
+        describe: 'Describes the generated image — or animation, with GIF output.',
+        group: 'core',
+        required: true,
+        maxLength: 32000,
+      },
+      {
+        key: 'aspect_ratio',
+        type: 'enum',
+        label: 'Aspect ratio',
+        describe: 'Aspect ratio of the generated image. auto lets the model choose.',
+        group: 'framing',
+        enum: GPT26_ASPECT,
+        default: '1:1',
+      },
+      {
+        key: 'resolution',
+        type: 'enum',
+        label: 'Resolution',
+        describe: 'Image resolution. Background mode needs 1K.',
+        group: 'framing',
+        enum: ['1K', '2K', '4K'],
+        default: '1K',
+      },
+      {
+        key: 'quality',
+        type: 'enum',
+        label: 'Quality',
+        describe: 'Image quality.',
+        group: 'framing',
+        enum: ['low', 'medium', 'high', 'xhigh', 'max', 'auto'],
+        default: 'medium',
+      },
+      {
+        key: 'background',
+        type: 'enum',
+        label: 'Background',
+        describe: 'Background output mode. Only available at 1K.',
+        group: 'framing',
+        enum: ['transparent', 'opaque', 'auto'],
+        default: 'auto',
+      },
+      {
+        key: 'output_format',
+        type: 'enum',
+        label: 'Output format',
+        describe: 'File format of the result. gif produces an animation.',
+        group: 'advanced',
+        enum: ['png', 'jpeg', 'webp', 'gif', 'svg'],
+        default: 'gif',
+      },
+      {
+        key: 'complexity',
+        type: 'enum',
+        label: 'Planning complexity',
+        describe: 'How much planning the model does before rendering.',
+        group: 'advanced',
+        enum: ['low', 'medium', 'high'],
+        default: 'high',
+      },
+      {
+        key: 'moderation',
+        type: 'enum',
+        label: 'Moderation',
+        describe: 'Audit intensity.',
+        group: 'advanced',
+        enum: ['auto', 'low'],
+        default: 'low',
+      },
+      {
+        key: 'output_compression',
+        type: 'number',
+        label: 'Compression',
+        describe: 'JPEG / WEBP compression ratio, 0-100.',
+        group: 'advanced',
+        min: 0,
+        max: 100,
+        step: 1,
+        default: 50,
+      },
+      {
+        key: 'frame_count',
+        type: 'enum',
+        label: 'Frame count',
+        describe: 'Number of frames. Sent as a quoted string.',
+        group: 'motion',
+        enum: ['2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16'],
+        default: '16',
+      },
+      {
+        key: 'frame_duration_ms',
+        type: 'number',
+        label: 'Frame duration (ms)',
+        describe: 'Duration of each frame in milliseconds, 20-2000 in steps of 10.',
+        group: 'motion',
+        min: 20,
+        max: 2000,
+        step: 10,
+        default: 120,
+      },
+    ],
+    constraints: GPT26_CONSTRAINTS,
+    notes:
+      'Slug is `gpt-image-2-6/flare-text-to-image` — a `gpt-image-2-6/` PREFIX and a slash, unlike 2.5, whose slugs ' +
+      'are one hyphenated string (`gpt-image-2-5-flare-text-to-image`). Defaults to GIF output (an animated image), ' +
+      'shaped by frame_count (a quoted string, 2-16) and frame_duration_ms. Sixteen aspect ratios — the same set as ' +
+      "GPT Image 2, not 2.5's thirteen — and `background` returns, restricted to 1K. `output_compression` is " +
+      'documented as a JPEG / WEBP ratio; the doc does not say whether other formats ignore or reject it. ' +
+      'NOT YET REACHABLE: `svg` (array) is documented only as "complex structure — see the Run with API example", ' +
+      'with no item schema, so it is left out rather than invented. ' +
+      'docUrl page path is inferred: transcribed from the page text supplied by the user while docs.kie.ai was unreachable — run /verify-catalog.',
   },
 ]

@@ -1,4 +1,4 @@
-# Kling — 19 video models
+# Kling — 21 video models
 
 Transcribed from `docs.kie.ai`. Every enum, default, and limit below is copied from its doc page.
 All models POST to `https://api.kie.ai/api/v1/jobs/createTask` with `{ model, callBackUrl?, input }`.
@@ -31,6 +31,8 @@ where it is an **integer** (`5`). Sending the wrong JSON type returns `422`.
 | 17 | `kling-3.0-omni/image-to-video` | image-to-video | `market/kling/v3-omni-image-to-video.md` |
 | 18 | `kling-3.0-omni/reference-to-video` | reference-to-video | `market/kling/v3-omni-reference-to-video.md` |
 | 19 | `kling-3.0-omni/transformation` | video-to-video | `market/kling/v3-omni-transformation.md` |
+| 20 | `kling-4.0/flash-keyframe-to-video` | image-to-video / text-to-video | `market/kling/kling-4-0-flash-keyframe-to-video.md` (inferred) |
+| 21 | `kling-4.0/reference-to-video` | reference-to-video | `market/kling/kling-4-0-reference-to-video.md` (inferred) |
 
 ---
 
@@ -289,3 +291,40 @@ multi-image subjects or reference images" when a video is provided.
 
 **Constraint:** "Video character subjects cannot be used together with multi-image subjects or
 reference images."
+
+---
+
+## Kling 4.0 — models 20–21
+
+> **Source.** Transcribed from the doc page text the user supplied on 2026-11-08; `docs.kie.ai` was unreachable from the session, so the doc-page path below is **inferred** and must be confirmed with `/verify-catalog`.
+
+Slug prefix is `kling-4.0/` (with a dot). `duration` is an **integer**, as on Omni, but with its own
+ranges: 3–20 on Flash Keyframe, 3–30 on Reference.
+
+### 20. `kling-4.0/flash-keyframe-to-video`
+
+| field | type | req | enum / range | default | notes |
+|---|---|---|---|---|---|
+| `prompt` | string | ✓ | ≤ 8000 chars | — | Doc "default" is an example prompt |
+| `first_frame_url` | string (url) | | image/jpeg, png, webp; ≤ 10MB | — | Optional — prompt-only also valid |
+| `duration` | number | | 3 – 20, step 1 | `10` | Integer seconds |
+| `resolution` | string | | `720p` | `720p` | Only tier |
+| `aspect_ratio` | string | | `16:9` `9:16` `1:1` `21:9` | `16:9` | Doc: "Only effects when the first frame is active." Ambiguous; recorded, not enforced |
+
+### 21. `kling-4.0/reference-to-video`
+
+| field | type | req | enum / range | default | notes |
+|---|---|---|---|---|---|
+| `prompt` | string | ✓ | ≤ 8000 chars | — | Refers to inputs as `@image_1`, `@video_1` |
+| `image_urls` | string[] | | image/jpeg, png, webp; ≤ 10MB each | — | Multiple |
+| `video_urls` | string[] | | ≤ 5 clips, 2–30 s each, 30 s combined incl. video elements; mp4/mov/mkv/avi/webm, ≤ 10MB | — | |
+| `keep_original_sound` | boolean | | | `false` | Keep the reference video's audio |
+| `duration` | number | | 3 – 30, step 1 | `5` | Integer seconds |
+| `resolution` | string | | `720p` `1080p` | `720p` | |
+| `aspect_ratio` | string | | `auto` `16:9` `9:16` `1:1` `21:9` | `auto` | |
+| `elements` | array | | — | — | **Not transcribed.** Doc says only "complex structure — see the Run with API example" |
+| `voices` | array | | — | — | **Not transcribed.** "Sound reference", same "complex structure" placeholder |
+
+`elements` and `voices` are left out of the registry until their item shape is read from the live
+page — inventing it would ship a 422.
+

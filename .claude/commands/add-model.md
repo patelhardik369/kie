@@ -6,7 +6,7 @@ argument-hint: <model-slug> [doc-url]
 Add `$1` to the Kie Studio model registry.
 
 1. Confirm `$1` belongs to an in-scope family — `kling`, `bytedance`/Seedream, `wan`, `google`
-   (Veo, Gemini Omni, Imagen 4, Nano Banana, Gemini TTS), `openai` (GPT Image), or `enhance` (any
+   (Veo, Gemini Omni, Imagen 4, Nano Banana, Gemini TTS), `openai` (GPT Image), `qwen` (image only), `flux`, or `enhance` (any
    upscaler or background remover, whoever makes it). If it does not, stop and say so — other Kie
    families are deliberately out of scope, and chat/text models are permanently out of scope.
 2. Run the `kie-model-scout` agent on `$1` (pass `$2` as the doc URL if given) to get the parameter

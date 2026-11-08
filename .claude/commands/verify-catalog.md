@@ -15,21 +15,23 @@ is expected to find something.
    | `wan` | Video Models > Wan, Image Models > Wan |
    | `google` | Image Models > Google, Video Models > Gemini Omni, Music Models > Gemini, **and the `Veo3.1 API` section, which is not under `market/`** |
    | `openai` | Image Models > GPT Image |
+| `qwen` | Image Models > Qwen |
+| `flux` | Image Models > Flux |
    | `enhance` | Image Models > Topaz, Image Models > Recraft, Video Models > Topaz, and `market/grok-imagine/upscale.md` only |
 
    Ignore every other family. Ignore **all** of `Chat Models` — Gemini, GPT-5, Codex, and Claude text
    models are permanently out of scope. Ignore `market/gemini-omni-audio.md` and
    `market/gemini-omni-character.md`: they are id-minting endpoints, not models.
 3. Compare against the slugs recorded in
-   `.claude/skills/kie-models/references/{kling,bytedance,wan,google,openai,enhance}.md` and, if the
+   `.claude/skills/kie-models/references/{kling,bytedance,wan,google,openai,qwen,flux,enhance}.md` and, if the
    app code exists, `lib/kie/registry/`.
 4. Report four lists:
    - **New upstream** — documented but not in the registry.
    - **Missing upstream** — in the registry but no longer documented (likely retired; flag before removing).
    - **Transport risk** — any new page whose OpenAPI `paths:` is not `/api/v1/jobs/createTask`. These
      cannot be added as plain registry entries; call them out separately.
-   - **Count check** — reference-file totals against the expected baseline of 19 Kling / 20 ByteDance /
-     20 Wan / 14 Google / 8 OpenAI / 11 Qwen / 5 Enhance = 97.
+   - **Count check** — reference-file totals against the expected baseline of 21 Kling / 21 ByteDance /
+     20 Wan / 15 Google / 9 OpenAI / 11 Qwen / 2 Flux / 5 Enhance = 104.
 5. For anything new, spot-check the `model` enum against the page path — these routinely diverge
    (`.../kling/v25-turbo-text-to-video-pro.md` serves `kling/v2-5-turbo-text-to-video-pro`;
    `.../google/nanobanana2.md` serves `nano-banana-2`; `.../google/pro-image-to-image.md` serves

@@ -20,6 +20,7 @@ export const FAMILY_LABEL: Record<Family, string> = {
   google: 'Google',
   openai: 'OpenAI',
   qwen: 'Qwen',
+  flux: 'Flux',
   enhance: 'Enhance',
 }
 
@@ -29,8 +30,9 @@ export const FAMILY_BLURB: Record<Family, string> = {
   bytedance: 'Seedance video, Seedream image',
   wan: 'Video, image, layer decomposition',
   google: 'Veo, Gemini Omni, Imagen 4, Nano Banana',
-  openai: 'GPT Image 1.5, 2 and 2.5',
+  openai: 'GPT Image 1.5, 2, 2.5 and 2.6',
   qwen: 'Qwen 1, 2, 2.1 and 3 image',
+  flux: 'FLUX.2 Pro and FLUX.3 Klein image',
   // Named for what it does, not who made it — see lib/kie/registry/enhance.ts.
   enhance: 'Upscale and background removal',
 }

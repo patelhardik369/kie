@@ -20,11 +20,12 @@ describe('which models offer markup', () => {
           (param.accept ?? []).includes('image'),
       ),
     )
-    // 64 take an image; 5 of them have no prompt to name a mark in.
+    // 66 take an image; 5 of them have no prompt to name a mark in.
     // Qwen contributed 6 — its six image-to-image endpoints, every one of which
-    // has a prompt, so the excluded list below is unchanged.
-    assert.equal(withImage.length, 64)
-    assert.equal(supported.length, 59)
+    // has a prompt, so the excluded list below is unchanged. Kling 4.0 added 2
+    // (first_frame_url, image_urls), both with a prompt.
+    assert.equal(withImage.length, 66)
+    assert.equal(supported.length, 61)
   })
 
   it('excludes exactly the prompt-less image endpoints, by their own data', () => {

@@ -1,18 +1,20 @@
 # Kie Studio
 
 A deployable generation studio built on the [Kie AI](https://kie.ai) unified API — your own
-Higgsfield, restricted to six model families, with **every parameter exposed** and **your own API
+Higgsfield, restricted to eight model families, with **every parameter exposed** and **your own API
 key**.
 
 | Family | Video | Image | Audio | Total |
 |---|---|---|---|---|
-| Kling | 19 | — | — | 19 |
-| ByteDance (Seedance / Seedream) | 10 | 10 | — | 20 |
+| Kling | 21 | — | — | 21 |
+| ByteDance (Seedance / Seedream) | 10 | 11 | — | 21 |
 | Wan | 18 | 2 | — | 20 |
-| Google (Veo / Gemini Omni / Imagen 4 / Nano Banana) | 5 | 8 | 1 | 14 |
-| OpenAI (GPT Image) | — | 4 | — | 4 |
+| Google (Veo / Gemini Omni / Imagen 4 / Nano Banana / Gemini TTS) | 5 | 9 | 1 | 15 |
+| OpenAI (GPT Image) | — | 9 | — | 9 |
+| Qwen (image) | — | 11 | — | 11 |
+| Flux (FLUX.2 Pro / FLUX.3 Klein) | — | 2 | — | 2 |
 | Enhance (upscale / background removal) | 2 | 3 | — | 5 |
-| | **54** | **27** | **1** | **82** |
+| | **56** | **47** | **1** | **104** |
 
 > **Status: built and deployable.** Runs on Vercel with Supabase for Postgres and Storage.
 > See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) to put it online.
@@ -38,7 +40,7 @@ Three promises:
 |---|---|
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | **Env vars, Supabase setup, scheduling, migrating from local** |
 | [`docs/PRD.md`](docs/PRD.md) | Goals, features, acceptance criteria |
-| [`docs/MODEL-CATALOG.md`](docs/MODEL-CATALOG.md) | All 97 models — what each is for |
+| [`docs/MODEL-CATALOG.md`](docs/MODEL-CATALOG.md) | All 104 models — what each is for |
 | [`docs/API-CONTRACT.md`](docs/API-CONTRACT.md) | Lifecycle, polling, retries, error mapping |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Route map, registry, job engine, storage |
 | [`docs/DATA-MODEL.md`](docs/DATA-MODEL.md) | Drizzle schema |
@@ -109,8 +111,8 @@ on Kling but an integer on Kling Omni, `wan/2-7-text-to-video` uses `ratio` wher
 
 ## Scope
 
-Deliberately limited to the six families in the table above. Kie also serves Runway, Hailuo,
-PixVerse, MiniMax, Sora, Flux, Qwen, Ideogram, Midjourney, Suno, ElevenLabs and chat models — all out
+Deliberately limited to the eight families in the table above. Kie also serves Runway, Hailuo,
+PixVerse, MiniMax, Sora, Ideogram, Midjourney, Suno, ElevenLabs and chat models — all out
 of scope.
 
 **No accounts, no billing, no sharing.** Each browser generates an anonymous workspace id and owns

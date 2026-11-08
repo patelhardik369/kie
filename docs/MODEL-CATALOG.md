@@ -1,24 +1,25 @@
-# Model catalog — 99 endpoints
+# Model catalog — 104 endpoints
 
 Index only. **Parameter detail lives in `.claude/skills/kie-models/references/`** so there is exactly
 one source of truth; each family section links there.
 
 | Family | Video | Image | Audio | Total |
 |---|---|---|---|---|
-| Kling | 19 | — | — | 19 |
+| Kling | 21 | — | — | 21 |
 | ByteDance (Seedance / Seedream) | 10 | 11 | — | 21 |
 | Wan | 18 | 2 | — | 20 |
 | Google (Veo / Gemini Omni / Imagen 4 / Nano Banana) | 5 | 9 | 1 | 15 |
-| OpenAI (GPT Image) | — | 8 | — | 8 |
+| OpenAI (GPT Image) | — | 9 | — | 9 |
 | Qwen (Qwen 1 / 2 / 2.1 / 3) | — | 11 | — | 11 |
+| Flux (FLUX.2 Pro / FLUX.3 Klein) | — | 2 | — | 2 |
 | Enhance (upscale / background removal) | 2 | 3 | — | 5 |
-| | **54** | **44** | **1** | **99** |
+| | **56** | **47** | **1** | **104** |
 
 Verify against upstream with `/verify-catalog`. Add one with `/add-model <slug>`.
 
 ---
 
-## Kling — 19 video models
+## Kling — 21 video models
 → [`references/kling.md`](../.claude/skills/kie-models/references/kling.md)
 
 | Model slug | Capability | Pick it for |
@@ -32,6 +33,8 @@ Verify against upstream with `/verify-catalog`. Add one with `/add-model <slug>`
 | `kling-3.0-omni/image-to-video` | image-to-video | Omni from a first frame, or first+last |
 | `kling-3.0-omni/reference-to-video` | reference-to-video | Character consistency from up to 7 reference images |
 | `kling-3.0-omni/transformation` | video-to-video | Restyling an existing clip |
+| `kling-4.0/flash-keyframe-to-video` | image/text-to-video | Kling 4.0 Flash: optional first frame, 3–20s, 720p, 8000-char prompts |
+| `kling-4.0/reference-to-video` | reference-to-video | Kling 4.0: images + up to 5 reference clips, 3–30s, 1080p, keep original sound |
 | `kling-2.6/motion-control` | motion-control | Driving a still portrait with a 3–30s video |
 | `kling-3.0/motion-control` | motion-control | Same, with background-source control |
 | `kling/ai-avatar-standard` | avatar | Talking head from image + audio, up to 5 min |
@@ -45,7 +48,8 @@ Verify against upstream with `/verify-catalog`. Add one with `/add-model <slug>`
 
 **Traps:** `duration` is a quoted string everywhere except Kling 3.0 Omni, where it's an integer.
 Page slugs differ from model slugs (`v25-...` in the URL, `v2-5-...` in the API). Kling 2.6 models
-carry a `kling-2.6/` prefix, not `kling/`.
+carry a `kling-2.6/` prefix, not `kling/`. Kling 4.0 is `kling-4.0/` with an integer `duration`;
+its `elements` and `voices` arrays are not yet transcribed (the doc gives no item shape).
 
 ---
 
@@ -182,7 +186,7 @@ task, so they belong in the asset library rather than the registry.
 
 ---
 
-## OpenAI — 8 image models
+## OpenAI — 9 image models
 → [`references/openai.md`](../.claude/skills/kie-models/references/openai.md)
 
 | Model slug | Capability | Pick it for |
@@ -195,6 +199,7 @@ task, so they belong in the asset library rather than the registry.
 | `gpt-image-2-5-flare-image-to-image` | image-to-image | 2.5 fast tier editing, up to 16 inputs |
 | `gpt-image-2-5-sunburst-text-to-image` | text-to-image | 2.5 premium tier; same schema as Flare |
 | `gpt-image-2-5-sunburst-image-to-image` | image-to-image | 2.5 premium tier editing, up to 16 inputs |
+| `gpt-image-2-6/flare-text-to-image` | text-to-image | 2.6: animated GIF / SVG output, 6 quality tiers, 32k prompts, 1K-only background |
 
 **Traps:** GPT Image 1.5 keeps a `gpt-image/` prefix **and** a dot (`1.5`); GPT Image 2 and 2.5 have
 neither, despite living under `market/gpt/` — and 2.5 spells its version `2-5`. 1.5 marks three fields
@@ -207,6 +212,10 @@ the other lacks — 2.5 adds `27:16` `16:27` `9:8` `8:9` and drops `5:4` `4:5` `
 it does **not** cap `auto` at 1K; its only cap is those four narrow ratios. Both generations gate
 `resolution` on the chosen `aspect_ratio`, and 2's gating differs between its own two endpoints while
 2.5's four are identical.
+
+GPT Image 2.6 changes the slug shape again: `gpt-image-2-6/flare-text-to-image` has a prefix and a
+slash. It defaults to GIF output, `frame_count` is a quoted string, and its `svg` array is not yet
+transcribed (the doc gives no item shape).
 
 Sora is not offered by Kie. The legacy 4o Image API (`/api/v1/gpt4o-image/*`) is a separate
 non-unified endpoint and is deliberately out of scope.
@@ -242,6 +251,19 @@ tier is a prefix on the capability, not on the family. `image_size` holds **name
 On `qwen2-1/image-to-image`, `mask_url` is a **mode switch**: it demands exactly one reference image,
 forbids a transparent background, and makes `aspect_ratio` and `enhance_prompt` no-ops that Kie
 reports in an `ignored` field rather than rejecting.
+
+---
+
+## Flux — 2 image models
+→ [`references/flux.md`](../.claude/skills/kie-models/references/flux.md)
+
+| Model slug | Capability | Pick it for |
+|---|---|---|
+| `flux-2/pro-text-to-image` | text-to-image | Small strict schema: 7 ratios, 1K/2K, ratio and resolution required |
+| `flux-3/klein-text-to-image` | text-to-image | Exact pixel sizes, 4K, up to 4 images, seed, prompt enhancer |
+
+**Traps:** the version is the prefix (`flux-2/`, `flux-3/`), never `flux/`. On Klein, `width` and
+`height` go together and make Kie **ignore** `aspect_ratio` and `resolution`.
 
 ---
 

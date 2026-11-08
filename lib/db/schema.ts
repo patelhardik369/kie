@@ -68,6 +68,7 @@ export const FAMILIES = [
   'google',
   'openai',
   'qwen',
+  'flux',
   'enhance',
 ] as const
 export type Family = (typeof FAMILIES)[number]

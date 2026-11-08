@@ -6,18 +6,19 @@ The defining product promise: **every parameter of every supported model is reac
 Hosted tools hide parameters behind presets. This app does the opposite — presets are a convenience
 layer *on top of* full manual control, never a replacement for it.
 
-## Scope boundary — seven families
+## Scope boundary — eight families
 
 | Family | Video | Image | Audio | Total |
 |---|---|---|---|---|
-| **Kling** | 19 | — | — | 19 |
+| **Kling** | 21 | — | — | 21 |
 | **ByteDance** (Seedance video / Seedream image) | 10 | 11 | — | 21 |
 | **Wan** | 18 | 2 | — | 20 |
 | **Google** (Veo, Gemini Omni, Imagen 4, Nano Banana, Gemini TTS) | 5 | 9 | 1 | 15 |
-| **OpenAI** (GPT Image 1.5 / 2 / 2.5) | — | 8 | — | 8 |
+| **OpenAI** (GPT Image 1.5 / 2 / 2.5 / 2.6) | — | 9 | — | 9 |
 | **Qwen** (Qwen 1, 2, 2.1, 3 image) | — | 11 | — | 11 |
+| **Flux** (FLUX.2 Pro, FLUX.3 Klein image) | — | 2 | — | 2 |
 | **Enhance** (Topaz, Recraft, Grok Imagine upscale) | 2 | 3 | — | 5 |
-| | **54** | **44** | **1** | **99** |
+| | **56** | **47** | **1** | **104** |
 
 `enhance` is a capability family, not a vendor: it holds every upscaler and background remover
 regardless of who makes it. That is why `grok-imagine/upscale` lives there while the rest of Grok
@@ -27,12 +28,13 @@ Plus utility endpoints: 3 file-upload variants, credits, download-URL, webhook v
 
 ### Still out of scope
 
-**Do not add Runway, Hailuo, PixVerse, MiniMax, Sora, Flux, Ideogram, Midjourney, Suno,
+**Do not add Runway, Hailuo, PixVerse, MiniMax, Sora, Ideogram, Midjourney, Suno,
 ElevenLabs, OmniHuman, InfiniteTalk, HappyHorse, Z-Image, or the rest of Grok Imagine.** Kie offers
 them; this project deliberately does not. If a task seems to need one, stop and ask.
 
 Qwen was on that list until its image endpoints were brought in as the seventh family. Only the
 **image** endpoints are in scope — Kie's Qwen chat completions stay out, under the rule below.
+Flux followed the same way as the eighth family (`flux-2/pro-text-to-image`, `flux-3/klein-text-to-image`).
 
 **No chat/text models, ever** — Kie serves Gemini 2.5/3.x, GPT-5.x, Codex, Qwen, and Claude as chat
 completions. A text completion has no output file, no `assets` row, and no gallery entry, so it has
@@ -90,7 +92,7 @@ Neither storage limit is raisable on Supabase Free. Treat both as facts, not set
 7. **The registry is data, not code branches.** Adding a model means adding a `ModelDefinition`, not
    writing a new form or a new route. If a model forces you to special-case the UI, the schema layer is
    missing a field type — extend the schema layer instead.
-8. **A transport is registry data too.** 98 of the 99 models POST to `/api/v1/jobs/createTask`; Veo
+8. **A transport is registry data too.** 103 of the 104 models POST to `/api/v1/jobs/createTask`; Veo
    posts to `/api/v1/veo/generate` and polls `/api/v1/veo/record-info` with a different response
    shape. That difference is declared as `transport: 'veo'` on the `ModelDefinition` and absorbed by
    an adapter in `lib/kie/veo.ts` that returns the same `Task` shape. **The job engine, the gallery,
@@ -109,7 +111,7 @@ Neither storage limit is raisable on Supabase Free. Treat both as facts, not set
 |---|---|
 | `.claude/skills/kie-api/SKILL.md` | API contract, both transports — load before touching `lib/kie/` |
 | `.claude/skills/kie-models/SKILL.md` | Registry conventions + `ModelDefinition` shape |
-| `.claude/skills/kie-models/references/{kling,bytedance,wan,google,openai,qwen,enhance,utility}.md` | **Authoritative** parameter tables |
+| `.claude/skills/kie-models/references/{kling,bytedance,wan,google,openai,qwen,flux,enhance,utility}.md` | **Authoritative** parameter tables |
 | `.claude/agents/kie-model-scout.md` | Subagent that transcribes a doc page into a registry entry |
 | `.claude/commands/` | `/add-model`, `/verify-catalog`, `/smoke-model` |
 | `docs/DEPLOYMENT.md` | **Env vars, Supabase setup, scheduling the tick, migrating a local studio** |

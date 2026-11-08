@@ -8,6 +8,7 @@ import {
   CAPABILITIES,
   ENHANCE_MODELS,
   FAMILIES,
+  FLUX_MODELS,
   GOOGLE_MODELS,
   KLING_MODELS,
   OPENAI_MODELS,
@@ -25,15 +26,16 @@ import {
 } from './index.ts'
 
 describe('catalog completeness', () => {
-  it('holds all 99 in-scope models', () => {
-    assert.equal(KLING_MODELS.length, 19)
+  it('holds all 104 in-scope models', () => {
+    assert.equal(KLING_MODELS.length, 21)
     assert.equal(BYTEDANCE_MODELS.length, 21)
     assert.equal(WAN_MODELS.length, 20)
     assert.equal(GOOGLE_MODELS.length, 15)
-    assert.equal(OPENAI_MODELS.length, 8)
+    assert.equal(OPENAI_MODELS.length, 9)
     assert.equal(QWEN_MODELS.length, 11)
+    assert.equal(FLUX_MODELS.length, 2)
     assert.equal(ENHANCE_MODELS.length, 5)
-    assert.equal(ALL_MODELS.length, 99)
+    assert.equal(ALL_MODELS.length, 104)
   })
 
   it('makes every Qwen model an image model', () => {
@@ -88,6 +90,7 @@ describe('catalog completeness', () => {
     for (const m of GOOGLE_MODELS) assert.equal(m.family, 'google', m.slug)
     for (const m of OPENAI_MODELS) assert.equal(m.family, 'openai', m.slug)
     for (const m of QWEN_MODELS) assert.equal(m.family, 'qwen', m.slug)
+    for (const m of FLUX_MODELS) assert.equal(m.family, 'flux', m.slug)
     for (const m of ENHANCE_MODELS) assert.equal(m.family, 'enhance', m.slug)
   })
 
@@ -148,6 +151,16 @@ describe('slugs are verbatim', () => {
     assert.ok(getModel('gpt-image-2-text-to-image'))
     assert.ok(getModel('gpt-image-2-5-flare-text-to-image'))
     assert.ok(getModel('gpt-image-2-5-sunburst-image-to-image'))
+  })
+
+  it('keeps the version prefix on Kling 4.0, GPT Image 2.6 and Flux', () => {
+    // A dot in kling-4.0, a slash after gpt-image-2-6 (2.5 has none), and the
+    // version — not the vendor — before the slash on Flux.
+    assert.ok(getModel('kling-4.0/flash-keyframe-to-video'))
+    assert.ok(getModel('kling-4.0/reference-to-video'))
+    assert.ok(getModel('gpt-image-2-6/flare-text-to-image'))
+    assert.ok(getModel('flux-2/pro-text-to-image'))
+    assert.ok(getModel('flux-3/klein-text-to-image'))
     assert.equal(getModel('google/nano-banana-2'), undefined)
     assert.equal(getModel('gpt/gpt-image-2-text-to-image'), undefined)
     // 2.5 keeps the dashes: no dot, no prefix, no `gpt-image/2.5-…` form.
@@ -312,12 +325,13 @@ describe('lookups', () => {
   })
 
   it('filters by family', () => {
-    assert.equal(modelsByFamily('kling').length, 19)
+    assert.equal(modelsByFamily('kling').length, 21)
     assert.equal(modelsByFamily('bytedance').length, 21)
     assert.equal(modelsByFamily('wan').length, 20)
     assert.equal(modelsByFamily('google').length, 15)
-    assert.equal(modelsByFamily('openai').length, 8)
+    assert.equal(modelsByFamily('openai').length, 9)
     assert.equal(modelsByFamily('qwen').length, 11)
+    assert.equal(modelsByFamily('flux').length, 2)
     assert.equal(modelsByFamily('enhance').length, 5)
   })
 
